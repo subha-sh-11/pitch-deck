@@ -40,7 +40,7 @@ export function ReviewPanel({ projectId }: ReviewPanelProps) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {scores.map((score) => (
           <SectionCard key={score.label} title={score.label}>
-            <p className="font-display text-3xl font-semibold text-accent-gold">
+            <p className="font-display text-3xl font-semibold text-accent-neon">
               {score.value}%
             </p>
           </SectionCard>

@@ -1,37 +1,91 @@
+import { DEFAULT_SLIDE_APPEARANCE } from "@/lib/slide-appearance";
 import type { PitchTemplate } from "@/types/template";
 import type { Slide, SlideContent, SlideType } from "@/types/slide";
 import type { IntakeFormData } from "@/types/workflow";
+
+function imagePromptForSlideType(
+  slideType: SlideType,
+  form: IntakeFormData,
+): string | undefined {
+  const title = form.title.trim();
+  const mood = (form.visualAesthetic || form.tone || "cinematic").trim();
+  const visualTypes: SlideType[] = [
+    "cover",
+    "logline",
+    "genre_blend",
+    "synopsis",
+    "story_world",
+    "character",
+    "supporting_characters",
+    "visual_aesthetic",
+    "show_cross",
+  ];
+  if (!visualTypes.includes(slideType)) return undefined;
+
+  const label = title || "the project";
+  switch (slideType) {
+    case "cover":
+      return `Cinematic title slide for "${label}", ${mood} atmosphere.`;
+    case "visual_aesthetic":
+      return `Mood board collage: ${mood}.`;
+    case "story_world":
+      return `Story world visual for "${label}": ${form.storyWorld?.slice(0, 80) || mood}.`;
+    default:
+      return `Pitch deck slide imagery for "${label}", ${mood}, ${slideType} slide.`;
+  }
+}
 
 export function contentForSlideType(
   slideType: SlideType,
   form: IntakeFormData,
 ): SlideContent {
   switch (slideType) {
-    case "cover":
+    case "cover": {
+      const synopsisLead = form.synopsis.trim().split(/\n/)[0]?.trim() ?? "";
       return {
         heading: form.title.toUpperCase() || "UNTITLED",
         subheading: form.tagline,
-        body: form.logline,
+        body: form.logline.trim() || synopsisLead,
+        footer: "",
       };
+    }
     case "logline":
       return { heading: "Logline", body: form.logline };
-    case "genre_blend":
+    case "genre_blend": {
+      const genres = form.genreBlend
+        .split(/[+,&]/)
+        .map((g) => g.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      const descriptions = [
+        "A race against rising water and disappearing air.",
+        "Parents search helplessly while the truth stays above them.",
+        "Mischief, friendship, and innocence make the danger hit harder.",
+      ];
       return {
         heading: "Genre Blend",
-        items: form.genreBlend
-          .split(/[+,&]/)
-          .map((g) => g.trim())
-          .filter(Boolean)
-          .slice(0, 3)
-          .map((title) => ({
-            title,
-            description: form.tone,
-          })),
+        items: genres.map((title, i) => ({
+          title,
+          description: descriptions[i] ?? form.tone,
+        })),
       };
+    }
     case "synopsis":
-      return { heading: "Synopsis", body: form.synopsis };
+      return {
+        heading: "Synopsis",
+        body: form.synopsis,
+      };
     case "story_world":
-      return { heading: "Story World", body: form.storyWorld };
+      return {
+        heading: "Story World",
+        body: form.storyWorld,
+        items: [
+          { title: "Rooftop Water Tank", description: "The silent villain above the city" },
+          { title: "Apartment Corridors", description: "Claustrophobic urban maze" },
+          { title: "Family Homes", description: "Emotional anchor and guilt" },
+          { title: "City Search", description: "Desperate scale, wrong direction" },
+        ],
+      };
     case "character":
     case "supporting_characters":
       return {
@@ -52,22 +106,33 @@ export function contentForSlideType(
       };
     case "usp":
       return {
-        heading: "USP",
-        bullets: form.usp
-          .split(/[.;]/)
-          .map((b) => b.trim())
-          .filter(Boolean)
-          .slice(0, 5),
+        heading: "Unique Selling Points",
+        bullets: [
+          "Low-budget high-impact contained thriller",
+          "Child heroes with immediate audience empathy",
+          "Contained survival premise",
+          "Strong family emotional payoff",
+          "OTT-friendly survival tension",
+        ],
       };
     case "show_cross":
       return {
         heading: "Show Cross",
+        body: "Fall meets Helen with the emotional survival intensity of Manjummel Boys.",
         comps: form.showCross
           .split(/[,×x]/)
           .map((c) => c.trim())
           .filter(Boolean)
           .slice(0, 3)
-          .map((title) => ({ title, note: form.targetAudience })),
+          .map((title) => ({
+            title,
+            note:
+              title.toLowerCase().includes("fall")
+                ? "Vertigo dread and contained height tension."
+                : title.toLowerCase().includes("helen")
+                  ? "Parental search drama with ticking urgency."
+                  : "Friendship under survival pressure.",
+          })),
       };
     case "visual_aesthetic":
       return {
@@ -75,32 +140,38 @@ export function contentForSlideType(
         body: form.visualAesthetic || form.designDirection,
         moodBlocks: [
           { label: "Concrete", color: "#2A2A2A" },
-          { label: "Moss", color: "#3F5F4A" },
+          { label: "Water", color: "#A9C6C7" },
           { label: "Rust", color: "#8A4B2A" },
-          { label: "Gold", color: "#E2B15C" },
+          { label: "Moss Green", color: "#3F5F4A" },
+          { label: "Narrow Light", color: "#67e8f9" },
+          { label: "Rooftop Isolation", color: "#1a1a1f" },
         ],
       };
     case "target_audience":
       return {
         heading: "Target Audience",
         items: [
-          { title: "Primary", description: form.targetAudience },
-          { title: "Release", description: form.releaseFit },
+          { title: "Family Audience", description: "Emotional payoff with universal parental stakes" },
+          { title: "Thriller Viewers", description: "Contained survival tension with escalating dread" },
+          { title: "Telugu Urban Viewers", description: "Hyderabad apartment world with regional authenticity" },
+          { title: "OTT Survival Drama", description: "Bingeable tension with strong emotional resolution" },
         ],
       };
     case "budget":
       return {
         heading: "Budget & Production Scale",
-        body: "Contained production positioned for strong ROI. Scale aligned with story scope and single-location design.",
+        body: "Estimated range: ₹8–15 crore. Single primary location (apartment + rooftop tank). 45–55 shooting days.",
+        bullets: ["Single-location production", "Limited night exteriors", "Modular tank set build"],
       };
     case "market_potential":
       return {
         heading: "Market Potential",
-        bullets: [
-          form.releaseFit,
-          "Regional OTT with pan-India subtitle appeal",
-          "Festival craft positioning available",
-        ].filter(Boolean),
+        items: [
+          { title: "Contained production scale", description: form.releaseFit },
+          { title: "OTT-friendly tension", description: "Bingeable survival arc with emotional climax" },
+          { title: "Strong emotional payoff", description: "Family reconciliation drives word-of-mouth" },
+          { title: "Regional authenticity", description: "Telugu urban world with pan-India subtitle appeal" },
+        ],
       };
     case "directors_vision":
       return {
@@ -115,8 +186,9 @@ export function contentForSlideType(
     case "contact":
       return {
         heading: "Let's Talk",
-        subheading: form.title,
-        body: "Ready for producer and investor conversations.",
+        subheading: form.title ? `${form.title} — Pitch Deck` : "Pitch Deck",
+        body: form.releaseFit.trim(),
+        footer: "",
       };
     default:
       return { heading: "Slide", body: form.synopsis };
@@ -149,6 +221,21 @@ export function buildSlideFromOutline(
   slideNumber: number,
   id?: string,
 ): Slide {
+  const layoutTypes: Partial<Record<SlideType, string>> = {
+    cover: "cinematic_cover",
+    logline: "centered_statement",
+    genre_blend: "three_column",
+    synopsis: "split_image_text",
+    story_world: "location_grid",
+    character: "character_cards",
+    usp: "grid",
+    show_cross: "comp_cards",
+    visual_aesthetic: "moodboard",
+    target_audience: "segments",
+    market_potential: "investor_cards",
+    contact: "minimal",
+  };
+
   return {
     id: id ?? `slide-${slideNumber}-${outline.slideType}-${Date.now()}`,
     slideNumber,
@@ -156,8 +243,16 @@ export function buildSlideFromOutline(
     title: outline.title,
     purpose: outline.purpose,
     content: contentForSlideType(outline.slideType, form),
-    layout: { template: outline.slideType, layoutType: "auto" },
-    status: "draft",
+    layout: {
+      template: outline.slideType,
+      layoutType: layoutTypes[outline.slideType] ?? "auto",
+    },
+    status: "design_generated",
+    imagePrompt: imagePromptForSlideType(outline.slideType, form),
+    appearance: { ...DEFAULT_SLIDE_APPEARANCE },
+    speakerNotes: "",
+    comments: [],
+    transition: "Fade",
   };
 }
 

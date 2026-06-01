@@ -22,7 +22,7 @@ export function ExportPanel({ projectId }: ExportPanelProps) {
   return (
     <div className="space-y-8">
       {message && (
-        <div className="rounded-xl border border-accent-gold/30 bg-accent-gold/10 px-4 py-3 text-sm text-accent-gold">
+        <div className="rounded-xl border border-accent-neon/30 bg-accent-neon/10 px-4 py-3 text-sm text-accent-neon">
           {message}
         </div>
       )}

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 type BadgeVariant =
   | "default"
-  | "gold"
+  | "neon"
   | "success"
   | "warning"
   | "muted"
@@ -16,8 +16,8 @@ interface BadgeProps {
 
 const variantClasses: Record<BadgeVariant, string> = {
   default: "bg-surface-2 text-text-primary border-border-glass",
-  gold: "bg-accent-gold/15 text-accent-gold border-accent-gold/30",
-  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  neon: "bg-accent-neon/15 text-accent-neon border-accent-neon/30 shadow-[0_0_12px_rgba(34,211,238,0.08)]",
+  success: "bg-[#a3e635]/15 text-[#a3e635] border-[#a3e635]/30",
   warning: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   muted: "bg-surface-3 text-text-muted border-border-glass",
   outline: "bg-transparent text-text-muted border-border-glass",

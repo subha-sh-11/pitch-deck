@@ -21,7 +21,7 @@ export const mockIntakeDefaults: IntakeFormData = {
   storyWorld:
     "A middle-class gated apartment community in Hyderabad where childhood mischief, parental fear, and urban isolation collide.",
   mainCharacters:
-    "Ravi — fearless leader. Arjun — anxious planner. Meera — empathetic mediator.",
+    "Potti — fearless leader — Drives the group's courage until survival strips away bravado. Bakki — anxious planner — His caution becomes the group's only logic inside the tank. Laddu — empathetic mediator — Holds the emotional center when fear threatens to split the trio.",
   characterDynamics:
     "Friendship tested under survival pressure while parents mirror the children's fear through control and denial.",
   usp: "Low-budget high-impact contained survival thriller with child protagonists and strong family emotion.",
@@ -31,7 +31,7 @@ export const mockIntakeDefaults: IntakeFormData = {
   releaseFit: "OTT-first with festival potential; contained single-location production.",
   visualAesthetic:
     "Dark concrete, water reflections, moss green, rust stains, thin beams of light, claustrophobic framing.",
-  colorPalette: "Deep black, concrete grey, moss green, rust brown, pale water blue, warm family light",
+  colorPalette: "Deep black, concrete grey, moss green, rust brown, pale water blue, ice highlight",
   textureStyle: "Textured concrete, water stains, dark gradients, subtle film grain",
   designDirection:
     "Premium survival thriller deck with full-bleed imagery, dark textured backgrounds, minimal typography, and high tension.",
@@ -141,7 +141,7 @@ export const mockDesignDirection: DesignDirection = {
     { name: "Moss Green", hex: "#3F5F4A" },
     { name: "Rust Brown", hex: "#8A4B2A" },
     { name: "Pale Water Blue", hex: "#A9C6C7" },
-    { name: "Warm Family Light", hex: "#E2B15C" },
+    { name: "Ice Highlight", hex: "#67e8f9" },
   ],
   typography: {
     headings: "Condensed bold cinematic headings",
@@ -168,9 +168,12 @@ export const mockDesignDirection: DesignDirection = {
     "The deck should make the water tank feel like a silent villain. The visual system uses concrete, darkness, water, and restricted light to create urgency while preserving emotional warmth for family-driven slides.",
 };
 
+const TANK_IMAGE_PROMPT =
+  "A dark cinematic rooftop water tank, concrete texture, moss green stains, rust edges, water reflection, thin beam of light, survival thriller mood.";
+
 export const mockSlides: Slide[] = [
   {
-    id: "slide-1",
+    id: "slide-cover",
     slideNumber: 1,
     slideType: "cover",
     title: "Cover",
@@ -178,14 +181,16 @@ export const mockSlides: Slide[] = [
     content: {
       heading: "THE TANK",
       subheading: "A Devil On The Roof",
-      body: "A contained Telugu survival thriller built around childhood friendship, parental fear, and a rooftop danger hiding in plain sight.",
+      body: "A contained Telugu survival thriller about childhood friendship, parental fear, and a rooftop danger hiding in plain sight.",
+      footer: "Written & Directed by Ashok Ram",
     },
-    layout: { template: "cover", layoutType: "full_bleed" },
-    status: "approved",
+    layout: { template: "cover", layoutType: "cinematic_cover" },
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
     aiRationale: "Strong cinematic title treatment with immediate genre signal.",
   },
   {
-    id: "slide-2",
+    id: "slide-logline",
     slideNumber: 2,
     slideType: "logline",
     title: "Logline",
@@ -195,7 +200,8 @@ export const mockSlides: Slide[] = [
       body: "Three mischievous kids are accidentally sealed inside a rooftop water tank that begins filling with water, while their desperate parents search the entire city except the danger directly above them.",
     },
     layout: { template: "logline", layoutType: "centered_statement" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
     aiRationale: "Hook is visual, urgent, and immediately producible.",
   },
   {
@@ -213,37 +219,46 @@ export const mockSlides: Slide[] = [
       ],
     },
     layout: { template: "genre_blend", layoutType: "three_column" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
-    id: "slide-4",
+    id: "slide-synopsis",
     slideNumber: 4,
     slideType: "synopsis",
     title: "Synopsis",
     purpose: "Present the story journey clearly and emotionally.",
     content: {
       heading: "Synopsis",
-      body: "Three childhood friends sneak onto a Hyderabad apartment rooftop to play. A prank goes wrong and they become sealed inside the building's water tank as it slowly fills. While the city searches below, the parents confront guilt, fear, and the emotional distance that made them miss what was right above them.",
+      body: "Three childhood friends sneak onto a Hyderabad apartment rooftop to play. A prank goes wrong and they become sealed inside the building's water tank as it slowly fills.\n\nWhile the city searches below, the parents confront guilt, fear, and the emotional distance that made them miss what was right above them.\n\nThe tank becomes a silent villain — and survival becomes the language of reconciliation.",
     },
     layout: { template: "synopsis", layoutType: "split_image_text" },
-    status: "needs_review",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
     aiRationale: "Consider tightening Act 2 for pitch readability.",
   },
   {
-    id: "slide-5",
+    id: "slide-story-world",
     slideNumber: 5,
     slideType: "story_world",
     title: "Story World",
     purpose: "Build setting and atmosphere.",
     content: {
       heading: "Story World",
-      body: "A middle-class gated apartment community in Hyderabad — childhood mischief, parental fear, and urban isolation collide on a rooftop where the water tank becomes a silent villain.",
+      body: "A middle-class gated apartment community in Hyderabad — childhood mischief, parental fear, and urban isolation collide.",
+      items: [
+        { title: "Rooftop Water Tank", description: "The silent villain above the city" },
+        { title: "Apartment Corridors", description: "Claustrophobic urban maze" },
+        { title: "Family Homes", description: "Emotional anchor and guilt" },
+        { title: "City Search", description: "Desperate scale, wrong direction" },
+      ],
     },
-    layout: { template: "story_world", layoutType: "atmospheric" },
-    status: "approved",
+    layout: { template: "story_world", layoutType: "location_grid" },
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
-    id: "slide-6",
+    id: "slide-characters",
     slideNumber: 6,
     slideType: "character",
     title: "Main Characters",
@@ -251,13 +266,14 @@ export const mockSlides: Slide[] = [
     content: {
       heading: "Main Characters",
       characters: [
-        { name: "Ravi", role: "Fearless Leader", description: "Drives the group's courage until survival strips away bravado." },
-        { name: "Arjun", role: "Anxious Planner", description: "His caution becomes the group's only logic inside the tank." },
-        { name: "Meera", role: "Empathetic Mediator", description: "Holds the emotional center when fear threatens to split the trio." },
+        { name: "Potti", role: "Fearless Leader", description: "Drives the group's courage until survival strips away bravado.", wound: "Cannot admit fear" },
+        { name: "Bakki", role: "Anxious Planner", description: "His caution becomes the group's only logic inside the tank.", wound: "Paralyzed by what-ifs" },
+        { name: "Laddu", role: "Empathetic Mediator", description: "Holds the emotional center when fear threatens to split the trio.", wound: "Carries everyone's pain" },
       ],
     },
     layout: { template: "character", layoutType: "character_cards" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
     id: "slide-7",
@@ -292,16 +308,18 @@ export const mockSlides: Slide[] = [
       ],
     },
     layout: { template: "usp", layoutType: "grid" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
-    id: "slide-9",
+    id: "slide-show-cross",
     slideNumber: 9,
     slideType: "show_cross",
     title: "Show Cross",
     purpose: "Position with comparable films.",
     content: {
       heading: "Show Cross",
+      body: "Fall meets Helen with the emotional survival intensity of Manjummel Boys.",
       comps: [
         { title: "Fall", note: "Vertigo dread and contained height tension." },
         { title: "Helen", note: "Parental search drama with ticking urgency." },
@@ -309,10 +327,11 @@ export const mockSlides: Slide[] = [
       ],
     },
     layout: { template: "show_cross", layoutType: "comp_cards" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
-    id: "slide-10",
+    id: "slide-visual",
     slideNumber: 10,
     slideType: "visual_aesthetic",
     title: "Visual Aesthetic",
@@ -322,16 +341,19 @@ export const mockSlides: Slide[] = [
       body: "Dark concrete, water reflections, moss green, rust stains, thin beams of light, claustrophobic framing.",
       moodBlocks: [
         { label: "Concrete", color: "#2A2A2A" },
-        { label: "Moss", color: "#3F5F4A" },
-        { label: "Rust", color: "#8A4B2A" },
         { label: "Water", color: "#A9C6C7" },
+        { label: "Rust", color: "#8A4B2A" },
+        { label: "Moss Green", color: "#3F5F4A" },
+        { label: "Narrow Light", color: "#67e8f9" },
+        { label: "Rooftop Isolation", color: "#1a1a1f" },
       ],
     },
     layout: { template: "visual_aesthetic", layoutType: "moodboard" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
-    id: "slide-11",
+    id: "slide-audience",
     slideNumber: 11,
     slideType: "target_audience",
     title: "Target Audience",
@@ -339,13 +361,15 @@ export const mockSlides: Slide[] = [
     content: {
       heading: "Target Audience",
       items: [
-        { title: "Primary", description: "18–40 urban Telugu OTT viewers" },
-        { title: "Secondary", description: "Horror-drama crossover with family appeal" },
-        { title: "Festival", description: "Contained thriller programmers seeking emotional payoff" },
+        { title: "Family Audience", description: "Emotional payoff with universal parental stakes" },
+        { title: "Thriller Viewers", description: "Contained survival tension with escalating dread" },
+        { title: "Telugu Urban Viewers", description: "Hyderabad apartment world with regional authenticity" },
+        { title: "OTT Survival Drama", description: "Bingeable tension with strong emotional resolution" },
       ],
     },
     layout: { template: "target_audience", layoutType: "segments" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
     id: "slide-12",
@@ -370,14 +394,16 @@ export const mockSlides: Slide[] = [
     purpose: "Explain commercial upside.",
     content: {
       heading: "Market Potential",
-      bullets: [
-        "OTT-first Telugu survival thriller with pan-India subtitle appeal",
-        "Festival circuit potential for contained craft",
-        "Remake-friendly universal premise",
+      items: [
+        { title: "Contained production scale", description: "Single-location build with strong ROI positioning" },
+        { title: "OTT-friendly tension", description: "Bingeable survival arc with emotional climax" },
+        { title: "Strong emotional payoff", description: "Family reconciliation drives word-of-mouth" },
+        { title: "Regional authenticity", description: "Telugu urban world with pan-India subtitle appeal" },
       ],
     },
-    layout: { template: "generic", layoutType: "text_led" },
-    status: "approved",
+    layout: { template: "market_potential", layoutType: "investor_cards" },
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
   {
     id: "slide-14",
@@ -415,9 +441,11 @@ export const mockSlides: Slide[] = [
       heading: "Let's Talk",
       subheading: "The Tank — Feature Film Pitch Deck",
       body: "director@thetankfilm.com · +91 98765 43210",
+      footer: "Let's bring this story to screen.",
     },
     layout: { template: "contact", layoutType: "minimal" },
-    status: "approved",
+    status: "design_generated",
+    imagePrompt: TANK_IMAGE_PROMPT,
   },
 ];
 

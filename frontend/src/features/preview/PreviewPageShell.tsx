@@ -1,10 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { SetupWizardProvider } from "@/features/setup/SetupWizardContext";
-import { getProjectById } from "@/lib/mock/mock-projects";
-import { projectRoutes } from "@/lib/routes";
 
 interface PreviewPageShellProps {
   projectId: string;
@@ -12,27 +9,12 @@ interface PreviewPageShellProps {
 }
 
 export function PreviewPageShell({ projectId, children }: PreviewPageShellProps) {
-  const project = getProjectById(projectId);
-
   return (
     <SetupWizardProvider projectId={projectId}>
-      <div className="min-h-screen bg-surface-0 cinematic-gradient">
-        <header className="border-b border-border-glass bg-surface-0/60 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <div>
-              <Link
-                href={projectRoutes.dashboard()}
-                className="text-xs text-text-dim hover:text-text-muted"
-              >
-                ← Dashboard
-              </Link>
-              <p className="mt-1 font-display text-lg font-semibold text-text-primary">
-                {project.title} — Content preview
-              </p>
-            </div>
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
+      <div className="preview-page flex h-screen flex-col overflow-hidden bg-[#050505]">
+        <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 sm:py-5 lg:px-8 xl:max-w-[1600px]">
+          {children}
+        </main>
       </div>
     </SetupWizardProvider>
   );

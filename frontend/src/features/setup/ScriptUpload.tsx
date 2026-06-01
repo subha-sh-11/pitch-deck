@@ -24,7 +24,7 @@ export function ScriptUpload() {
   }
 
   return (
-    <div className="mb-8 rounded-2xl border border-dashed border-accent-gold/30 bg-surface-2/40 p-6">
+    <div className="mb-8 rounded-2xl border border-dashed border-accent-neon/30 bg-surface-2/40 p-6">
       <h3 className="text-sm font-semibold text-text-primary">Upload script (optional)</h3>
       <p className="mt-1 text-sm text-text-muted">
         PDF, DOCX, or FDX — we&apos;ll extract title, logline, genre, synopsis, characters,
@@ -61,7 +61,7 @@ export function ScriptUpload() {
 
       {extractedSummary && (
         <div className="mt-4 rounded-xl border border-border-glass bg-surface-1 p-4">
-          <p className="mb-3 text-xs uppercase tracking-wider text-accent-gold">
+          <p className="mb-3 text-xs uppercase tracking-wider text-accent-neon">
             Extracted from script
           </p>
           <div className="flex flex-wrap gap-2">

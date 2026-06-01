@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { WorkflowActionBar } from "@/components/layout/WorkflowActionBar";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
@@ -34,11 +35,23 @@ export function PitchStep({ projectId }: PitchStepProps) {
 
   return (
     <>
+      <WorkflowActionBar
+        left={
+          <Button type="button" variant="ghost" href={projectRoutes.setupBody(projectId)}>
+            ← Back
+          </Button>
+        }
+        right={
+          <Button type="submit" form="pitch-form">
+            Choose presentation template →
+          </Button>
+        }
+      />
       <PageHeader
         title="Pitch Strength"
         subtitle="Position your project for producers, investors, studios, or OTT platforms. Visual style will be recommended when you choose a template."
       />
-      <form onSubmit={handleContinue} className="space-y-6">
+      <form id="pitch-form" onSubmit={handleContinue} className="space-y-6">
         <Textarea
           label="USP / Unique Selling Points"
           value={formData.usp}
@@ -63,12 +76,6 @@ export function PitchStep({ projectId }: PitchStepProps) {
           onChange={(e) => updateForm({ releaseFit: e.target.value })}
           rows={2}
         />
-        <div className="flex justify-between gap-4">
-          <Button type="button" variant="ghost" href={projectRoutes.setupBody(projectId)}>
-            Back
-          </Button>
-          <Button type="submit">Choose Presentation Template</Button>
-        </div>
       </form>
     </>
   );

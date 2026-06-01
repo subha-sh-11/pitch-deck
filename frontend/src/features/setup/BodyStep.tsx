@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { WorkflowActionBar } from "@/components/layout/WorkflowActionBar";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
@@ -35,11 +36,23 @@ export function BodyStep({ projectId }: BodyStepProps) {
 
   return (
     <>
+      <WorkflowActionBar
+        left={
+          <Button type="button" variant="ghost" href={projectRoutes.setupIdentity(projectId)}>
+            ← Back
+          </Button>
+        }
+        right={
+          <Button type="submit" form="body-form">
+            Continue to Pitch Strength →
+          </Button>
+        }
+      />
       <PageHeader
         title="Story Body"
         subtitle="Describe the emotional, narrative, and character foundation of your project."
       />
-      <form onSubmit={handleContinue} className="space-y-6">
+      <form id="body-form" onSubmit={handleContinue} className="space-y-6">
         <Textarea
           label="Synopsis"
           value={formData.synopsis}
@@ -65,16 +78,6 @@ export function BodyStep({ projectId }: BodyStepProps) {
           onChange={(e) => updateForm({ characterDynamics: e.target.value })}
           rows={3}
         />
-        <div className="flex justify-between gap-4">
-          <Button
-            type="button"
-            variant="ghost"
-            href={projectRoutes.setupIdentity(projectId)}
-          >
-            Back
-          </Button>
-          <Button type="submit">Continue to Pitch Strength</Button>
-        </div>
       </form>
     </>
   );
