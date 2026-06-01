@@ -1,43 +1,73 @@
-import { Button } from "@/components/ui/Button";
+import Link from "next/link";
 import { DeckPreviewPanel } from "@/features/landing/DeckPreviewPanel";
 import { MOCK_PROJECT_ID } from "@/lib/mock/mock-projects";
 import { projectRoutes } from "@/lib/routes";
 
 export function HeroSection() {
   return (
-    <section className="landing-spotlight landing-vignette landing-grain relative min-h-[90vh]">
-      <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-24 lg:flex-row lg:items-center lg:gap-16 lg:py-32">
-        <div className="flex-1 text-center lg:text-left">
-          <p className="mb-5 text-xs font-medium uppercase tracking-[0.2em] text-accent-gold">
-            Gamma for filmmakers
-          </p>
-          <h1 className="font-display text-4xl font-semibold leading-[1.05] text-text-primary sm:text-5xl md:text-6xl lg:text-7xl">
+    <section className="relative min-h-[92vh] overflow-hidden">
+      <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-14 px-6 pb-20 pt-16 lg:flex-row lg:items-center lg:gap-12 lg:pb-28 lg:pt-20">
+        <div className="flex-1 text-center lg:max-w-xl lg:text-left">
+          <div className="landing-animate-in landing-delay-1 landing-badge-pill mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-neon opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-lime" />
+            </span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-neon">
+              Gamma for filmmakers
+            </span>
+          </div>
+
+          <h1 className="landing-animate-in landing-delay-2 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.05] tracking-tight text-text-primary">
             AI Pitch Deck Studio for{" "}
-            <span className="text-gradient-gold">Filmmakers</span>
+            <span className="landing-text-shimmer">Filmmakers</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-text-muted md:text-xl lg:mx-0">
-            Turn film ideas, scripts, and director vision into cinematic
-            investor-ready pitch decks.
+
+          <p className="landing-animate-in landing-delay-3 mx-auto mt-6 max-w-lg text-lg leading-relaxed text-text-muted lg:mx-0">
+            Turn scripts, director vision, and story DNA into cinematic,
+            investor-ready decks — in minutes, not weeks.
           </p>
-          <p className="mx-auto mt-4 max-w-lg text-sm text-text-dim lg:mx-0">
-            Purpose-built for film, web series, OTT, studio, producer, and
-            investor pitches — not another generic presentation tool.
+
+          <p className="landing-animate-in landing-delay-3 mx-auto mt-3 max-w-md text-sm text-text-dim lg:mx-0">
+            Built for feature films, OTT pitches, and producer meetings. Not a
+            generic slide tool.
           </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
-            <Button href={projectRoutes.newProject()} size="lg">
-              Create New Pitch Deck
-            </Button>
-            <Button
-              href={projectRoutes.setupIdentity(MOCK_PROJECT_ID)}
-              variant="secondary"
-              size="lg"
+
+          <div className="landing-animate-in landing-delay-4 mt-10 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
+            <Link
+              href={projectRoutes.newProject()}
+              className="landing-btn-primary inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold text-zinc-950"
             >
-              View Demo Workspace
-            </Button>
+              Create New Pitch Deck
+              <span aria-hidden>→</span>
+            </Link>
+            <Link
+              href={projectRoutes.setupIdentity(MOCK_PROJECT_ID)}
+              className="landing-btn-glass inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-medium text-text-primary"
+            >
+              View Demo
+            </Link>
+          </div>
+
+          <div className="landing-animate-in landing-delay-5 mt-12 flex flex-wrap items-center justify-center gap-8 lg:justify-start">
+            {[
+              { value: "12+", label: "Slide templates", accent: "text-accent-neon" },
+              { value: "AI", label: "Story extraction", accent: "text-accent-lime" },
+              { value: "1-click", label: "Export ready", accent: "text-text-primary" },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center lg:text-left">
+                <p className={`font-display text-2xl font-semibold ${stat.accent}`}>
+                  {stat.value}
+                </p>
+                <p className="text-[11px] uppercase tracking-wider text-text-dim">
+                  {stat.label}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="w-full flex-1 lg:max-w-xl">
+        <div className="landing-animate-in landing-delay-6 w-full flex-1 lg:max-w-[540px]">
           <DeckPreviewPanel />
         </div>
       </div>

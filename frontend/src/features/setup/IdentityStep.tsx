@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { WorkflowActionBar } from "@/components/layout/WorkflowActionBar";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -26,12 +27,15 @@ export function IdentityStep({ projectId }: IdentityStepProps) {
 
   return (
     <>
+      <WorkflowActionBar
+        right={<Button type="submit" form="identity-form">Continue to Story Body →</Button>}
+      />
       <PageHeader
         title="Story Identity"
         subtitle="Define the core identity of your project. Complete this section before moving to Story Body."
       />
       <ScriptUpload />
-      <form onSubmit={handleContinue} className="space-y-6">
+      <form id="identity-form" onSubmit={handleContinue} className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
           <Input
             label="Title"
@@ -68,9 +72,6 @@ export function IdentityStep({ projectId }: IdentityStepProps) {
           rows={2}
           placeholder="Dark, emotional, claustrophobic, urgent"
         />
-        <div className="flex justify-end">
-          <Button type="submit">Continue to Story Body</Button>
-        </div>
       </form>
     </>
   );

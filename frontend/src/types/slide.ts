@@ -17,15 +17,25 @@ export type SlideType =
   | "contact"
   | "generic";
 
-export type SlideStatus = "draft" | "approved" | "needs_review";
+export type SlideStatus =
+  | "draft"
+  | "approved"
+  | "needs_review"
+  | "design_generated";
 
 export interface SlideContent {
   heading: string;
   subheading?: string;
   body?: string;
+  footer?: string;
   bullets?: string[];
   items?: { title: string; description: string }[];
-  characters?: { name: string; role: string; description: string }[];
+  characters?: {
+    name: string;
+    role: string;
+    description: string;
+    wound?: string;
+  }[];
   comps?: { title: string; note: string }[];
   moodBlocks?: { label: string; color: string }[];
 }
@@ -33,6 +43,28 @@ export interface SlideContent {
 export interface SlideLayout {
   template: string;
   layoutType: string;
+}
+
+export type SlideStyleVariant = "cinematic" | "minimal" | "bold";
+
+export type SlideBackgroundKey =
+  | "default"
+  | "warm-portrait"
+  | "concrete"
+  | "water"
+  | "dark-gradient";
+
+export interface SlideAppearance {
+  styleVariant: SlideStyleVariant;
+  accentColor: string;
+  backgroundKey: SlideBackgroundKey;
+}
+
+export interface SlideComment {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface Slide {
@@ -44,8 +76,20 @@ export interface Slide {
   content: SlideContent;
   layout: SlideLayout;
   status: SlideStatus;
+  imagePrompt?: string;
   aiRationale?: string;
+  appearance?: SlideAppearance;
+  speakerNotes?: string;
+  comments?: SlideComment[];
+  transition?: string;
 }
+
+export const SLIDE_STATUS_LABELS: Record<SlideStatus, string> = {
+  draft: "Draft",
+  approved: "Approved",
+  needs_review: "Needs Review",
+  design_generated: "Design Generated",
+};
 
 export const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
   cover: "Cover",

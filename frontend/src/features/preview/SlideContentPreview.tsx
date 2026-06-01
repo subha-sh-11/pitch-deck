@@ -2,22 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Textarea";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
-import { getTemplateById } from "@/lib/mock/mock-templates";
 import { projectRoutes } from "@/lib/routes";
-import { SLIDE_TYPE_LABELS } from "@/types/slide";
-import { AddSlideMenu } from "./AddSlideMenu";
+import type { SlideContent } from "@/types/slide";
+import { DeckSlideIndex } from "./DeckSlideIndex";
 import { GeneratingOverlay } from "./GeneratingOverlay";
-import { PhaseBreadcrumb } from "./PhaseBreadcrumb";
-import {
-  getSelectedSlide,
-  slideContentToText,
-  textToSlideContentPatch,
-} from "./slide-content-utils";
+import { PreviewCinematicBackground } from "./PreviewCinematicBackground";
+import { SlideContentDetailPanel } from "./SlideContentDetailPanel";
+import { getSelectedSlide } from "./slide-content-utils";
 
 const GENERATE_DELAY_MS = 2500;
 
@@ -33,10 +26,7 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     isStepComplete,
     initDraftSlides,
     updateDraftSlide,
-    deleteDraftSlide,
-    insertDraftSlideAfter,
     regenerateDraftSlide,
-    regenerateAllDraftSlides,
     setGenerationStatus,
     approveContent,
     generationStatus,
@@ -44,7 +34,7 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
-  const [bodyText, setBodyText] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
     if (!isStepComplete("pitch")) {
@@ -62,52 +52,13 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     }
   }, [selectedTemplateId, draftSlides.length, initDraftSlides, projectId, router]);
 
-  const selected = getSelectedSlide(draftSlides, selectedId);
-  const selectedIndex = selected
-    ? draftSlides.findIndex((s) => s.id === selected.id)
-    : 0;
-
   useEffect(() => {
     if (draftSlides.length > 0 && !selectedId) {
       setSelectedId(draftSlides[0].id);
     }
   }, [draftSlides, selectedId]);
 
-  useEffect(() => {
-    const slide = draftSlides.find((s) => s.id === selectedId) ?? draftSlides[0];
-    if (slide) setBodyText(slideContentToText(slide.content));
-  }, [selectedId, draftSlides]);
-
-  const template = selectedTemplateId
-    ? getTemplateById(selectedTemplateId)
-    : undefined;
-
-  if (!isStepComplete("pitch") || !selectedTemplateId) {
-    return null;
-  }
-
-  if (draftSlides.length === 0 || !selected) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center text-text-muted">
-        Preparing slide preview…
-      </div>
-    );
-  }
-
-  function persistBodyEdit() {
-    if (!selected) return;
-    updateDraftSlide(
-      selected.id,
-      textToSlideContentPatch(bodyText, selected.content),
-    );
-  }
-
-  function handleSelectSlide(id: string) {
-    persistBodyEdit();
-    setSelectedId(id);
-    const slide = draftSlides.find((s) => s.id === id);
-    if (slide) setBodyText(slideContentToText(slide.content));
-  }
+  const selected = getSelectedSlide(draftSlides, selectedId);
 
   async function handleRegenerateSlide() {
     if (!selected) return;
@@ -116,130 +67,91 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     setRegeneratingId(null);
   }
 
+  function handleSaveSlideContent(patch: Partial<SlideContent>) {
+    if (!selected) return;
+    updateDraftSlide(selected.id, patch);
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 2000);
+  }
+
   async function handleStartGenerate() {
-    persistBodyEdit();
+    if (draftSlides.length === 0) initDraftSlides();
     setGenerationStatus("generating");
     await new Promise((r) => setTimeout(r, GENERATE_DELAY_MS));
     approveContent();
     router.push(projectRoutes.editor(projectId));
   }
 
+  if (!isStepComplete("pitch") || !selectedTemplateId) {
+    return null;
+  }
+
+  if (draftSlides.length === 0 || !selected) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-500">
+        Preparing slide content…
+      </div>
+    );
+  }
+
   return (
     <>
       {generationStatus === "generating" && <GeneratingOverlay />}
 
-      <PhaseBreadcrumb projectId={projectId} current="preview" />
+      <div className="preview-studio-root preview-page-refined flex min-h-0 flex-1 flex-col">
+        <PreviewCinematicBackground />
 
-      <PageHeader
-        title="Review slide content"
-        subtitle="Edit each slide before generating your pitch deck. Visual direction is applied automatically from your story and template."
-        actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void regenerateAllDraftSlides()}
-          >
-            Regenerate all
-          </Button>
-        }
-      />
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          <header className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                href={projectRoutes.templates(projectId)}
+                className="-ml-2 text-zinc-500"
+              >
+                ← Templates
+              </Button>
+              <h1 className="font-display text-xl font-semibold text-zinc-100 md:text-2xl">
+                Slide Content Preview
+              </h1>
+            </div>
+            <Button
+              size="sm"
+              className="preview-generate-btn shrink-0"
+              onClick={() => void handleStartGenerate()}
+            >
+              Start Generate →
+            </Button>
+          </header>
 
-      {template && (
-        <div className="mb-6 glass-panel rounded-xl p-4">
-          <p className="text-xs uppercase tracking-wider text-accent-gold">
-            Auto visual direction
+          <p className="mb-5 max-w-2xl text-sm text-zinc-500">
+            Review copy for each slide before the deck is built. Select a slide to
+            read or edit.
           </p>
-          <p className="mt-1 text-sm text-text-muted">{template.designDirection.mood}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {template.designDirection.palette.slice(0, 4).map((c) => (
-              <div
-                key={c.name}
-                className="h-6 w-6 rounded border border-border-glass"
-                style={{ backgroundColor: c.hex }}
-                title={c.name}
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[200px_1fr] lg:gap-5">
+            <aside className="min-h-[280px] lg:min-h-0 lg:max-h-[calc(100vh-140px)]">
+              <DeckSlideIndex
+                slides={draftSlides}
+                selectedId={selected.id}
+                onSelect={setSelectedId}
               />
-            ))}
+            </aside>
+
+            <div className="min-h-[400px] lg:min-h-0 lg:max-h-[calc(100vh-140px)]">
+              <SlideContentDetailPanel
+                slide={selected}
+                slideKey={selected.id}
+                totalSlides={draftSlides.length}
+                onSave={handleSaveSlideContent}
+                onRegenerate={() => void handleRegenerateSlide()}
+                regenerating={regeneratingId === selected.id}
+                savedFlash={savedFlash}
+              />
+            </div>
           </div>
         </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <div className="space-y-2 max-h-[520px] overflow-y-auto">
-          {draftSlides.map((slide, index) => (
-            <button
-              key={slide.id}
-              type="button"
-              onClick={() => handleSelectSlide(slide.id)}
-              className={`w-full rounded-xl border p-3 text-left transition-colors ${
-                selected.id === slide.id
-                  ? "border-accent-gold/50 bg-accent-gold/10"
-                  : "border-border-glass hover:bg-surface-2"
-              }`}
-            >
-              <span className="text-xs text-text-dim">{slide.slideNumber}</span>
-              <p className="font-medium text-text-primary">{slide.title}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-text-muted">
-                {slideContentToText(slide.content)}
-              </p>
-            </button>
-          ))}
-        </div>
-
-        <div className="glass-panel rounded-2xl p-6">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <h3 className="font-display text-xl font-semibold text-text-primary">
-              {selected.title}
-            </h3>
-            <Badge variant="muted">{SLIDE_TYPE_LABELS[selected.slideType]}</Badge>
-          </div>
-          <p className="mb-4 text-sm text-text-muted">{selected.purpose}</p>
-
-          <Textarea
-            label="Heading"
-            value={selected.content.heading}
-            onChange={(e) =>
-              updateDraftSlide(selected.id, { heading: e.target.value })
-            }
-            rows={1}
-            className="min-h-0 mb-4"
-          />
-          <Textarea
-            label="Content"
-            value={bodyText}
-            onChange={(e) => setBodyText(e.target.value)}
-            onBlur={persistBodyEdit}
-            rows={10}
-          />
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={regeneratingId === selected.id}
-              onClick={() => void handleRegenerateSlide()}
-            >
-              {regeneratingId === selected.id ? "Regenerating…" : "Regenerate slide"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={draftSlides.length <= 1}
-              onClick={() => deleteDraftSlide(selected.id)}
-            >
-              Delete slide
-            </Button>
-            <AddSlideMenu
-              onAdd={(type) => insertDraftSlideAfter(selectedIndex, type)}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 flex justify-between gap-4">
-        <Button variant="ghost" href={projectRoutes.templates(projectId)}>
-          Back to templates
-        </Button>
-        <Button onClick={() => void handleStartGenerate()}>Start Generate</Button>
       </div>
     </>
   );

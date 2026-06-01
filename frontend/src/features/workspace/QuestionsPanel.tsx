@@ -26,13 +26,13 @@ export function QuestionsPanel({ projectId }: QuestionsPanelProps) {
               cy="50"
               r="42"
               fill="none"
-              stroke="#e2b15c"
+              stroke="#67e8f9"
               strokeWidth="8"
               strokeDasharray={`${data.completenessScore * 2.64} 264`}
               strokeLinecap="round"
             />
           </svg>
-          <span className="absolute text-xl font-semibold text-accent-gold">
+          <span className="absolute text-xl font-semibold text-accent-neon">
             {data.completenessScore}%
           </span>
         </div>

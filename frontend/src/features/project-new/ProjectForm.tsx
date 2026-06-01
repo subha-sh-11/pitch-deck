@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { SectionCard } from "@/components/layout/SectionCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -39,23 +39,11 @@ const STORY_STAGES: { value: StoryStage; label: string }[] = [
   { value: "completed", label: "Completed Project" },
 ];
 
-const TONE_TAGS = [
-  "Emotional", "Dark", "Fun", "Gritty", "Massy", "Realistic",
-  "Poetic", "Suspenseful", "Romantic", "Spiritual", "Chaotic", "Premium",
-];
-
 export function ProjectForm() {
   const router = useRouter();
-  const [selectedTones, setSelectedTones] = useState<string[]>(["Dark", "Emotional"]);
   const [submitting, setSubmitting] = useState(false);
 
-  function toggleTone(tone: string) {
-    setSelectedTones((prev) =>
-      prev.includes(tone) ? prev.filter((t) => t !== tone) : [...prev, tone],
-    );
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     router.push(projectRoutes.setupIdentity(MOCK_PROJECT_ID));
@@ -70,7 +58,7 @@ export function ProjectForm() {
             <label className="block text-sm font-medium text-text-primary">Project Type</label>
             <select
               name="projectType"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none"
+              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
               defaultValue="feature_film"
             >
               {PROJECT_TYPES.map((t) => (
@@ -82,7 +70,7 @@ export function ProjectForm() {
             <label className="block text-sm font-medium text-text-primary">Pitch Purpose</label>
             <select
               name="pitchPurpose"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none"
+              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
               defaultValue="investor"
             >
               {PITCH_PURPOSES.map((p) => (
@@ -94,7 +82,7 @@ export function ProjectForm() {
             <label className="block text-sm font-medium text-text-primary">Story Stage</label>
             <select
               name="storyStage"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none"
+              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
               defaultValue="synopsis_ready"
             >
               {STORY_STAGES.map((s) => (
@@ -105,7 +93,7 @@ export function ProjectForm() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Market & Genre" description="Language, genre, and tonal positioning.">
+      <SectionCard title="Market & Genre" description="Language and genre positioning for your pitch.">
         <div className="grid gap-6 md:grid-cols-2">
           <Input
             label="Language / Market"
@@ -120,39 +108,6 @@ export function ProjectForm() {
               name="genreBlend"
               placeholder="Survival Thriller + Suspense Drama + Childhood Comedy"
             />
-          </div>
-          <div className="md:col-span-2 space-y-2">
-            <label className="block text-sm font-medium text-text-primary">Tone</label>
-            <div className="flex flex-wrap gap-2">
-              {TONE_TAGS.map((tone) => (
-                <button
-                  key={tone}
-                  type="button"
-                  onClick={() => toggleTone(tone)}
-                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                    selectedTones.includes(tone)
-                      ? "border-accent-gold bg-accent-gold/15 text-accent-gold"
-                      : "border-border-glass text-text-muted hover:border-accent-gold/30"
-                  }`}
-                >
-                  {tone}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text-primary">Production Status</label>
-            <select
-              name="productionStatus"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-gold/50 focus:outline-none"
-              defaultValue="development"
-            >
-              <option value="development">Development</option>
-              <option value="script_ready">Script Ready</option>
-              <option value="pre_production">Pre-production</option>
-              <option value="in_production">In Production</option>
-              <option value="post_production">Post-production</option>
-            </select>
           </div>
         </div>
       </SectionCard>

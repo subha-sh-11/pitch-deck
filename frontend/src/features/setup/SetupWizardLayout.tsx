@@ -19,7 +19,7 @@ export function SetupWizardLayout({ projectId, children }: SetupWizardLayoutProp
     <SetupWizardProvider projectId={projectId}>
       <div className="min-h-screen bg-surface-0 cinematic-gradient">
         <header className="border-b border-border-glass bg-surface-0/60 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
             <div>
               <Link
                 href={projectRoutes.dashboard()}
@@ -33,7 +33,7 @@ export function SetupWizardLayout({ projectId, children }: SetupWizardLayoutProp
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-3xl px-6 py-10">
+        <main className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-10">
           <SetupProgressBar />
           {children}
         </main>

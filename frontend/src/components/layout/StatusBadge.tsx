@@ -7,15 +7,15 @@ interface StatusBadgeProps {
 
 const statusVariant: Record<
   ProjectStatus,
-  "default" | "gold" | "success" | "warning" | "muted"
+  "default" | "neon" | "success" | "warning" | "muted"
 > = {
   intake: "muted",
   questions: "muted",
   story_analysis: "default",
   outline: "default",
-  content: "gold",
-  design: "gold",
-  editor: "gold",
+  content: "neon",
+  design: "neon",
+  editor: "neon",
   review: "warning",
   export: "success",
   completed: "success",
