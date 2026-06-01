@@ -17,13 +17,15 @@ export interface ContentReliabilityResult {
   aiSuggestion?: string;
 }
 
-const PLACEHOLDER_PATTERN = /^[A-Z]{4,8}$|^(test|lorem|xxx|asdf|zfdgvd)$/i;
+const ALL_CAPS_PLACEHOLDER = /^[A-Z]{4,8}$/;
+const KNOWN_PLACEHOLDER = /^(test|lorem|xxx|asdf|zfdgvd)$/i;
 
 function isPlaceholderText(text: string): boolean {
   const t = text.trim();
   if (t.length < 3) return true;
-  if (PLACEHOLDER_PATTERN.test(t)) return true;
-  if (!/[a-z]/i.test(t) && t.length < 12) return true;
+  if (KNOWN_PLACEHOLDER.test(t)) return true;
+  if (ALL_CAPS_PLACEHOLDER.test(t)) return true;
+  if (!/[a-z]/.test(t) && t.length < 12) return true;
   return false;
 }
 

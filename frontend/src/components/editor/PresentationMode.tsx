@@ -47,6 +47,7 @@ export function PresentationMode({
         <button
           type="button"
           onClick={onClose}
+          aria-label="Exit presentation"
           className="rounded-lg p-2 text-white/80 hover:bg-white/10"
         >
           <IconClose />
@@ -58,6 +59,7 @@ export function PresentationMode({
           type="button"
           disabled={index === 0}
           onClick={() => onIndexChange(index - 1)}
+          aria-label="Previous slide"
           className="mr-4 rounded-full p-3 text-white/80 hover:bg-white/10 disabled:opacity-30"
         >
           <IconChevronLeft className="h-8 w-8" />
@@ -71,6 +73,7 @@ export function PresentationMode({
           type="button"
           disabled={index >= slides.length - 1}
           onClick={() => onIndexChange(index + 1)}
+          aria-label="Next slide"
           className="ml-4 rounded-full p-3 text-white/80 hover:bg-white/10 disabled:opacity-30"
         >
           <IconChevronRight className="h-8 w-8" />

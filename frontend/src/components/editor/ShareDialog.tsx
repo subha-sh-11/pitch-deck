@@ -24,6 +24,7 @@ export function ShareDialog({ open, onClose, projectTitle, onToast }: ShareDialo
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close share dialog"
             className="rounded-lg p-1 text-[#5C5C66] hover:bg-[#F0F0F3]"
           >
             <IconClose />

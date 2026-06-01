@@ -33,7 +33,7 @@ function SectionBlock({
 }: {
   title: string;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">

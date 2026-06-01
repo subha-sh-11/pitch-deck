@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Slide, SlideContent } from "@/types/slide";
@@ -33,11 +33,21 @@ export function SlideContentDetailPanel({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
 
+  const formattedText = useMemo(
+    () => blocksToEditableText(formatSlidePreviewBlocks(slide)),
+    [slide],
+  );
+
   useEffect(() => {
     setEditing(false);
-    setEditText(blocksToEditableText(formatSlidePreviewBlocks(slide)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on slide switch
+    setEditText(formattedText);
   }, [slide.id]);
+
+  useEffect(() => {
+    if (!editing) {
+      setEditText(formattedText);
+    }
+  }, [formattedText, editing]);
 
   function handleSaveEdit() {
     onSave(applyEditableTextToSlide(slide, editText));

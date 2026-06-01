@@ -37,6 +37,7 @@ export function EditorFlyout({
           <button
             type="button"
             onClick={onClose}
+            aria-label={`Close ${title}`}
             className="rounded-lg p-1 text-[#5C5C66] hover:bg-[#F0F0F3]"
           >
             <IconClose className="h-4 w-4" />

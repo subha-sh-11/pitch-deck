@@ -38,18 +38,19 @@ export function PitchTopBar({
       <div className="flex min-w-0 items-center gap-2">
         <Link
           href={projectRoutes.dashboard()}
+          aria-label="Home"
           className="flex h-9 w-9 items-center justify-center rounded-lg text-[#5C5C66] transition-colors hover:bg-[#F0F0F3] hover:text-[#1A1A1F]"
-          title="Home"
         >
           <IconHome />
         </Link>
         <button
           type="button"
           onClick={onMenuToggle}
+          aria-label="Menu"
+          aria-expanded={menuOpen}
           className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
             menuOpen ? "bg-[#EEF0FF] text-[#4F46E5]" : "text-[#5C5C66] hover:bg-[#F0F0F3]"
           }`}
-          title="Menu"
         >
           <IconMenu />
         </button>
@@ -78,22 +79,22 @@ export function PitchTopBar({
         </div>
         <button
           type="button"
+          aria-label="Notifications"
           className="hidden h-9 w-9 items-center justify-center rounded-lg text-[#5C5C66] hover:bg-[#F0F0F3] sm:flex"
-          title="Notifications"
         >
           <IconBell />
         </button>
         <button
           type="button"
+          aria-label="Grid view"
           className="hidden h-9 w-9 items-center justify-center rounded-lg text-[#5C5C66] hover:bg-[#F0F0F3] md:flex"
-          title="Grid view"
         >
           <IconGrid />
         </button>
         <button
           type="button"
+          aria-label="Analytics"
           className="hidden h-9 w-9 items-center justify-center rounded-lg text-[#5C5C66] hover:bg-[#F0F0F3] md:flex"
-          title="Analytics"
         >
           <IconAnalytics />
         </button>
@@ -107,8 +108,8 @@ export function PitchTopBar({
         <button
           type="button"
           onClick={onPresent}
+          aria-label="Present"
           className="ml-1 flex h-9 w-9 items-center justify-center rounded-lg text-[#5C5C66] transition-colors hover:bg-[#F0F0F3]"
-          title="Present"
         >
           <IconPlay />
         </button>

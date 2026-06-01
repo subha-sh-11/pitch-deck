@@ -3,21 +3,52 @@ import type { PitchTemplate } from "@/types/template";
 import type { Slide, SlideContent, SlideType } from "@/types/slide";
 import type { IntakeFormData } from "@/types/workflow";
 
-const DEFAULT_IMAGE_PROMPT =
-  "A dark cinematic rooftop water tank, concrete texture, moss green stains, rust edges, water reflection, thin beam of light, survival thriller mood.";
+function imagePromptForSlideType(
+  slideType: SlideType,
+  form: IntakeFormData,
+): string | undefined {
+  const title = form.title.trim();
+  const mood = (form.visualAesthetic || form.tone || "cinematic").trim();
+  const visualTypes: SlideType[] = [
+    "cover",
+    "logline",
+    "genre_blend",
+    "synopsis",
+    "story_world",
+    "character",
+    "supporting_characters",
+    "visual_aesthetic",
+    "show_cross",
+  ];
+  if (!visualTypes.includes(slideType)) return undefined;
+
+  const label = title || "the project";
+  switch (slideType) {
+    case "cover":
+      return `Cinematic title slide for "${label}", ${mood} atmosphere.`;
+    case "visual_aesthetic":
+      return `Mood board collage: ${mood}.`;
+    case "story_world":
+      return `Story world visual for "${label}": ${form.storyWorld?.slice(0, 80) || mood}.`;
+    default:
+      return `Pitch deck slide imagery for "${label}", ${mood}, ${slideType} slide.`;
+  }
+}
 
 export function contentForSlideType(
   slideType: SlideType,
   form: IntakeFormData,
 ): SlideContent {
   switch (slideType) {
-    case "cover":
+    case "cover": {
+      const synopsisLead = form.synopsis.trim().split(/\n/)[0]?.trim() ?? "";
       return {
         heading: form.title.toUpperCase() || "UNTITLED",
         subheading: form.tagline,
-        body: "A contained Telugu survival thriller about childhood friendship, parental fear, and a rooftop danger hiding in plain sight.",
-        footer: "Written & Directed by Ashok Ram",
+        body: form.logline.trim() || synopsisLead,
+        footer: "",
       };
+    }
     case "logline":
       return { heading: "Logline", body: form.logline };
     case "genre_blend": {
@@ -42,7 +73,7 @@ export function contentForSlideType(
     case "synopsis":
       return {
         heading: "Synopsis",
-        body: `${form.synopsis}\n\nWhile the city searches below, parents confront guilt, fear, and the emotional distance that made them miss what was right above them.`,
+        body: form.synopsis,
       };
     case "story_world":
       return {
@@ -155,9 +186,9 @@ export function contentForSlideType(
     case "contact":
       return {
         heading: "Let's Talk",
-        subheading: `${form.title} — Feature Film Pitch Deck`,
-        body: "director@thetankfilm.com · Ready for producer conversations.",
-        footer: "Let's bring this story to screen.",
+        subheading: form.title ? `${form.title} — Pitch Deck` : "Pitch Deck",
+        body: form.releaseFit.trim(),
+        footer: "",
       };
     default:
       return { heading: "Slide", body: form.synopsis };
@@ -217,7 +248,7 @@ export function buildSlideFromOutline(
       layoutType: layoutTypes[outline.slideType] ?? "auto",
     },
     status: "design_generated",
-    imagePrompt: DEFAULT_IMAGE_PROMPT,
+    imagePrompt: imagePromptForSlideType(outline.slideType, form),
     appearance: { ...DEFAULT_SLIDE_APPEARANCE },
     speakerNotes: "",
     comments: [],

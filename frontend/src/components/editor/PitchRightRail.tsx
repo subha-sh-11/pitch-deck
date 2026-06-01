@@ -51,7 +51,8 @@ export function PitchRightRail({
           <button
             key={id}
             type="button"
-            title={label}
+            aria-label={label}
+            aria-pressed={activePanel === id}
             onClick={() => toggle(id)}
             className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
               activePanel === id
@@ -68,24 +69,24 @@ export function PitchRightRail({
         <button
           type="button"
           onClick={() => onZoomChange(Math.max(50, zoom - 10))}
+          aria-label="Zoom out"
           className="text-[10px] text-[#9CA3AF] hover:text-[#1A1A1F]"
-          title="Zoom out"
         >
           −
         </button>
         <button
           type="button"
           onClick={() => onZoomChange(100)}
+          aria-label={`Reset zoom to 100%, current ${zoom}%`}
           className="text-xs font-medium tabular-nums text-[#5C5C66] hover:text-[#1A1A1F]"
-          title="Reset zoom"
         >
           {zoom}%
         </button>
         <button
           type="button"
           onClick={() => onZoomChange(Math.min(125, zoom + 10))}
+          aria-label="Zoom in"
           className="text-[10px] text-[#9CA3AF] hover:text-[#1A1A1F]"
-          title="Zoom in"
         >
           +
         </button>
