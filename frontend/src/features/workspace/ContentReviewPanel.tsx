@@ -36,7 +36,7 @@ export function ContentReviewPanel({ projectId }: ContentReviewPanelProps) {
             onClick={() => setSelectedId(slide.id)}
             className={`w-full rounded-xl border p-3 text-left transition-colors ${
               selectedId === slide.id
-                ? "border-accent-gold/50 bg-accent-gold/10"
+                ? "border-accent-neon/50 bg-accent-neon/10"
                 : "border-border-glass hover:bg-surface-2"
             }`}
           >

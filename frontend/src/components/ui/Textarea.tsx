@@ -23,7 +23,7 @@ export function Textarea({
       )}
       <textarea
         id={inputId}
-        className={`w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-3 text-sm text-text-primary placeholder:text-text-dim focus:border-accent-gold/50 focus:outline-none focus:ring-1 focus:ring-accent-gold/30 min-h-[100px] resize-y ${className}`}
+        className={`w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-3 text-sm text-text-primary placeholder:text-text-dim focus:border-accent-neon/50 focus:outline-none focus:ring-1 focus:ring-accent-neon/30 min-h-[100px] resize-y ${className}`}
         {...props}
       />
       {helperText && (

@@ -14,13 +14,14 @@ import {
   buildSlidesFromTemplate,
   renumberSlides,
 } from "@/lib/build-slides";
+import { DEFAULT_SLIDE_APPEARANCE } from "@/lib/slide-appearance";
 import {
   ADDABLE_SLIDE_TYPES,
   regenerateAllSlides,
   regenerateSingleSlide,
 } from "@/lib/regenerate-slide";
 import { getTemplateById } from "@/lib/mock/mock-templates";
-import type { Slide, SlideContent, SlideType } from "@/types/slide";
+import type { Slide, SlideAppearance, SlideComment, SlideContent, SlideType } from "@/types/slide";
 import {
   EMPTY_INTAKE_FORM,
   type ExtractedScriptSummary,
@@ -53,6 +54,15 @@ interface SetupWizardContextValue extends SetupWizardState {
   setScriptUploaded: (value: boolean) => void;
   initDraftSlides: () => void;
   updateDraftSlide: (id: string, patch: Partial<SlideContent> & { title?: string }) => void;
+  updateDraftSlideMeta: (
+    id: string,
+    patch: Partial<
+      Pick<Slide, "speakerNotes" | "comments" | "transition" | "title">
+    > & {
+      appearance?: Partial<SlideAppearance>;
+    },
+  ) => void;
+  addSlideComment: (id: string, text: string) => void;
   deleteDraftSlide: (id: string) => boolean;
   insertDraftSlideAfter: (index: number, slideType: SlideType) => void;
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
@@ -170,6 +180,52 @@ export function SetupWizardProvider({
     [],
   );
 
+  const updateDraftSlideMeta = useCallback(
+    (
+      id: string,
+      patch: Partial<
+        Pick<Slide, "speakerNotes" | "comments" | "transition" | "title">
+      > & {
+        appearance?: Partial<SlideAppearance>;
+      },
+    ) => {
+      setState((prev) => ({
+        ...prev,
+        draftSlides: prev.draftSlides.map((s) => {
+          if (s.id !== id) return s;
+          return {
+            ...s,
+            ...patch,
+            appearance: patch.appearance
+              ? {
+                  ...(s.appearance ?? DEFAULT_SLIDE_APPEARANCE),
+                  ...patch.appearance,
+                }
+              : s.appearance,
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const addSlideComment = useCallback((id: string, text: string) => {
+    const comment: SlideComment = {
+      id: `comment-${Date.now()}`,
+      author: "You",
+      text,
+      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setState((prev) => ({
+      ...prev,
+      draftSlides: prev.draftSlides.map((s) =>
+        s.id === id
+          ? { ...s, comments: [...(s.comments ?? []), comment] }
+          : s,
+      ),
+    }));
+  }, []);
+
   const deleteDraftSlide = useCallback((id: string): boolean => {
     let deleted = false;
     setState((prev) => {
@@ -275,6 +331,8 @@ export function SetupWizardProvider({
       setScriptUploaded,
       initDraftSlides,
       updateDraftSlide,
+      updateDraftSlideMeta,
+      addSlideComment,
       deleteDraftSlide,
       insertDraftSlideAfter,
       moveDraftSlide,
@@ -295,6 +353,8 @@ export function SetupWizardProvider({
       setScriptUploaded,
       initDraftSlides,
       updateDraftSlide,
+      updateDraftSlideMeta,
+      addSlideComment,
       deleteDraftSlide,
       insertDraftSlideAfter,
       moveDraftSlide,

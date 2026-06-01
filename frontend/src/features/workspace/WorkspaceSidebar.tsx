@@ -14,14 +14,14 @@ interface WorkspaceSidebarProps {
 function StepIcon({ status }: { status: WorkflowStepStatus }) {
   if (status === "completed") {
     return (
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-gold/20 text-xs text-accent-gold">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-neon/20 text-xs text-accent-neon">
         ✓
       </span>
     );
   }
   if (status === "active") {
     return (
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-gold text-xs font-medium text-surface-0">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-neon text-xs font-medium text-surface-0">
         •
       </span>
     );
@@ -55,7 +55,7 @@ export function WorkspaceSidebar({ projectId }: WorkspaceSidebarProps) {
               href={projectRoutes.step(projectId, step.id)}
               className={`flex min-w-[200px] items-start gap-3 rounded-xl p-3 transition-colors lg:min-w-0 ${
                 step.status === "active"
-                  ? "bg-accent-gold/10 border border-accent-gold/30"
+                  ? "bg-accent-neon/10 border border-accent-neon/30"
                   : "hover:bg-surface-2 border border-transparent"
               }`}
             >

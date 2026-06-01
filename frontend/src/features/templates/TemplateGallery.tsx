@@ -2,17 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { PhaseBreadcrumb } from "@/features/preview/PhaseBreadcrumb";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
 import {
   getRecommendedTemplates,
   getTemplateById,
 } from "@/lib/mock/mock-templates";
 import { projectRoutes } from "@/lib/routes";
+import { TemplatePreviewCard } from "./TemplatePreviewCard";
 
 interface TemplateGalleryProps {
   projectId: string;
@@ -56,78 +53,77 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
   }
 
   return (
-    <>
-      <PhaseBreadcrumb projectId={projectId} current="template" />
-      <PageHeader
-        title="Choose a presentation template"
-        subtitle="Each template includes 12+ slides. Visual direction is generated automatically from your story and template style."
-      />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {templates.map((template) => (
-          <button
-            key={template.id}
-            type="button"
-            onClick={() => handleSelect(template.id)}
-            className="text-left"
-          >
-            <Card
-              hover
-              className={`h-full transition-all ${
-                selected === template.id
-                  ? "ring-2 ring-accent-gold/50 border-accent-gold/40"
-                  : ""
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                {template.id === topPick && (
-                  <Badge variant="gold">Recommended</Badge>
-                )}
-                <Badge variant="muted">{template.slideCount} slides</Badge>
-              </div>
-              <h3 className="font-display text-xl font-semibold text-text-primary">
-                {template.name}
-              </h3>
-              <p className="mt-2 text-sm text-text-muted">{template.description}</p>
-            </Card>
-          </button>
-        ))}
+    <div className="w-full">
+      <div className="templates-page-header">
+        <Button
+          variant="ghost"
+          size="sm"
+          href={projectRoutes.setupPitch(projectId)}
+          className="-ml-2 text-zinc-500"
+        >
+          ← Back
+        </Button>
+        <Button
+          size="sm"
+          className="templates-continue-btn preview-cta-primary"
+          onClick={continueToPreview}
+          disabled={!selected}
+        >
+          Continue to slide preview →
+        </Button>
       </div>
 
-      {activeTemplate && (
-        <div className="mt-8 glass-panel rounded-2xl p-6">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-accent-gold">
-            Generated visual direction
-          </h3>
-          <p className="mt-2 text-sm text-text-muted">{activeTemplate.designDirection.mood}</p>
-          <p className="mt-1 text-sm text-text-dim">
-            {activeTemplate.designDirection.cinematicTone}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {activeTemplate.designDirection.palette.map((color) => (
-              <div key={color.name} className="flex items-center gap-2">
-                <div
-                  className="h-8 w-8 rounded-lg border border-border-glass"
-                  style={{ backgroundColor: color.hex }}
-                />
-                <span className="text-xs text-text-muted">{color.name}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs text-text-dim">
-            {activeTemplate.designDirection.rationale}
-          </p>
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-zinc-100 md:text-[1.65rem]">
+          Choose a presentation template
+        </h1>
+        <p className="mt-1.5 max-w-2xl text-sm text-zinc-500">
+          Each structure includes 10–14 slides. Visual direction is generated from your
+          story when you continue.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          {templates.map((template) => (
+            <TemplatePreviewCard
+              key={template.id}
+              template={template}
+              selected={selected === template.id}
+              recommended={template.id === topPick}
+              onSelect={() => handleSelect(template.id)}
+            />
+          ))}
         </div>
-      )}
 
-      <div className="mt-8 flex justify-between">
-        <Button variant="ghost" href={projectRoutes.setupPitch(projectId)}>
-          Back
-        </Button>
-        <Button onClick={continueToPreview} disabled={!selected}>
-          Continue to slide preview
-        </Button>
+        {activeTemplate && (
+          <aside className="templates-direction-panel h-fit p-4 lg:sticky lg:top-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-neon">
+              Visual direction
+            </p>
+            <p className="mt-2 text-sm font-medium text-zinc-300">
+              {activeTemplate.designDirection.mood}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              {activeTemplate.designDirection.cinematicTone}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeTemplate.designDirection.palette.map((color) => (
+                <div
+                  key={color.name}
+                  className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1"
+                >
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-sm border border-zinc-700"
+                    style={{ backgroundColor: color.hex }}
+                  />
+                  <span className="text-[10px] text-zinc-500">{color.name}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
       </div>
-    </>
+    </div>
   );
 }

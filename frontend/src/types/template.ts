@@ -9,4 +9,6 @@ export interface PitchTemplate {
   slideOutline: DeckOutlineItem[];
   designDirection: DesignDirection;
   matchTags: string[];
+  /** Visual mock style key for gallery preview cards */
+  previewStyle?: string;
 }

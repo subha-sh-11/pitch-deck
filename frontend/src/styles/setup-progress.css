@@ -1,0 +1,196 @@
+/* Setup wizard step bar — grey + cyan with traveling shine */
+
+@keyframes setup-shine-travel {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(200%);
+    opacity: 0;
+  }
+}
+
+.setup-progress {
+  position: relative;
+  margin-bottom: 2.5rem;
+}
+
+.setup-progress__list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .setup-progress__list {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+}
+
+.setup-progress__step {
+  flex: 1;
+  min-width: 0;
+}
+
+.setup-progress__btn > .setup-progress__badge,
+.setup-progress__btn > .setup-progress__label {
+  position: relative;
+  z-index: 1;
+}
+
+.setup-progress__btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  border-radius: 9999px;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  background: #18181b;
+  padding: 0.65rem 1.1rem 0.65rem 0.65rem;
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    transform 0.25s ease,
+    box-shadow 0.3s ease;
+  overflow: hidden;
+}
+
+.setup-progress__btn--active {
+  border-top-color: rgba(34, 211, 238, 0.5);
+  border-left-color: rgba(34, 211, 238, 0.5);
+  border-right-color: rgba(63, 63, 70, 0.65);
+  border-bottom-color: rgba(63, 63, 70, 0.65);
+  background: #1c1c1f;
+  box-shadow:
+    -1px -1px 0 rgba(34, 211, 238, 0.3),
+    -3px -3px 14px rgba(34, 211, 238, 0.1);
+}
+
+.setup-progress__btn--active::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 45%;
+  border-radius: 9999px 0 0 0;
+  background: linear-gradient(
+    180deg,
+    rgba(34, 211, 238, 0.85),
+    transparent
+  );
+  animation: setup-shine-travel 2.6s ease-in-out infinite;
+  animation-delay: 0.35s;
+  pointer-events: none;
+}
+
+.setup-progress__btn--active::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 2px;
+  border-radius: 9999px 0 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.9),
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: setup-shine-travel 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.setup-progress__btn--completed {
+  border-color: rgba(82, 82, 91, 0.7);
+  background: #1a1a1d;
+}
+
+.setup-progress__btn--completed:hover {
+  border-color: rgba(34, 211, 238, 0.28);
+  background: #1f1f23;
+}
+
+.setup-progress__btn--locked {
+  border-color: rgba(39, 39, 42, 0.9);
+  background: rgba(24, 24, 27, 0.6);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.setup-progress__badge {
+  display: flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition:
+    background 0.3s ease,
+    color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.setup-progress__badge--active {
+  background: #22d3ee;
+  color: #09090b;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.45);
+}
+
+.setup-progress__badge--completed {
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  color: #22d3ee;
+}
+
+.setup-progress__badge--locked {
+  background: rgba(63, 63, 70, 0.6);
+  border: 1px solid rgba(82, 82, 91, 0.5);
+  color: #71717a;
+}
+
+.setup-progress__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #a1a1aa;
+  transition: color 0.3s ease;
+}
+
+.setup-progress__btn--active .setup-progress__label {
+  color: #fafafa;
+}
+
+.setup-progress__btn--completed .setup-progress__label {
+  color: #d4d4d8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-progress__btn--active::before,
+  .setup-progress__btn--active::after {
+    animation: none;
+  }
+
+  .setup-progress__btn--active {
+    box-shadow: -1px -1px 0 rgba(34, 211, 238, 0.4);
+  }
+}

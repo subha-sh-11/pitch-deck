@@ -1,0 +1,85 @@
+/* Slide Content Preview — restrained, professional */
+
+.preview-page-refined {
+  --preview-accent: #67e8f9;
+  --preview-accent-muted: rgba(103, 232, 249, 0.35);
+}
+
+.preview-page-refined .preview-studio-bg__spotlight,
+.preview-page-refined .preview-studio-bg__particle {
+  opacity: 0.35;
+}
+
+.preview-page-refined .preview-index-row--active::before,
+.preview-page-refined .preview-index-row--active::after {
+  display: none;
+}
+
+.preview-page-refined .preview-index-row--active {
+  border-top-color: rgba(63, 63, 70, 0.8);
+  border-left-color: var(--preview-accent-muted);
+  border-right-color: rgba(39, 39, 42, 0.8);
+  border-bottom-color: rgba(39, 39, 42, 0.8);
+  background: #1c1c1f;
+  box-shadow: inset 3px 0 0 var(--preview-accent-muted);
+}
+
+.preview-page-refined .preview-index-row--active .preview-index-num {
+  color: var(--preview-accent);
+}
+
+.preview-page-refined .preview-index-row:not(.preview-index-row--active) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.preview-page-refined .preview-index-row:not(.preview-index-row--active):hover {
+  background: rgba(39, 39, 42, 0.5);
+  transform: none;
+}
+
+.preview-slide-panel {
+  background: #111113;
+  border: 1px solid rgba(63, 63, 70, 0.45);
+  border-radius: 14px;
+}
+
+.preview-slide-list {
+  background: #111113;
+  border: 1px solid rgba(63, 63, 70, 0.45);
+  border-radius: 14px;
+}
+
+.preview-content-block {
+  border-radius: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.4);
+  background: rgba(24, 24, 27, 0.6);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.preview-content-block:hover {
+  border-color: rgba(82, 82, 91, 0.6);
+  background: rgba(39, 39, 42, 0.5);
+}
+
+.preview-fade-in {
+  animation: preview-fade-up 0.35s ease backwards;
+}
+
+.preview-generate-btn {
+  background: #e4e4e7 !important;
+  color: #18181b !important;
+  box-shadow: none !important;
+}
+
+.preview-generate-btn:hover {
+  background: #fafafa !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+.preview-generate-btn::before {
+  display: none !important;
+}

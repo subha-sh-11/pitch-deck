@@ -31,7 +31,7 @@ export function StoryAnalysisPanel({ projectId }: StoryAnalysisPanelProps) {
           {data.genreDna.map((g) => (
             <span
               key={g}
-              className="rounded-full border border-accent-gold/30 bg-accent-gold/10 px-3 py-1 text-sm text-accent-gold"
+              className="rounded-full border border-accent-neon/30 bg-accent-neon/10 px-3 py-1 text-sm text-accent-neon"
             >
               {g}
             </span>

@@ -21,7 +21,7 @@ export function ProgressBar({
       )}
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-accent-rust to-accent-gold transition-all duration-500"
+          className="h-full rounded-full bg-gradient-to-r from-accent-rust to-accent-neon transition-all duration-500"
           style={{ width: `${clamped}%` }}
         />
       </div>

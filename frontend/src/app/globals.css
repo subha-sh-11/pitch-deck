@@ -1,9 +1,14 @@
 @import "tailwindcss";
 @import "../styles/cinematic.css";
+@import "../styles/landing.css";
+@import "../styles/preview-studio.css";
+@import "../styles/setup-progress.css";
+@import "../styles/templates-page.css";
+@import "../styles/preview-page-refined.css";
 
 :root {
-  --background: #050505;
-  --foreground: #ede7da;
+  --background: #09090b;
+  --foreground: #fafafa;
 }
 
 body {
@@ -18,5 +23,5 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(226, 177, 92, 0.3) transparent;
+  scrollbar-color: rgba(34, 211, 238, 0.28) transparent;
 }

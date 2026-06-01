@@ -27,7 +27,7 @@ export function DeckEditor({ projectId }: DeckEditorProps) {
             type="button"
             onClick={() => setIndex(i)}
             className={`shrink-0 rounded-lg border p-2 transition-colors xl:w-full ${
-              i === index ? "border-accent-gold/50 bg-accent-gold/10" : "border-border-glass"
+              i === index ? "border-accent-neon/50 bg-accent-neon/10" : "border-border-glass"
             }`}
           >
             <div className="aspect-video w-32 xl:w-full rounded bg-surface-3 mb-1" />

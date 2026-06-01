@@ -22,7 +22,7 @@ export function OutlinePanel({ projectId }: OutlinePanelProps) {
           <Card key={item.slideNumber} hover>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex gap-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-medium text-accent-gold">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-sm font-medium text-accent-neon">
                   {item.slideNumber}
                 </span>
                 <div>
@@ -31,7 +31,7 @@ export function OutlinePanel({ projectId }: OutlinePanelProps) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge variant={item.required ? "gold" : "outline"}>
+                <Badge variant={item.required ? "neon" : "outline"}>
                   {item.required ? "Required" : "Optional"}
                 </Badge>
                 <Badge variant="muted">{SLIDE_TYPE_LABELS[item.slideType]}</Badge>

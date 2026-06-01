@@ -1,0 +1,13 @@
+export { CoverSlide } from "./CoverSlide";
+export { LoglineSlide } from "./LoglineSlide";
+export { GenreBlendSlide } from "./GenreBlendSlide";
+export { SynopsisSlide } from "./SynopsisSlide";
+export { StoryWorldSlide } from "./StoryWorldSlide";
+export { CharacterSlide } from "./CharacterSlide";
+export { USPGridSlide } from "./USPGridSlide";
+export { ShowCrossSlide } from "./ShowCrossSlide";
+export { VisualAestheticSlide } from "./VisualAestheticSlide";
+export { TargetAudienceSlide } from "./TargetAudienceSlide";
+export { MarketPotentialSlide } from "./MarketPotentialSlide";
+export { ContactSlide } from "./ContactSlide";
+export { GenericSlide } from "./GenericSlide";
