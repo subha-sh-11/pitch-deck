@@ -1,18 +1,23 @@
 """FastAPI application entrypoint."""
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import health
+from app.core.logging import get_logger, setup_logging
+from app.routers import assets, decks, generate, health, jobs, projects, templates
+
+setup_logging()
+_req_log = get_logger("request")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup / shutdown hooks (engine warmup, cache, etc.) go here.
+    get_logger("app").info("Pitch Deck API starting — provider checks below")
     yield
 
 
@@ -23,6 +28,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    dur_ms = (time.perf_counter() - start) * 1000
+    _req_log.info(
+        "%s %s -> %s (%.0f ms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        dur_ms,
+    )
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -32,6 +52,12 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
+app.include_router(projects.router, prefix=settings.api_v1_prefix)
+app.include_router(decks.router, prefix=settings.api_v1_prefix)
+app.include_router(generate.router, prefix=settings.api_v1_prefix)
+app.include_router(jobs.router, prefix=settings.api_v1_prefix)
+app.include_router(assets.router, prefix=settings.api_v1_prefix)
+app.include_router(templates.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

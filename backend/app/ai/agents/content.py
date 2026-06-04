@@ -1,0 +1,171 @@
+"""Slide Content agent → SlideContent per slide type (frontend src/types/slide.ts).
+
+Deterministic fallback mirrors the frontend's build-slides logic, grounded strictly in the
+intake form. The LLM refinement sharpens copy without inventing plot beyond the intake.
+"""
+from __future__ import annotations
+
+import json
+import re
+
+from app.ai.llm import complete_json
+
+
+def _g(intake: dict, key: str, default: str = "") -> str:
+    val = (intake or {}).get(key)
+    return val if isinstance(val, str) and val.strip() else default
+
+
+def _split(text: str, pattern: str, limit: int) -> list[str]:
+    return [p.strip() for p in re.split(pattern, text) if p.strip()][:limit]
+
+
+def _mood_blocks(design: dict | None) -> list[dict]:
+    palette = (design or {}).get("palette") or []
+    blocks = [{"label": c.get("name", "Tone"), "color": c.get("hex", "#2A2A2A")}
+              for c in palette[:4] if c.get("hex")]
+    return blocks or [
+        {"label": "Base", "color": "#2A2A2A"},
+        {"label": "Accent", "color": "#B8862F"},
+    ]
+
+
+def content_fallback(slide_type: str, intake: dict, design: dict | None = None) -> dict:
+    """Deterministic SlideContent grounded in the intake form."""
+    if slide_type == "cover":
+        return {"heading": (_g(intake, "title") or "Untitled").upper(),
+                "subheading": _g(intake, "tagline"), "body": _g(intake, "logline")}
+    if slide_type == "logline":
+        return {"heading": "Logline", "body": _g(intake, "logline")}
+    if slide_type == "genre_blend":
+        tone = _g(intake, "tone")
+        items = [{"title": t, "description": tone}
+                 for t in _split(_g(intake, "genreBlend"), r"[+,&]", 3)]
+        return {"heading": "Genre Blend", "items": items}
+    if slide_type == "synopsis":
+        return {"heading": "Synopsis", "body": _g(intake, "synopsis")}
+    if slide_type == "story_world":
+        return {"heading": "Story World", "body": _g(intake, "storyWorld")}
+    if slide_type in ("character", "supporting_characters"):
+        heading = "Main Characters" if slide_type == "character" else "Supporting Characters"
+        chars = []
+        for line in _split(_g(intake, "mainCharacters"), r"[.;]", 3):
+            parts = [p.strip() for p in line.split("—")]
+            chars.append({"name": parts[0] or "Character",
+                          "role": parts[1] if len(parts) > 1 else "Lead",
+                          "description": parts[2] if len(parts) > 2 else _g(intake, "characterDynamics")})
+        return {"heading": heading, "characters": chars}
+    if slide_type == "usp":
+        return {"heading": "USP", "bullets": _split(_g(intake, "usp"), r"[.;]", 5)}
+    if slide_type == "show_cross":
+        audience = _g(intake, "targetAudience")
+        comps = [{"title": c, "note": audience}
+                 for c in _split(_g(intake, "showCross"), r"[,×x]", 3)]
+        return {"heading": "Show Cross", "comps": comps}
+    if slide_type == "visual_aesthetic":
+        return {"heading": "Visual Aesthetic",
+                "body": _g(intake, "visualAesthetic") or _g(intake, "designDirection"),
+                "moodBlocks": _mood_blocks(design)}
+    if slide_type == "target_audience":
+        return {"heading": "Target Audience",
+                "items": [{"title": "Primary", "description": _g(intake, "targetAudience")},
+                          {"title": "Release", "description": _g(intake, "releaseFit")}]}
+    if slide_type == "budget":
+        return {"heading": "Budget & Production Scale",
+                "body": "Contained production positioned for strong ROI. Scale aligned with story scope."}
+    if slide_type == "market_potential":
+        return {"heading": "Market Potential",
+                "bullets": [b for b in [_g(intake, "releaseFit"),
+                                        "Regional OTT with pan-India subtitle appeal",
+                                        "Festival craft positioning available"] if b]}
+    if slide_type == "directors_vision":
+        return {"heading": "Director's Vision",
+                "body": _g(intake, "designDirection") or _g(intake, "synopsis")}
+    if slide_type == "team":
+        return {"heading": "Team & Production Status",
+                "body": "Development stage. Key creative attachments in progress."}
+    if slide_type == "contact":
+        return {"heading": "Let's Talk", "subheading": _g(intake, "title"),
+                "body": "Ready for producer and investor conversations."}
+    return {"heading": "Slide", "body": _g(intake, "synopsis")}
+
+
+_SYSTEM = (
+    "You are a pitch-deck copywriter for film and series. Write the content for ONE slide, grounded "
+    "STRICTLY in the provided intake — never invent plot, characters, or facts not present. Match the "
+    "slide's purpose and the deck's tone. Keep copy tight and producer-readable. "
+    "Return ONLY a JSON object using ONLY the fields relevant to this slide type, from this set: "
+    "heading (required), subheading, body, bullets (array of strings), items (array of {title, "
+    "description}), characters (array of {name, role, description}), comps (array of {title, note}), "
+    "moodBlocks (array of {label, color})."
+)
+
+
+# The field each slide-type's template needs to render something. If the LLM omits it,
+# we backfill from the deterministic fallback so no slide ever renders blank.
+_PRIMARY_FIELDS: dict[str, list[str]] = {
+    "cover": ["body"],
+    "logline": ["body"],
+    "genre_blend": ["items"],
+    "synopsis": ["body"],
+    "story_world": ["body"],
+    "character": ["characters"],
+    "supporting_characters": ["characters"],
+    "usp": ["bullets"],
+    "show_cross": ["comps"],
+    "visual_aesthetic": ["body", "moodBlocks"],
+    "target_audience": ["items"],
+    "budget": ["body"],
+    "market_potential": ["bullets"],
+    "directors_vision": ["body"],
+    "team": ["body"],
+    "contact": ["body"],
+}
+
+
+def _empty(value) -> bool:
+    return value is None or (isinstance(value, (str, list, dict)) and len(value) == 0)
+
+
+def _ensure_renderable(slide_type: str, result: dict, fb: dict) -> dict:
+    """Backfill the template's expected fields from the fallback when the LLM omitted them."""
+    if _empty(result.get("heading")):
+        result["heading"] = fb.get("heading") or slide_type.replace("_", " ").title()
+    for field in _PRIMARY_FIELDS.get(slide_type, ["body"]):
+        if _empty(result.get(field)) and not _empty(fb.get(field)):
+            result[field] = fb[field]
+    return result
+
+
+def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None) -> dict:
+    fb = content_fallback(slide_type, intake, design)
+    payload = {
+        "slideType": slide_type,
+        "title": title,
+        "purpose": purpose,
+        "intake": intake,
+        "deckTone": (design or {}).get("cinematicTone"),
+    }
+    result = complete_json(
+        system=_SYSTEM,
+        prompt="Write this slide:\n" + json.dumps(payload, ensure_ascii=False),
+        fallback=lambda: fb,
+        cache_prefix=f"content:{slide_type}",
+    )
+    if not isinstance(result, dict):
+        result = fb
+    # visual_aesthetic moodBlocks should reflect the real palette even if the LLM omitted them
+    if slide_type == "visual_aesthetic" and not result.get("moodBlocks"):
+        result["moodBlocks"] = _mood_blocks(design)
+    result = _ensure_renderable(slide_type, result, fb)
+
+    # Show Cross: attach real comparable-film posters (TMDB) when available.
+    if slide_type == "show_cross":
+        from app.ai import tmdb
+
+        for comp in result.get("comps") or []:
+            if isinstance(comp, dict) and comp.get("title") and not comp.get("posterUrl"):
+                poster = tmdb.poster_for(comp["title"])
+                if poster:
+                    comp["posterUrl"] = poster
+    return result

@@ -1,4 +1,3 @@
-import { mockIntakeDefaults } from "@/lib/mock/mock-deck";
 import type { IntakeFormData } from "@/types/workflow";
 
 export type ContentPreviewSectionId =
@@ -87,26 +86,11 @@ export const CONTENT_PREVIEW_SECTIONS: ContentPreviewSection[] = [
   },
 ];
 
-const SECTION_REGENERATE_KEYS: Record<
-  ContentPreviewSectionId,
-  (keyof IntakeFormData)[]
-> = {
-  identity: ["title", "tagline", "logline", "genreBlend", "tone"],
-  story: ["synopsis", "storyWorld", "keyScenes"],
-  characters: ["mainCharacters", "characterDynamics"],
-  pitch: ["usp", "showCross", "targetAudience", "releaseFit"],
-  visual: ["visualAesthetic", "colorPalette", "textureStyle", "designDirection"],
-};
-
+// Section-level "regenerate" is handled server-side now; this is a no-op placeholder.
 export function getSectionRegeneratePatch(
-  sectionId: ContentPreviewSectionId,
+  _sectionId: ContentPreviewSectionId,
 ): Partial<IntakeFormData> {
-  const keys = SECTION_REGENERATE_KEYS[sectionId];
-  const patch: Partial<IntakeFormData> = {};
-  for (const key of keys) {
-    patch[key] = mockIntakeDefaults[key];
-  }
-  return patch;
+  return {};
 }
 
 export function enrichVisualFromTemplate(

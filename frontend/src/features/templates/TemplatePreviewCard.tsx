@@ -1,7 +1,6 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge";
-import type { PitchTemplate } from "@/types/template";
 
 const TEMPLATE_ICONS: Record<string, string> = {
   "investor-thriller": "INV",
@@ -13,7 +12,7 @@ const TEMPLATE_ICONS: Record<string, string> = {
 };
 
 interface TemplatePreviewCardProps {
-  template: PitchTemplate;
+  template: { id: string; name: string; description: string; slideCount: number };
   selected: boolean;
   recommended?: boolean;
   onSelect: () => void;

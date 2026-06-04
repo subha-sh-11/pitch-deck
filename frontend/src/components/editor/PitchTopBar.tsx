@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { getProjectById } from "@/lib/mock/mock-projects";
+import { useEffect, useState } from "react";
+import { getProject } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import {
   IconAnalytics,
@@ -30,8 +31,12 @@ export function PitchTopBar({
   menuOpen,
   onMenuToggle,
 }: PitchTopBarProps) {
-  const project = getProjectById(projectId);
-  const title = project.title.toUpperCase().replace(/\s+/g, " ").trim() || "TANK";
+  const [title, setTitle] = useState("PROJECT");
+  useEffect(() => {
+    getProject(projectId)
+      .then((p) => setTitle((p.title || "Project").toUpperCase().replace(/\s+/g, " ").trim()))
+      .catch(() => {});
+  }, [projectId]);
 
   return (
     <header className="pitch-topbar flex h-[52px] shrink-0 items-center border-b border-[#E0E0E5] bg-white px-3">

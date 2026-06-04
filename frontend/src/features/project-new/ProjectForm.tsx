@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/layout/SectionCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { projectRoutes } from "@/lib/routes";
-import { MOCK_PROJECT_ID } from "@/lib/mock/mock-projects";
+import { createProject } from "@/lib/api";
 import type { PitchPurpose, ProjectType, StoryStage } from "@/types/project";
 
 const PROJECT_TYPES: { value: ProjectType; label: string }[] = [
@@ -42,11 +42,34 @@ const STORY_STAGES: { value: StoryStage; label: string }[] = [
 export function ProjectForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
-    router.push(projectRoutes.setupIdentity(MOCK_PROJECT_ID));
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const genreBlend = String(fd.get("genreBlend") ?? "");
+    const primary = String(fd.get("genre") ?? "");
+    const genres = Array.from(
+      new Set(
+        [primary, ...genreBlend.split(/[+,&]/).map((g) => g.trim())].filter(Boolean),
+      ),
+    );
+    try {
+      const project = await createProject({
+        title: String(fd.get("title") ?? "").trim(),
+        projectType: (fd.get("projectType") as ProjectType) || undefined,
+        pitchPurpose: (fd.get("pitchPurpose") as PitchPurpose) || undefined,
+        storyStage: (fd.get("storyStage") as StoryStage) || undefined,
+        language: String(fd.get("language") ?? "") || undefined,
+        genres,
+      });
+      router.push(projectRoutes.setupIdentity(project.id));
+    } catch (err) {
+      setError((err as Error).message ?? "Could not create project");
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -111,6 +134,12 @@ export function ProjectForm() {
           </div>
         </div>
       </SectionCard>
+
+      {error && (
+        <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
       <div className="flex justify-end gap-4">
         <Button type="button" variant="ghost" href={projectRoutes.dashboard()}>

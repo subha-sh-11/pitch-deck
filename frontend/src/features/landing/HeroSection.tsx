@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { DeckPreviewPanel } from "@/features/landing/DeckPreviewPanel";
-import { MOCK_PROJECT_ID } from "@/lib/mock/mock-projects";
 import { projectRoutes } from "@/lib/routes";
 
 export function HeroSection() {
@@ -42,10 +41,10 @@ export function HeroSection() {
               <span aria-hidden>→</span>
             </Link>
             <Link
-              href={projectRoutes.setupIdentity(MOCK_PROJECT_ID)}
+              href={projectRoutes.dashboard()}
               className="landing-btn-glass inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-medium text-text-primary"
             >
-              View Demo
+              View Projects
             </Link>
           </div>
 

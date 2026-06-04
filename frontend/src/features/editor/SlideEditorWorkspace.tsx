@@ -4,12 +4,34 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DeckEditor } from "@/components/editor/DeckEditor";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
-import { mockDesignDirection } from "@/lib/mock/mock-deck";
 import { projectRoutes } from "@/lib/routes";
+import type { DesignDirection } from "@/types/design";
 
 interface SlideEditorWorkspaceProps {
   projectId: string;
 }
+
+// Neutral fallback used only if the deck's design direction hasn't loaded yet.
+const FALLBACK_DESIGN: DesignDirection = {
+  mood: "Cinematic",
+  cinematicTone: "Grounded, atmospheric",
+  palette: [
+    { name: "Deep Black", hex: "#0B0B0D" },
+    { name: "Accent", hex: "#B8862F" },
+    { name: "Text", hex: "#EDE7DA" },
+  ],
+  typography: {
+    headings: "Display serif",
+    body: "Humanist sans",
+    accents: "Uppercase labels",
+    treatment: "Minimal",
+  },
+  visualStyle: ["Cinematic"],
+  backgroundStyle: "Dark textured",
+  imageStyle: "Cinematic, realistic lighting",
+  layoutStyle: "Asymmetric, generous negative space",
+  rationale: "",
+};
 
 export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
   const router = useRouter();
@@ -17,6 +39,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     draftSlides,
     contentApproved,
     selectedTemplateId,
+    designDirection,
     deleteDraftSlide,
     insertDraftSlideAfter,
     moveDraftSlide,
@@ -56,7 +79,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     <DeckEditor
       projectId={projectId}
       slides={draftSlides}
-      designDirection={mockDesignDirection}
+      designDirection={designDirection ?? FALLBACK_DESIGN}
       onDeleteSlide={deleteDraftSlide}
       onInsertAfter={insertDraftSlideAfter}
       onMoveSlide={moveDraftSlide}

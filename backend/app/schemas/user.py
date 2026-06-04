@@ -4,18 +4,18 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
 
-from app.schemas.base import ORMModel
+from app.schemas.base import CamelModel
 
 
-class UserCreate(BaseModel):
+class UserCreate(CamelModel):
     email: EmailStr
     name: str | None = None
     role: str = "director"
 
 
-class UserRead(ORMModel):
+class UserRead(CamelModel):
     id: uuid.UUID
     email: EmailStr
     name: str | None

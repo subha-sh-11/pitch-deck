@@ -36,8 +36,11 @@ export interface SlideContent {
     description: string;
     wound?: string;
   }[];
-  comps?: { title: string; note: string }[];
+  comps?: { title: string; note: string; posterUrl?: string }[];
   moodBlocks?: { label: string; color: string }[];
+  /** Backend-generated image (served URL) bound to this slide, if any. */
+  imageUrl?: string;
+  imagePrompt?: string;
 }
 
 export interface SlideLayout {

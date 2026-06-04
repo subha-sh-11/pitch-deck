@@ -5,6 +5,7 @@ import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
+import { useSetupWizard } from "@/features/setup/SetupWizardContext";
 import type { Slide, SlideType } from "@/types/slide";
 import { SLIDE_STATUS_LABELS, SLIDE_TYPE_LABELS } from "@/types/slide";
 import { AddSlideMenu } from "./AddSlideMenu";
@@ -66,6 +67,7 @@ export function PreviewEditPanel({
   regenerating,
   canDelete,
 }: PreviewEditPanelProps) {
+  const { designDirection } = useSetupWizard();
   return (
     <div className="preview-scroll flex h-full min-h-0 flex-col gap-4 pr-1">
       <section className="shrink-0 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
@@ -90,7 +92,11 @@ export function PreviewEditPanel({
 
       <SectionBlock title="Live preview" description="How this slide will appear in your deck.">
         <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.08]">
-          <SlideRenderer slide={slide} className="rounded-none" />
+          <SlideRenderer
+            slide={slide}
+            designDirection={designDirection ?? undefined}
+            className="rounded-none"
+          />
         </div>
       </SectionBlock>
 

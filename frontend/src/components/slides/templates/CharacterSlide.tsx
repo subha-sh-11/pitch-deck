@@ -9,8 +9,12 @@ export function CharacterSlide({ content }: CharacterSlideProps) {
   const characters = content.characters ?? [];
 
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0c] to-[#141418]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${
+          content.imageUrl ? "bg-black/55" : "bg-gradient-to-br from-[#0a0a0c] to-[#141418]"
+        }`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>{content.heading || "Characters"}</SlideLabel>
         <div className="mt-5 grid flex-1 grid-cols-3 gap-4">

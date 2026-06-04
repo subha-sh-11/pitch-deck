@@ -1,12 +1,14 @@
 "use client";
 
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideAppearance } from "@/types/slide";
 import { SlideContextBar } from "./SlideContextBar";
 
 interface SlideCanvasProps {
   slide: Slide;
   zoom: number;
+  designDirection?: DesignDirection;
   onAppearanceChange: (appearance: Partial<SlideAppearance>) => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
@@ -16,6 +18,7 @@ interface SlideCanvasProps {
 export function SlideCanvas({
   slide,
   zoom,
+  designDirection,
   onAppearanceChange,
   onDuplicate,
   onDelete,
@@ -23,16 +26,19 @@ export function SlideCanvas({
 }: SlideCanvasProps) {
   return (
     <div className="pitch-canvas relative flex flex-1 flex-col min-h-0">
-      <div className="flex flex-1 items-center justify-center overflow-auto p-8 pb-24">
+      <div className="flex flex-1 items-center justify-center overflow-auto p-4 pb-20">
+        {/* Fit-to-canvas: the slide fills the available space at 16:9 (zoom = % of
+            canvas height), letterboxed like a real presentation surface. */}
         <div
-          className="w-full max-w-[920px] transition-transform duration-200 ease-out"
-          style={{
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: "center center",
-          }}
+          className="aspect-video max-w-full shrink-0 transition-[height] duration-200 ease-out"
+          style={{ height: `${zoom}%` }}
         >
-          <div className="pitch-slide-shadow overflow-hidden rounded-lg bg-white ring-1 ring-[#E0E0E5]">
-            <SlideRenderer slide={slide} className="rounded-none" />
+          <div className="pitch-slide-shadow h-full w-full overflow-hidden rounded-lg bg-white ring-1 ring-[#E0E0E5]">
+            <SlideRenderer
+              slide={slide}
+              designDirection={designDirection}
+              className="rounded-none"
+            />
           </div>
         </div>
       </div>

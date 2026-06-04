@@ -9,8 +9,12 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
   const items = content.items ?? [];
 
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#101010]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${
+          content.imageUrl ? "bg-black/60" : "bg-gradient-to-b from-[#0a0a0c] to-[#101010]"
+        }`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>{content.heading || "Genre Blend"}</SlideLabel>
         <div className="mt-6 grid flex-1 grid-cols-3 gap-4">

@@ -11,6 +11,11 @@ export interface TypographyDirection {
   treatment: string;
 }
 
+export interface DesignFonts {
+  display: string;
+  body?: string;
+}
+
 export interface DesignDirection {
   mood: string;
   cinematicTone: string;
@@ -21,4 +26,5 @@ export interface DesignDirection {
   imageStyle: string;
   layoutStyle: string;
   rationale: string;
+  fonts?: DesignFonts;
 }

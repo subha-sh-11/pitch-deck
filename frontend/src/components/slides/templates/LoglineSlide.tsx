@@ -7,8 +7,14 @@ interface LoglineSlideProps {
 
 export function LoglineSlide({ content }: LoglineSlideProps) {
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#080808] via-[#101014] to-[#0a0a0c]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${
+          content.imageUrl
+            ? "bg-gradient-to-r from-black/90 via-black/55 to-black/25"
+            : "bg-gradient-to-br from-[#080808] via-[#101014] to-[#0a0a0c]"
+        }`}
+      />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(34,211,238,0.06),transparent_55%)]" />
 
       <div className="relative flex h-full items-center px-[10%]">

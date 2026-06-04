@@ -26,15 +26,18 @@ export function SynopsisSlide({ content }: SynopsisSlideProps) {
           </div>
         </div>
         <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#2A2A2A] via-[#3F5F4A]/30 to-[#080808]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_40%,rgba(169,198,199,0.15),transparent_50%)]" />
-          <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-[#A9C6C7]/20 to-transparent" />
-          <div className="absolute inset-4 rounded border border-white/[0.06]" />
-          <div className="absolute bottom-6 left-6 right-6">
-            <p className="text-[10px] uppercase tracking-widest text-[#22d3ee]/80">
-              Hyderabad · Rooftop · Rising Water
-            </p>
-          </div>
+          {content.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={content.imageUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1f] to-[#080808]" />
+          )}
+          {/* blend the image into the text column */}
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-[#0a0a0c]" />
         </div>
       </div>
     </SlideFrame>

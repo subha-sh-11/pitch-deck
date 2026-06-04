@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { getProjectById } from "@/lib/mock/mock-projects";
+import { getProject } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 
 interface EditorHeaderProps {
@@ -19,7 +20,12 @@ export function EditorHeader({
   onExport,
   saveStatus = "Saved",
 }: EditorHeaderProps) {
-  const project = getProjectById(projectId);
+  const [title, setTitle] = useState("Project");
+  useEffect(() => {
+    getProject(projectId)
+      .then((p) => setTitle(p.title || "Project"))
+      .catch(() => {});
+  }, [projectId]);
 
   return (
     <header className="editor-header flex h-[52px] shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#101010]/95 px-4 backdrop-blur-md">
@@ -31,7 +37,7 @@ export function EditorHeader({
           Pitch Deck Studio
         </Link>
         <span className="text-white/20">|</span>
-        <span className="truncate text-sm text-[#9CA3AF]">{project.title}</span>
+        <span className="truncate text-sm text-[#9CA3AF]">{title}</span>
         <Badge variant="neon" className="hidden sm:inline-flex">
           Design Generated
         </Badge>

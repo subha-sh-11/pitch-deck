@@ -1,4 +1,4 @@
-"""Pydantic request/response schemas."""
+"""Pydantic request/response schemas (mirror the frontend TS types, camelCase on the wire)."""
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.project import (
     ProjectCreate,
@@ -6,7 +6,21 @@ from app.schemas.project import (
     ProjectRead,
     ProjectSummary,
 )
-from app.schemas.vision import VisionDocumentRead, VisionDocumentUpdate
+from app.schemas.intake import (
+    IntakeFormData,
+    IntakeUpdate,
+    IntakeAnalysis,
+    ExtractedScriptSummary,
+)
+from app.schemas.design import (
+    DesignDirection,
+    ColorToken,
+    TypographyDirection,
+    StoryAnalysis,
+    QualityReview,
+)
+from app.schemas.slide import Slide, SlideContent, SlideLayout, SlideUpdate, DeckOutlineItem
+from app.schemas.deck import DeckRead, TemplateSelect
 
 __all__ = [
     "UserCreate",
@@ -15,6 +29,20 @@ __all__ = [
     "ProjectUpdate",
     "ProjectRead",
     "ProjectSummary",
-    "VisionDocumentRead",
-    "VisionDocumentUpdate",
+    "IntakeFormData",
+    "IntakeUpdate",
+    "IntakeAnalysis",
+    "ExtractedScriptSummary",
+    "DesignDirection",
+    "ColorToken",
+    "TypographyDirection",
+    "StoryAnalysis",
+    "QualityReview",
+    "Slide",
+    "SlideContent",
+    "SlideLayout",
+    "SlideUpdate",
+    "DeckOutlineItem",
+    "DeckRead",
+    "TemplateSelect",
 ]

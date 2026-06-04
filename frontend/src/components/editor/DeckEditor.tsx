@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideAppearance, SlideType } from "@/types/slide";
 import { SLIDE_STATUS_LABELS, SLIDE_TYPE_LABELS } from "@/types/slide";
-import { mockQualityReview } from "@/lib/mock/mock-deck";
-import { getProjectById } from "@/lib/mock/mock-projects";
+import { getProject } from "@/lib/api";
 import { DEFAULT_SLIDE_APPEARANCE, SLIDE_TRANSITIONS } from "@/lib/slide-appearance";
 import { AiAssistantFab } from "./AiAssistantFab";
 import { EditorFlyout } from "./EditorFlyout";
@@ -48,9 +47,41 @@ export function DeckEditor({
   onUpdateSlideMeta,
   onAddComment,
 }: DeckEditorProps) {
-  const project = getProjectById(projectId);
+  const [projectTitle, setProjectTitle] = useState("Project");
+  useEffect(() => {
+    getProject(projectId)
+      .then((p) => setProjectTitle(p.title || "Project"))
+      .catch(() => {});
+  }, [projectId]);
+
+  // Quality review computed from the real deck (no mock data).
+  const review = useMemo(() => {
+    const hasContent = (s: Slide) => {
+      const c = s.content;
+      return Boolean(
+        c.heading &&
+          (c.body ||
+            c.bullets?.length ||
+            c.items?.length ||
+            c.characters?.length ||
+            c.comps?.length ||
+            c.imageUrl),
+      );
+    };
+    const ready = slides.filter(hasContent).length;
+    return {
+      overallReadiness: slides.length ? Math.round((ready / slides.length) * 100) : 0,
+      findings: slides
+        .filter((s) => !hasContent(s))
+        .map((s) => ({
+          slideTitle: s.title,
+          suggestion: "Add copy or imagery to strengthen this slide.",
+        })),
+    };
+  }, [slides]);
+
   const [index, setIndex] = useState(0);
-  const [zoom, setZoom] = useState(53);
+  const [zoom, setZoom] = useState(100);
   const [shareOpen, setShareOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -156,6 +187,7 @@ export function DeckEditor({
         <SlideNavigator
           slides={slides}
           activeIndex={safeIndex}
+          designDirection={designDirection}
           onSelect={setIndex}
           onAddSlide={handleAddSlide}
         />
@@ -164,6 +196,7 @@ export function DeckEditor({
           <SlideCanvas
             slide={slide}
             zoom={zoom}
+            designDirection={designDirection}
             onAppearanceChange={(appearance) =>
               onUpdateSlideMeta(slide.id, { appearance })
             }
@@ -205,7 +238,7 @@ export function DeckEditor({
       <ShareDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
-        projectTitle={project.title}
+        projectTitle={projectTitle}
         onToast={showToast}
       />
 
@@ -213,6 +246,7 @@ export function DeckEditor({
         <PresentationMode
           slides={slides}
           index={safeIndex}
+          designDirection={designDirection}
           onIndexChange={setIndex}
           onClose={() => setPresenting(false)}
         />
@@ -375,11 +409,11 @@ export function DeckEditor({
         <p className="mb-3 text-sm">
           Readiness:{" "}
           <span className="font-semibold text-[#4F46E5]">
-            {mockQualityReview.overallReadiness}%
+            {review.overallReadiness}%
           </span>
         </p>
         <ul className="space-y-3">
-          {mockQualityReview.findings.map((f) => (
+          {review.findings.map((f) => (
             <li key={f.slideTitle} className="rounded-lg border border-[#E0E0E5] p-3">
               <p className="text-sm font-medium">{f.slideTitle}</p>
               <p className="mt-1 text-xs text-[#5C5C66]">{f.suggestion}</p>

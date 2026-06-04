@@ -18,7 +18,7 @@ body {
 }
 
 .font-display {
-  font-family: var(--font-cormorant), Georgia, serif;
+  font-family: var(--slide-font-display, var(--font-cormorant)), Georgia, serif;
 }
 
 * {

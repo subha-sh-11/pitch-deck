@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { getProjectById } from "@/lib/mock/mock-projects";
+import { useEffect, useState, type ReactNode } from "react";
+import { getProject } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import { SetupProgressBar } from "./SetupProgressBar";
 import { SetupWizardProvider } from "./SetupWizardContext";
@@ -13,7 +13,13 @@ interface SetupWizardLayoutProps {
 }
 
 export function SetupWizardLayout({ projectId, children }: SetupWizardLayoutProps) {
-  const project = getProjectById(projectId);
+  const [title, setTitle] = useState("Project");
+
+  useEffect(() => {
+    getProject(projectId)
+      .then((p) => setTitle(p.title || "Project"))
+      .catch(() => setTitle("Project"));
+  }, [projectId]);
 
   return (
     <SetupWizardProvider projectId={projectId}>
@@ -28,7 +34,7 @@ export function SetupWizardLayout({ projectId, children }: SetupWizardLayoutProp
                 ← Dashboard
               </Link>
               <p className="mt-1 font-display text-lg font-semibold text-text-primary">
-                {project.title}
+                {title}
               </p>
             </div>
           </div>

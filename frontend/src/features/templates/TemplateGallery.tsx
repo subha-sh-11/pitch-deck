@@ -4,10 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
-import {
-  getRecommendedTemplates,
-  getTemplateById,
-} from "@/lib/mock/mock-templates";
+import { listTemplates, recommendTemplate, type TemplateSummary } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import { TemplatePreviewCard } from "./TemplatePreviewCard";
 
@@ -17,14 +14,11 @@ interface TemplateGalleryProps {
 
 export function TemplateGallery({ projectId }: TemplateGalleryProps) {
   const router = useRouter();
-  const {
-    formData,
-    selectedTemplateId,
-    setSelectedTemplate,
-    initDraftSlides,
-    isStepComplete,
-  } = useSetupWizard();
-  const [selected, setSelected] = useState(selectedTemplateId);
+  const { selectedTemplateId, setSelectedTemplate, isStepComplete } = useSetupWizard();
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [topPick, setTopPick] = useState<string | undefined>();
+  const [selected, setSelected] = useState<string | null>(selectedTemplateId);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isStepComplete("pitch")) {
@@ -32,13 +26,27 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
     }
   }, [isStepComplete, projectId, router]);
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([listTemplates(), recommendTemplate(projectId).catch(() => null)])
+      .then(([tpls, rec]) => {
+        if (!active) return;
+        setTemplates(tpls);
+        const pick = rec?.templateId ?? tpls[0]?.id;
+        setTopPick(pick);
+        setSelected((cur) => cur ?? pick ?? null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
+
   if (!isStepComplete("pitch")) {
     return null;
   }
-
-  const templates = getRecommendedTemplates(formData.genreBlend, formData.tone);
-  const topPick = templates[0]?.id;
-  const activeTemplate = selected ? getTemplateById(selected) : undefined;
 
   function handleSelect(id: string) {
     setSelected(id);
@@ -48,9 +56,11 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
   function continueToPreview() {
     if (!selected) return;
     setSelectedTemplate(selected);
-    initDraftSlides();
+    // Generation runs when the preview page mounts (initDraftSlides → backend).
     router.push(projectRoutes.preview(projectId));
   }
+
+  const activeTemplate = templates.find((t) => t.id === selected);
 
   return (
     <div className="w-full">
@@ -83,47 +93,42 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {templates.map((template) => (
-            <TemplatePreviewCard
-              key={template.id}
-              template={template}
-              selected={selected === template.id}
-              recommended={template.id === topPick}
-              onSelect={() => handleSelect(template.id)}
-            />
-          ))}
-        </div>
+      {loading ? (
+        <p className="text-sm text-zinc-500">Loading templates…</p>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {templates.map((template) => (
+              <TemplatePreviewCard
+                key={template.id}
+                template={template}
+                selected={selected === template.id}
+                recommended={template.id === topPick}
+                onSelect={() => handleSelect(template.id)}
+              />
+            ))}
+          </div>
 
-        {activeTemplate && (
-          <aside className="templates-direction-panel h-fit p-4 lg:sticky lg:top-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-neon">
-              Visual direction
-            </p>
-            <p className="mt-2 text-sm font-medium text-zinc-300">
-              {activeTemplate.designDirection.mood}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-              {activeTemplate.designDirection.cinematicTone}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activeTemplate.designDirection.palette.map((color) => (
-                <div
-                  key={color.name}
-                  className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1"
-                >
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-sm border border-zinc-700"
-                    style={{ backgroundColor: color.hex }}
-                  />
-                  <span className="text-[10px] text-zinc-500">{color.name}</span>
-                </div>
-              ))}
-            </div>
-          </aside>
-        )}
-      </div>
+          {activeTemplate && (
+            <aside className="templates-direction-panel h-fit p-4 lg:sticky lg:top-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-neon">
+                Deck structure
+              </p>
+              <p className="mt-2 text-sm font-medium text-zinc-300">{activeTemplate.name}</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                {activeTemplate.description}
+              </p>
+              <ol className="mt-3 space-y-1">
+                {activeTemplate.slideOutline.map((item) => (
+                  <li key={item.slideNumber} className="text-[11px] text-zinc-500">
+                    <span className="text-zinc-600">{item.slideNumber}.</span> {item.title}
+                  </li>
+                ))}
+              </ol>
+            </aside>
+          )}
+        </div>
+      )}
     </div>
   );
 }

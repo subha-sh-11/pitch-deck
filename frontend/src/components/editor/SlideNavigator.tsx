@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SlideThumbnailPreview } from "@/components/slides/SlideThumbnailPreview";
 import { ADDABLE_SLIDE_TYPES } from "@/lib/regenerate-slide";
+import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideType } from "@/types/slide";
 import { SLIDE_TYPE_LABELS } from "@/types/slide";
 import { IconCamera, IconPlus } from "./EditorIcons";
@@ -10,6 +11,7 @@ import { IconCamera, IconPlus } from "./EditorIcons";
 interface SlideNavigatorProps {
   slides: Slide[];
   activeIndex: number;
+  designDirection?: DesignDirection;
   onSelect: (index: number) => void;
   onAddSlide: (slideType: SlideType) => void;
 }
@@ -17,6 +19,7 @@ interface SlideNavigatorProps {
 export function SlideNavigator({
   slides,
   activeIndex,
+  designDirection,
   onSelect,
   onAddSlide,
 }: SlideNavigatorProps) {
@@ -80,7 +83,11 @@ export function SlideNavigator({
               </span>
 
               <div className="ml-5 overflow-hidden rounded-lg border border-[#E0E0E5] bg-white shadow-sm">
-                <SlideThumbnailPreview slide={slide} active={active} />
+                <SlideThumbnailPreview
+                  slide={slide}
+                  active={active}
+                  designDirection={designDirection}
+                />
               </div>
 
               {active && hasMedia && (

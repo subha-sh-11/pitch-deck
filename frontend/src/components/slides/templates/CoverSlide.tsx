@@ -6,33 +6,32 @@ interface CoverSlideProps {
 }
 
 export function CoverSlide({ content }: CoverSlideProps) {
+  const hasImage = Boolean(content.imageUrl);
   return (
-    <SlideFrame>
-      {/* Concrete texture base */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0c0c0e] via-[#141418] to-[#080808]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      {/* Base tint — translucent over a generated image, full gradient without one */}
+      <div
+        className={`absolute inset-0 ${
+          hasImage
+            ? "bg-black/25"
+            : "bg-gradient-to-br from-[#0c0c0e] via-[#141418] to-[#080808]"
+        }`}
+      />
 
       {/* Spotlight from top-right */}
       <div className="absolute -right-20 -top-20 h-[70%] w-[60%] rounded-full bg-gradient-to-bl from-[#22d3ee]/12 via-[#A9C6C7]/8 to-transparent blur-3xl" />
 
-      {/* Water reflection glow bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-2/5 bg-gradient-to-t from-[#3F5F4A]/25 via-[#A9C6C7]/10 to-transparent" />
+      {/* Bottom-left scrim so the title stays legible over imagery */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-black/90 via-black/35 to-transparent" />
 
       {/* Vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.65)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)]" />
 
-      {/* Tank silhouette — right side */}
-      <div className="absolute right-[6%] top-1/2 -translate-y-1/2">
-        <div className="relative h-[72%] w-[28vw] max-w-[280px] min-w-[160px]">
-          <div className="absolute inset-0 rounded-t-full rounded-b-lg bg-gradient-to-b from-[#2A2A2A] via-[#1a1a1f] to-[#3F5F4A]/40 shadow-[inset_0_0_60px_rgba(0,0,0,0.8)]" />
-          <div className="absolute inset-x-[8%] top-[12%] h-[55%] rounded-t-full bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c]/80" />
-          <div className="absolute -right-2 top-[18%] h-8 w-3 rounded-sm bg-[#8A4B2A]/80" />
-          <div className="absolute bottom-[8%] left-[10%] right-[10%] h-1 bg-[#A9C6C7]/30 blur-sm" />
-          <div className="absolute -inset-4 rounded-full bg-[#22d3ee]/5 blur-2xl" />
-        </div>
-      </div>
-
-      {/* Neon accent line */}
-      <div className="absolute bottom-[28%] left-[8%] h-px w-24 bg-gradient-to-r from-[#22d3ee] to-transparent" />
+      {/* Accent line (story palette) */}
+      <div
+        className="absolute bottom-[28%] left-[8%] h-px w-24"
+        style={{ background: "linear-gradient(to right, var(--slide-accent), transparent)" }}
+      />
 
       {/* Content — bottom-left */}
       <div className="relative z-10 flex h-full flex-col justify-end p-[8%] pb-[10%]">
@@ -41,7 +40,10 @@ export function CoverSlide({ content }: CoverSlideProps) {
             {content.heading}
           </h1>
           {content.subheading && (
-            <p className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic text-[#22d3ee]">
+            <p
+              className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic"
+              style={{ color: "var(--slide-accent)" }}
+            >
               {content.subheading}
             </p>
           )}
@@ -59,7 +61,13 @@ export function CoverSlide({ content }: CoverSlideProps) {
       </div>
 
       {/* Corner badge */}
-      <div className="absolute right-[8%] top-[8%] rounded border border-[#22d3ee]/30 bg-black/40 px-2 py-1 text-[9px] uppercase tracking-widest text-[#22d3ee]/90 backdrop-blur-sm">
+      <div
+        className="absolute right-[8%] top-[8%] rounded border bg-black/40 px-2 py-1 text-[9px] uppercase tracking-widest backdrop-blur-sm"
+        style={{
+          borderColor: "color-mix(in srgb, var(--slide-accent) 35%, transparent)",
+          color: "var(--slide-accent)",
+        }}
+      >
         Feature Pitch
       </div>
     </SlideFrame>

@@ -9,8 +9,10 @@ export function USPGridSlide({ content }: USPGridSlideProps) {
   const bullets = content.bullets ?? [];
 
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-[#0a0a0c]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : "bg-[#0a0a0c]"}`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>{content.heading || "Unique Selling Points"}</SlideLabel>
         <div className="mt-6 grid flex-1 grid-cols-2 gap-3 content-start">

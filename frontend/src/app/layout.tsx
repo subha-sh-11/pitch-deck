@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
+import {
+  Anton,
+  Cormorant_Garamond,
+  Geist,
+  Geist_Mono,
+  Oswald,
+  Playfair_Display,
+  Poppins,
+} from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +26,16 @@ const cormorant = Cormorant_Garamond({
   weight: ["400", "500", "600", "700"],
 });
 
+// Theme-driven display fonts (selected per style register).
+const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["latin"] });
+const oswald = Oswald({ variable: "--font-oswald", subsets: ["latin"] });
+const poppins = Poppins({
+  variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+const anton = Anton({ variable: "--font-anton", subsets: ["latin"], weight: ["400"] });
+
 export const metadata: Metadata = {
   title: "Pitch Deck Studio — AI Pitch Deck for Filmmakers",
   description:
@@ -32,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} ${playfair.variable} ${oswald.variable} ${poppins.variable} ${anton.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-surface-0 text-text-primary font-sans">
         {children}

@@ -7,8 +7,14 @@ interface ContactSlideProps {
 
 export function ContactSlide({ content }: ContactSlideProps) {
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-gradient-to-b from-[#101010] via-[#0a0a0c] to-[#080808]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${
+          content.imageUrl
+            ? "bg-black/70"
+            : "bg-gradient-to-b from-[#101010] via-[#0a0a0c] to-[#080808]"
+        }`}
+      />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.06),transparent_60%)]" />
 
       <div className="relative flex h-full flex-col items-center justify-center p-[10%] text-center">

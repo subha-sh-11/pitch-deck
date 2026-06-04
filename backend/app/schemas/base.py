@@ -1,52 +1,31 @@
-"""Shared Pydantic base classes and enums."""
+"""Shared Pydantic base classes and controlled vocabularies (mirrors the frontend)."""
 from __future__ import annotations
 
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
-class ORMModel(BaseModel):
-    """Response models read from SQLAlchemy ORM objects."""
+class CamelModel(BaseModel):
+    """Base for all API models — serializes to camelCase to match the frontend TS types."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ─── Controlled vocabularies (kept as str enums; DB stores plain text) ───
-
-class ProjectFormat(str, Enum):
-    feature = "feature"
-    limited_series = "limited_series"
-    ongoing_series = "ongoing_series"
-    short = "short"
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
 
 
-class ProjectStatus(str, Enum):
-    draft = "draft"
-    in_review = "in_review"
-    completed = "completed"
-
-
-class StyleRegister(str, Enum):
-    restrained_cinematic = "restrained_cinematic"
-    editorial_warm = "editorial_warm"
-    high_contrast_genre = "high_contrast_genre"
-    playful_bright = "playful_bright"
-    pulp_stylized = "pulp_stylized"
-
-
-class StartingPoint(str, Enum):
-    logline = "logline"
-    concept_note = "concept_note"
-    treatment = "treatment"
-    full_script = "full_script"
-
+# ─── Project vocabularies (frontend src/types/project.ts) ───
 
 class ProjectType(str, Enum):
-    film = "film"
+    feature_film = "feature_film"
     web_series = "web_series"
     short_film = "short_film"
     documentary = "documentary"
+    pilot = "pilot"
+    other = "other"
 
 
 class PitchPurpose(str, Enum):
@@ -55,23 +34,74 @@ class PitchPurpose(str, Enum):
     studio = "studio"
     producer = "producer"
     festival = "festival"
+    cast_crew = "cast_crew"
+    internal = "internal"
 
 
 class StoryStage(str, Enum):
     raw_idea = "raw_idea"
+    one_line = "one_line"
+    synopsis_ready = "synopsis_ready"
     partial_script = "partial_script"
     full_script = "full_script"
-    shot_footage = "shot_footage"
+    pilot_shot = "pilot_shot"
+    partially_shot = "partially_shot"
+    completed = "completed"
 
 
 class ProductionStatus(str, Enum):
     development = "development"
+    script_ready = "script_ready"
     pre_production = "pre_production"
     in_production = "in_production"
-    post = "post"
+    post_production = "post_production"
 
 
-class UserState(str, Enum):
-    logline_only = "logline_only"
-    partial_material = "partial_material"
-    full_script = "full_script"
+class ProjectStatus(str, Enum):
+    intake = "intake"
+    questions = "questions"
+    story_analysis = "story_analysis"
+    outline = "outline"
+    content = "content"
+    design = "design"
+    editor = "editor"
+    review = "review"
+    export = "export"
+    completed = "completed"
+
+
+# ─── Slide vocabularies (frontend src/types/slide.ts) ───
+
+class SlideType(str, Enum):
+    cover = "cover"
+    logline = "logline"
+    genre_blend = "genre_blend"
+    synopsis = "synopsis"
+    story_world = "story_world"
+    character = "character"
+    supporting_characters = "supporting_characters"
+    usp = "usp"
+    show_cross = "show_cross"
+    visual_aesthetic = "visual_aesthetic"
+    target_audience = "target_audience"
+    budget = "budget"
+    market_potential = "market_potential"
+    directors_vision = "directors_vision"
+    team = "team"
+    contact = "contact"
+    generic = "generic"
+
+
+class SlideStatus(str, Enum):
+    draft = "draft"
+    approved = "approved"
+    needs_review = "needs_review"
+
+
+class DeckStatus(str, Enum):
+    draft = "draft"
+    outline_pending = "outline_pending"
+    content_pending = "content_pending"
+    design_pending = "design_pending"
+    ready = "ready"
+    exported = "exported"

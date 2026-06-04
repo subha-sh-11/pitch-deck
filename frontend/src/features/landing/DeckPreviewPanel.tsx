@@ -3,14 +3,73 @@
 import { useEffect, useState } from "react";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideThumbnailPreview } from "@/components/slides/SlideThumbnailPreview";
-import { mockSlides } from "@/lib/mock/mock-deck";
 import type { Slide } from "@/types/slide";
 
+// Static sample slides — landing-page decoration only (not app data).
 const PREVIEW_SLIDES: Slide[] = [
-  mockSlides[0],
-  mockSlides[1],
-  mockSlides[2],
-  mockSlides[9],
+  {
+    id: "preview-cover",
+    slideNumber: 1,
+    slideType: "cover",
+    title: "Cover",
+    purpose: "",
+    content: {
+      heading: "THE TANK",
+      subheading: "A Devil On The Roof",
+      body: "A contained Telugu survival thriller.",
+    },
+    layout: { template: "cover", layoutType: "full_bleed" },
+    status: "approved",
+  },
+  {
+    id: "preview-logline",
+    slideNumber: 2,
+    slideType: "logline",
+    title: "Logline",
+    purpose: "",
+    content: {
+      heading: "Logline",
+      body: "Three kids are sealed inside a rooftop water tank as their city searches everywhere but above.",
+    },
+    layout: { template: "logline", layoutType: "centered_statement" },
+    status: "approved",
+  },
+  {
+    id: "preview-genre",
+    slideNumber: 3,
+    slideType: "genre_blend",
+    title: "Genre Blend",
+    purpose: "",
+    content: {
+      heading: "Genre Blend",
+      items: [
+        { title: "Survival Thriller", description: "A race against rising water." },
+        { title: "Suspense Drama", description: "Helpless parents, hidden truth." },
+        { title: "Childhood Comedy", description: "Mischief that turns to dread." },
+      ],
+    },
+    layout: { template: "genre_blend", layoutType: "three_column" },
+    status: "approved",
+  },
+  {
+    id: "preview-visual",
+    slideNumber: 4,
+    slideType: "visual_aesthetic",
+    title: "Visual Aesthetic",
+    purpose: "",
+    content: {
+      heading: "Visual Aesthetic",
+      body: "Dark concrete, water reflections, claustrophobic framing.",
+      moodBlocks: [
+        { label: "Concrete", color: "#2A2A2A" },
+        { label: "Moss", color: "#3F5F4A" },
+        { label: "Rust", color: "#8A4B2A" },
+        { label: "Water", color: "#A9C6C7" },
+      ],
+    },
+    layout: { template: "visual_aesthetic", layoutType: "moodboard" },
+    status: "approved",
+  },
 ];
 
 const GENRE_CHIPS = [

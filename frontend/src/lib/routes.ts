@@ -1,7 +1,5 @@
 import type { WorkflowStepId } from "@/types/workflow";
 
-export const MOCK_PROJECT_ID = "mock-project";
-
 export const projectRoutes = {
   dashboard: () => "/dashboard",
   newProject: () => "/projects/new",

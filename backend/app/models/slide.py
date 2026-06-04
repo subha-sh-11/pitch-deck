@@ -1,30 +1,43 @@
-"""Slide model — content + layout live in JSONB, flexible per slide type."""
+"""Slide model — aligned to the frontend's Slide contract (content/layout as JSONB)."""
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, uuid_pk
+
+if TYPE_CHECKING:
+    from app.models.asset import Asset
+    from app.models.deck import Deck
 
 
 class Slide(Base, TimestampMixin):
     __tablename__ = "slides"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    variant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("deck_variants.id", ondelete="CASCADE"), nullable=False, index=True
+    deck_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("decks.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # title | logline_genre | world_hook | synopsis | character | mood_board | comps_audience |
-    # budget_timeline | team | ask_status | season_arc | episode_structure | world_bible |
-    # visual_treatment | footage_sizzle
+    slide_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # cover | logline | genre_blend | synopsis | story_world | character |
+    # supporting_characters | usp | show_cross | visual_aesthetic | target_audience |
+    # budget | market_potential | directors_vision | team | contact | generic
     slide_type: Mapped[str] = mapped_column(String(48), nullable=False)
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    content: Mapped[dict | None] = mapped_column(JSONB)  # per-type content
-    layout: Mapped[dict | None] = mapped_column(JSONB)   # Slide Layout Agent output
-    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    ai_generated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255))
+    purpose: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[dict | None] = mapped_column(JSONB)  # SlideContent
+    layout: Mapped[dict | None] = mapped_column(JSONB)   # SlideLayout
+    # draft | approved | needs_review
+    status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
+    ai_rationale: Mapped[str | None] = mapped_column(Text)
+    # The generated image bound to this slide (cover/world/character/mood), if any
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), index=True
+    )
 
-    variant: Mapped["DeckVariant"] = relationship(back_populates="slides")
+    deck: Mapped["Deck"] = relationship(back_populates="slides")
+    image_asset: Mapped["Asset | None"] = relationship(foreign_keys=[image_asset_id])

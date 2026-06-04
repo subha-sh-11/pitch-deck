@@ -12,8 +12,6 @@ import { PreviewCinematicBackground } from "./PreviewCinematicBackground";
 import { SlideContentDetailPanel } from "./SlideContentDetailPanel";
 import { getSelectedSlide } from "./slide-content-utils";
 
-const GENERATE_DELAY_MS = 2500;
-
 interface SlideContentPreviewProps {
   projectId: string;
 }
@@ -22,14 +20,14 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
   const router = useRouter();
   const {
     draftSlides,
-    selectedTemplateId,
     isStepComplete,
     initDraftSlides,
     updateDraftSlide,
     regenerateDraftSlide,
-    setGenerationStatus,
     approveContent,
     generationStatus,
+    generationProgress,
+    generationError,
   } = useSetupWizard();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -42,15 +40,12 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     }
   }, [isStepComplete, projectId, router]);
 
+  // Kick off backend generation (design + content + images) once.
   useEffect(() => {
-    if (!selectedTemplateId) {
-      router.replace(projectRoutes.templates(projectId));
-      return;
-    }
     if (draftSlides.length === 0) {
       initDraftSlides();
     }
-  }, [selectedTemplateId, draftSlides.length, initDraftSlides, projectId, router]);
+  }, [draftSlides.length, initDraftSlides]);
 
   useEffect(() => {
     if (draftSlides.length > 0 && !selectedId) {
@@ -74,29 +69,31 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     window.setTimeout(() => setSavedFlash(false), 2000);
   }
 
-  async function handleStartGenerate() {
-    if (draftSlides.length === 0) initDraftSlides();
-    setGenerationStatus("generating");
-    await new Promise((r) => setTimeout(r, GENERATE_DELAY_MS));
+  function handleStartGenerate() {
     approveContent();
     router.push(projectRoutes.editor(projectId));
   }
 
-  if (!isStepComplete("pitch") || !selectedTemplateId) {
+  if (!isStepComplete("pitch")) {
     return null;
   }
 
   if (draftSlides.length === 0 || !selected) {
     return (
-      <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-500">
-        Preparing slide content…
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center text-sm text-zinc-500">
+        {generationStatus === "generating" && <GeneratingOverlay progress={generationProgress} />}
+        {generationError ? (
+          <p className="max-w-md text-red-400">Generation failed: {generationError}</p>
+        ) : (
+          <p>Generating your deck — story, copy, and images. This can take up to a minute…</p>
+        )}
       </div>
     );
   }
 
   return (
     <>
-      {generationStatus === "generating" && <GeneratingOverlay />}
+      {generationStatus === "generating" && <GeneratingOverlay progress={generationProgress} />}
 
       <div className="preview-studio-root preview-page-refined flex min-h-0 flex-1 flex-col">
         <PreviewCinematicBackground />

@@ -9,8 +9,10 @@ export function VisualAestheticSlide({ content }: VisualAestheticSlideProps) {
   const blocks = content.moodBlocks ?? [];
 
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-[#0a0a0c]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/45" : "bg-[#0a0a0c]"}`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>{content.heading || "Visual Aesthetic"}</SlideLabel>
         {content.body && (
