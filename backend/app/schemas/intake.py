@@ -45,6 +45,14 @@ class IntakeUpdate(CamelModel):
     form: IntakeFormData
 
 
+class IntakeExtractResult(CamelModel):
+    """Fields auto-extracted from an uploaded script, for the user to review."""
+
+    file_name: str
+    form: IntakeFormData
+    filled_fields: list[str]
+
+
 class FollowUpQuestion(CamelModel):
     question: str
     placeholder: str
