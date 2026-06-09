@@ -1,4 +1,4 @@
-import { IdentityStep } from "@/features/setup/IdentityStep";
+import { IntakeStudio } from "@/features/setup/IntakeStudio";
 
 export default async function IdentityPage({
   params,
@@ -6,5 +6,5 @@ export default async function IdentityPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <IdentityStep projectId={id} />;
+  return <IntakeStudio projectId={id} />;
 }

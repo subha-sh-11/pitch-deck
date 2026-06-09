@@ -8,15 +8,16 @@ export const projectRoutes = {
   setupBody: (id: string) => `/projects/${id}/setup/body`,
   setupPitch: (id: string) => `/projects/${id}/setup/pitch`,
   templates: (id: string) => `/projects/${id}/templates`,
-  preview: (id: string) => `/projects/${id}/preview`,
   editor: (id: string) => `/projects/${id}/editor`,
+  /** @deprecated content-preview step removed; templates now generates straight to the editor */
+  preview: (id: string) => `/projects/${id}/templates`,
   /** @deprecated use setupIdentity */
   intake: (id: string) => `/projects/${id}/setup/identity`,
   /** @deprecated redirects to setup */
   questions: (id: string) => `/projects/${id}/setup/identity`,
   storyAnalysis: (id: string) => `/projects/${id}/setup/identity`,
   outline: (id: string) => `/projects/${id}/templates`,
-  content: (id: string) => `/projects/${id}/preview`,
+  content: (id: string) => `/projects/${id}/templates`,
   design: (id: string) => `/projects/${id}/templates`,
   review: (id: string) => `/projects/${id}/editor`,
   export: (id: string) => `/projects/${id}/editor`,
@@ -26,7 +27,7 @@ export const projectRoutes = {
       questions: projectRoutes.setupIdentity,
       "story-analysis": projectRoutes.setupIdentity,
       outline: projectRoutes.templates,
-      content: projectRoutes.preview,
+      content: projectRoutes.templates,
       design: projectRoutes.templates,
       editor: projectRoutes.editor,
       review: projectRoutes.editor,

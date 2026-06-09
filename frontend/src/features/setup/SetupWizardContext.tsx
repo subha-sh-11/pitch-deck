@@ -23,6 +23,7 @@ import { buildSlideFromOutline, renumberSlides } from "@/lib/build-slides";
 import { DEFAULT_SLIDE_APPEARANCE } from "@/lib/slide-appearance";
 import { ADDABLE_SLIDE_TYPES } from "@/lib/regenerate-slide";
 import type { DesignDirection } from "@/types/design";
+import type { ProjectStatus } from "@/types/project";
 import type { Slide, SlideAppearance, SlideComment, SlideContent, SlideType } from "@/types/slide";
 import {
   EMPTY_INTAKE_FORM,
@@ -34,6 +35,18 @@ import {
 import type { IntakeFormData } from "@/types/workflow";
 
 const STORAGE_PREFIX = "pitch-deck-setup-";
+
+// Lifecycle stages at which a generated deck exists. Earlier stages
+// (intake/questions/story_analysis/outline) have no deck yet, so requesting one
+// returns an expected 404 — we skip the fetch entirely to avoid the noise.
+const DECK_BEARING_STATUSES: ReadonlySet<ProjectStatus> = new Set<ProjectStatus>([
+  "content",
+  "design",
+  "editor",
+  "review",
+  "export",
+  "completed",
+]);
 
 const DEFAULT_STATE: SetupWizardState = {
   formData: EMPTY_INTAKE_FORM,
@@ -123,8 +136,10 @@ export function SetupWizardProvider({
     const saved = loadState(projectId);
     if (saved) setState(saved);
     (async () => {
+      let deckMayExist = false;
       try {
         const project = await getProject(projectId);
+        deckMayExist = DECK_BEARING_STATUSES.has(project.status);
         if (!cancelled && project.intakeForm && (!saved || !saved.formData.title)) {
           setState((prev) => ({
             ...prev,
@@ -134,20 +149,24 @@ export function SetupWizardProvider({
       } catch {
         /* unknown project */
       }
-      try {
-        const deck = await getDeck(projectId);
-        if (!cancelled && deck) {
-          setDesignDirection(deck.designDirection ?? null);
-          if (deck.slides?.length && (!saved || saved.draftSlides.length === 0)) {
-            setState((prev) => ({
-              ...prev,
-              draftSlides: deck.slides,
-              generationStatus: "ready",
-            }));
+      // Only fetch the deck once generation has produced one. Fetching earlier
+      // would hit the backend's expected "No deck generated yet" 404.
+      if (deckMayExist) {
+        try {
+          const deck = await getDeck(projectId);
+          if (!cancelled && deck) {
+            setDesignDirection(deck.designDirection ?? null);
+            if (deck.slides?.length && (!saved || saved.draftSlides.length === 0)) {
+              setState((prev) => ({
+                ...prev,
+                draftSlides: deck.slides,
+                generationStatus: "ready",
+              }));
+            }
           }
+        } catch {
+          /* no deck yet */
         }
-      } catch {
-        /* no deck yet */
       }
       if (!cancelled) setHydrated(true);
     })();

@@ -27,6 +27,19 @@ class IntakeFormData(CamelModel):
     themes: str = ""
     key_scenes: str = ""
     visual_mood: str = ""
+    # Pitch-deck checklist additions (format, look, market, team, business, output)
+    format: str = ""
+    why_now: str = ""
+    visual_references: str = ""
+    mood_board: str = ""
+    pitching_to: str = ""
+    creative_team: str = ""
+    director_statement: str = ""
+    budget: str = ""
+    production_status: str = ""
+    distribution: str = ""
+    deck_length: str = ""
+    delivery_format: str = ""
 
 
 class ExtractedField(CamelModel):
