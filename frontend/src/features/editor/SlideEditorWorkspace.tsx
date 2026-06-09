@@ -42,6 +42,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     designDirection,
     deleteDraftSlide,
     insertDraftSlideAfter,
+    duplicateDraftSlide,
     moveDraftSlide,
     regenerateDraftSlide,
     updateDraftSlide,
@@ -82,6 +83,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
       designDirection={designDirection ?? FALLBACK_DESIGN}
       onDeleteSlide={deleteDraftSlide}
       onInsertAfter={insertDraftSlideAfter}
+      onDuplicateSlide={duplicateDraftSlide}
       onMoveSlide={moveDraftSlide}
       onRegenerateSlide={regenerateDraftSlide}
       onUpdateSlide={updateDraftSlide}

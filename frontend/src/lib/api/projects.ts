@@ -60,22 +60,13 @@ export interface IntakeExtractResult {
   filledFields: (keyof IntakeFormData)[];
 }
 
-/**
- * Upload a script (PDF/DOCX/FDX/TXT) and get back auto-extracted intake fields.
- * Uses raw fetch (not apiFetch) because multipart bodies must not set Content-Type.
- */
-export async function extractScript(
-  projectId: string,
-  file: File,
-): Promise<IntakeExtractResult> {
+/** POST a multipart file to the API (Content-Type must be left to the browser). */
+async function postFile<T>(path: string, file: File): Promise<T> {
   const body = new FormData();
   body.append("file", file);
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/projects/${projectId}/intake/extract`, {
-      method: "POST",
-      body,
-    });
+    res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body });
   } catch (err) {
     throw new ApiError(0, `Network error: ${(err as Error).message}`);
   }
@@ -88,5 +79,15 @@ export async function extractScript(
     }
     throw new ApiError(res.status, detail);
   }
-  return (await res.json()) as IntakeExtractResult;
+  return (await res.json()) as T;
 }
+
+/**
+ * Upload a script (PDF/DOCX/FDX/TXT) and get back auto-extracted intake fields.
+ */
+export const extractScript = (projectId: string, file: File) =>
+  postFile<IntakeExtractResult>(`/projects/${projectId}/intake/extract`, file);
+
+/** Upload an image to replace a slide's visual; returns the served URL. */
+export const uploadSlideImage = (projectId: string, file: File) =>
+  postFile<{ url: string }>(`/projects/${projectId}/assets/upload-image`, file).then((r) => r.url);

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { MarketingShell } from "@/components/layout/MarketingShell";
 import { Button } from "@/components/ui/Button";
 import { ProjectCard } from "@/features/dashboard/ProjectCard";
-import { listProjects } from "@/lib/api";
+import { API_BASE_URL, listProjects } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import type { Project } from "@/types/project";
 
@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
         {error && (
           <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-            {error} — is the backend running on :8001?
+            {error} — is the backend running at {API_BASE_URL}?
           </p>
         )}
 

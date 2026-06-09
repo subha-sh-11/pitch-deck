@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface GenreBlendSlideProps {
@@ -16,11 +17,13 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
         }`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
-        <SlideLabel>{content.heading || "Genre Blend"}</SlideLabel>
+        <SlideLabel>
+          <EditableText k="heading" as="span" value={content.heading || "Genre Blend"} />
+        </SlideLabel>
         <div className="mt-6 grid flex-1 grid-cols-3 gap-4">
           {items.map((item, i) => (
             <div
-              key={item.title}
+              key={i}
               className="group relative flex flex-col justify-end overflow-hidden rounded-lg border border-white/[0.08] p-5 transition-colors hover:border-[#22d3ee]/30"
               style={{
                 background: `linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.4) 100%)`,
@@ -35,12 +38,19 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
               <span className="relative mb-2 text-[10px] font-bold text-[#22d3ee]">
                 0{i + 1}
               </span>
-              <h3 className="relative font-display text-xl font-semibold text-[#F5F1E8]">
-                {item.title}
-              </h3>
-              <p className="relative mt-2 text-xs leading-relaxed text-[#9CA3AF]">
-                {item.description}
-              </p>
+              <EditableText
+                k={`item-${i}-title`}
+                as="h3"
+                className="relative font-display text-xl font-semibold text-[#F5F1E8]"
+                value={item.title}
+              />
+              <EditableText
+                k={`item-${i}-desc`}
+                as="p"
+                multiline
+                className="relative mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                value={item.description}
+              />
             </div>
           ))}
         </div>

@@ -21,6 +21,23 @@ body {
   font-family: var(--slide-font-display, var(--font-cormorant)), Georgia, serif;
 }
 
+/* PPT-style inline editing affordances (canvas edit mode only) */
+.pde-editable {
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+  border-radius: 2px;
+  transition: outline-color 0.12s ease, background-color 0.12s ease;
+}
+.pde-editable:hover {
+  outline-color: rgba(34, 211, 238, 0.5);
+  background-color: rgba(34, 211, 238, 0.06);
+}
+.pde-editing {
+  outline: 1px solid rgba(34, 211, 238, 0.8);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(34, 211, 238, 0.28) transparent;

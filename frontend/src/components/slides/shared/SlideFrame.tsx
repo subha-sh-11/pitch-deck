@@ -1,4 +1,14 @@
-import type { ReactNode } from "react";
+"use client";
+
+import type {
+  CSSProperties,
+  ReactNode,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
+import { FreeTextLayer } from "../editing/FreeTextLayer";
+import { ImageReplaceControl } from "../editing/ImageReplaceControl";
+import { clientPointToPct, useSlideEdit } from "../editing/SlideEditContext";
 
 interface SlideFrameProps {
   children: ReactNode;
@@ -8,14 +18,37 @@ interface SlideFrameProps {
 }
 
 export function SlideFrame({ children, className = "", imageUrl }: SlideFrameProps) {
+  const { editing, imageUrl: editedImageUrl, addTextBox, selectTextBox } = useSlideEdit();
+  // The provider holds the live (possibly user-replaced) image URL.
+  const resolvedImage = editedImageUrl ?? imageUrl;
+
+  function onDoubleClick(e: ReactMouseEvent<HTMLDivElement>) {
+    if (!editing) return;
+    if ((e.target as HTMLElement).closest("[data-slide-text]")) return; // editing existing text
+    const { xPct, yPct } = clientPointToPct(e.currentTarget, e.clientX, e.clientY);
+    addTextBox(xPct, yPct);
+  }
+
+  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!editing) return;
+    const t = e.target as HTMLElement;
+    // Clicking empty slide area deselects any selected text box.
+    if (t.closest("[data-slide-text]") || t.closest("[data-slide-toolbar]")) return;
+    selectTextBox(null);
+  }
+
   return (
     <div
+      data-slide-root
+      onPointerDown={onPointerDown}
+      onDoubleClick={onDoubleClick}
       className={`relative h-full w-full overflow-hidden bg-[#0a0a0c] text-[#F5F1E8] ${className}`}
+      style={{ containerType: "size" } as CSSProperties}
     >
-      {imageUrl && (
+      {resolvedImage && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={resolvedImage}
           alt=""
           className="absolute inset-0 z-0 h-full w-full object-cover"
         />
@@ -27,6 +60,8 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
         }}
       />
       {children}
+      <FreeTextLayer />
+      <ImageReplaceControl />
     </div>
   );
 }

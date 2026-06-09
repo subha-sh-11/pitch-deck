@@ -30,6 +30,8 @@ log = get_logger("generation")
 
 _EXT = {"image/svg+xml": "svg", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 _MAX_WORKERS = 6
+# Image providers rate-limit per minute — generate images at lower concurrency than text.
+_IMG_WORKERS = 3
 
 
 def _project_dict(project: Project) -> dict:
@@ -169,10 +171,12 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                     i, item = pair
                     return i, _generate_slide_image(item["slide_type"], intake, design_clean)
 
-                with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
+                # Image providers (esp. Vertex Imagen) rate-limit per minute — keep image
+                # concurrency low so a full deck doesn't burst past the limit.
+                with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
                     img_map = dict(ex.map(_img, targets))
                 providers = [res[1].meta.get("provider") for res in img_map.values()]
-                real = sum(1 for p in providers if p in ("google", "fal", "replicate"))
+                real = sum(1 for p in providers if p in ("vertex", "google", "fal", "replicate"))
                 log.info("  -images -%d generated (%d real, %d placeholder)",
                          len(img_map), real, len(img_map) - real)
             _set_job(session, job_id, progress=80)
@@ -238,15 +242,32 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         intake = project.intake_form or {}
         design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
 
-        slide.content = content_agent.run(
+        # Preserve the user's manual editor state across a regenerate: inline text
+        # overrides, free-form text boxes, and the existing image (so a failed image
+        # generation never wipes good art).
+        old = dict(slide.content or {})
+        new_content = content_agent.run(
             slide.slide_type, slide.title or "", slide.purpose or "", intake, design
         )
+        for key in ("edits", "textBoxes", "imageUrl", "imagePrompt"):
+            if old.get(key) is not None:
+                new_content[key] = old[key]
+        slide.content = new_content
         slide.layout = layout_agent.run(slide.slide_type, design)
         slide.status = "draft"
         session.flush()
 
         if with_image and image_prompt_agent.slide_needs_image(slide.slide_type):
-            _store_slide_image(session, project.id, slide, intake, design)
+            prompt, img = _generate_slide_image(slide.slide_type, intake, design)
+            had_image = bool((slide.content or {}).get("imageUrl"))
+            if img.meta.get("provider") == "placeholder" and had_image:
+                # Provider unavailable (e.g. quota/429) — keep the existing image.
+                log.warning(
+                    "image regen fell back to placeholder; keeping existing image for slide %s",
+                    slide.id,
+                )
+            else:
+                _persist_image(session, project.id, slide, prompt, img)
             session.flush()
 
         log.info("✓ regenerated slide %s (%s)", slide.id, slide.slide_type)
@@ -254,3 +275,76 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         result = serialize_slide(slide)
         _set_job(session, job_id, status="succeeded", progress=100, result=result)
         return result
+
+
+def regenerate_slide_image(slide_id: str) -> dict:
+    """Regenerate ONLY the slide image (text/content/edits untouched).
+
+    Returns {slide, ok, reason}. On provider failure (e.g. quota/429 → placeholder)
+    the existing image is kept and ok=False so the UI can tell the user.
+    """
+    from app.services.deck_service import serialize_slide
+
+    with session_scope() as session:
+        slide = session.get(Slide, uuid.UUID(slide_id))
+        if slide is None:
+            raise ValueError("slide not found")
+        deck = session.get(Deck, slide.deck_id)
+        project = session.get(Project, deck.project_id)
+        intake = project.intake_form or {}
+        design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
+
+        if not image_prompt_agent.slide_needs_image(slide.slide_type):
+            return {"slide": serialize_slide(slide), "ok": False, "reason": "slide_has_no_image"}
+
+        prompt, img = _generate_slide_image(slide.slide_type, intake, design)
+        if img.meta.get("provider") == "placeholder":
+            log.warning("image regen unavailable (placeholder) for slide %s", slide.id)
+            return {
+                "slide": serialize_slide(slide),
+                "ok": False,
+                "reason": "image_provider_unavailable",
+            }
+        _persist_image(session, project.id, slide, prompt, img)
+        session.flush()
+        log.info("✓ regenerated image for slide %s (%s)", slide.id, slide.slide_type)
+        return {"slide": serialize_slide(slide), "ok": True}
+
+
+def generate_project_image(project_id: str, slide_type: str) -> dict:
+    """Generate a standalone image for a slide TYPE using the project's intake + design.
+
+    Used by editor-added (client-only) slides that have no DB row. Returns {ok, url, reason}.
+    The asset is stored unbound (slide_id=None); the frontend keeps the URL in slide content.
+    """
+    with session_scope() as session:
+        project = session.get(Project, uuid.UUID(project_id))
+        if project is None:
+            raise ValueError("project not found")
+        if not image_prompt_agent.slide_needs_image(slide_type):
+            return {"ok": False, "reason": "slide_has_no_image"}
+
+        deck = session.execute(
+            select(Deck).where(Deck.project_id == project.id).limit(1)
+        ).scalar_one_or_none()
+        intake = project.intake_form or {}
+        design = {k: v for k, v in ((deck.design_direction if deck else {}) or {}).items()
+                  if k != "_register"}
+
+        prompt, img = _generate_slide_image(slide_type, intake, design)
+        if img.meta.get("provider") == "placeholder":
+            return {"ok": False, "reason": "image_provider_unavailable"}
+
+        kind = image_prompt_agent.image_kind(slide_type)
+        ext = _EXT.get(img.mime, "png")
+        key = f"generated/{project.id}/{kind}/{uuid.uuid4().hex}.{ext}"
+        asset = Asset(project_id=project.id, slide_id=None, kind=kind,
+                      storage_key=key, mime=img.mime, generation_meta={**img.meta})
+        session.add(asset)
+        session.flush()
+        stored = store_asset(key, img.data, img.mime)
+        asset.generation_meta = {**(asset.generation_meta or {}),
+                                 "stored_in_s3": stored.stored_in_s3}
+        url = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
+        log.info("✓ generated standalone image (%s) for project %s", slide_type, project.id)
+        return {"ok": True, "url": url}

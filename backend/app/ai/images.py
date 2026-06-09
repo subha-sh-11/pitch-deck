@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import html
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,10 +43,15 @@ _PROVIDER_KEY = {
 def _resolve_image_provider() -> str:
     if settings.ai_offline or settings.image_provider == "none":
         return "placeholder"
+    # Vertex authenticates via ADC (no key) — only needs a project configured.
+    if settings.image_provider == "vertex":
+        return "vertex" if settings.vertex_project else "placeholder"
     if settings.image_provider in _PROVIDER_KEY:
         has_key = bool(getattr(settings, _PROVIDER_KEY[settings.image_provider]))
         return settings.image_provider if has_key else "placeholder"
     # auto
+    if settings.vertex_project:
+        return "vertex"
     if settings.fal_key:
         return "fal"
     if settings.replicate_api_token:
@@ -71,6 +77,8 @@ def generate_image(
             return _fal_generate(prompt, w, h, negative_prompt, seed)
         if provider == "replicate":
             return _replicate_generate(prompt, w, h, negative_prompt, seed)
+        if provider == "vertex":
+            return _vertex_generate(prompt, aspect_ratio, seed)
         if provider == "google":
             return _google_generate(prompt, aspect_ratio, seed)
     except Exception as exc:  # noqa: BLE001
@@ -80,6 +88,77 @@ def generate_image(
 
 # Imagen supports a fixed set of aspect ratios; map ours onto the nearest.
 _GOOGLE_ASPECT = {"21:9": "16:9", "16:9": "16:9", "4:3": "4:3", "1:1": "1:1", "3:4": "3:4"}
+
+# Cached ADC credentials for Vertex (refreshed lazily when the token expires).
+_vertex_creds = None
+
+
+def _vertex_token() -> str:
+    """OAuth token from Application Default Credentials (gcloud auth application-default login)."""
+    global _vertex_creds
+    import google.auth
+    import google.auth.transport.requests
+
+    if _vertex_creds is None:
+        _vertex_creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+    if not _vertex_creds.valid:
+        _vertex_creds.refresh(google.auth.transport.requests.Request())
+    return _vertex_creds.token
+
+
+def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
+    """Google Imagen via Vertex AI (ADC auth, billed to the configured GCP project)."""
+    import base64
+
+    import httpx
+
+    project = settings.vertex_project
+    location = settings.vertex_location
+    model = settings.google_image_model
+    url = (
+        f"https://{location}-aiplatform.googleapis.com/v1/projects/{project}"
+        f"/locations/{location}/publishers/google/models/{model}:predict"
+    )
+    body = {
+        "instances": [{"prompt": prompt}],
+        "parameters": {
+            "sampleCount": 1,
+            "aspectRatio": _GOOGLE_ASPECT.get(aspect_ratio, "16:9"),
+            # Cinematic realism for film pitches: least-restrictive standard filter and
+            # allow adult figures (still blocks minors + the most graphic content).
+            "safetySetting": "block_only_high",
+            "personGeneration": "allow_adult",
+        },
+    }
+    # Imagen has a per-minute rate limit; a full deck generates many images at once, so
+    # retry transient 429/503 with exponential backoff instead of falling back to placeholder.
+    for attempt in range(4):
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {_vertex_token()}"},
+            json=body,
+            timeout=120,
+        )
+        if resp.status_code in (429, 503) and attempt < 3:
+            wait = 4 * (2 ** attempt)  # 4s, 8s, 16s
+            _log.warning("vertex imagen %s (rate limit), retry %d in %ds",
+                         resp.status_code, attempt + 1, wait)
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        preds = resp.json().get("predictions", [])
+        if not preds or "bytesBase64Encoded" not in preds[0]:
+            reason = ""
+            if preds and isinstance(preds[0], dict):
+                reason = preds[0].get("raiFilteredReason", "")
+            raise ValueError(f"Vertex Imagen returned no image (safety filter?): {reason}")
+        data = base64.b64decode(preds[0]["bytesBase64Encoded"])
+        mime = preds[0].get("mimeType", "image/png")
+        return ImageResult(data, mime, {"provider": "vertex", "model": model,
+                                        "prompt": prompt, "seed": seed})
+    raise RuntimeError("Vertex Imagen rate-limited after retries")
 
 
 def _google_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:

@@ -25,7 +25,7 @@ _FIELDS: dict[str, str] = {
     "storyWorld": "The setting/world: place, era, social texture (extract + describe).",
     "mainCharacters": "Lead characters as 'Name — role — one-line description.', separated by periods (extract).",
     "characterDynamics": "The key relationships, alliances and conflicts between characters (extract).",
-    "usp": "2-4 selling points: what makes this fresh/marketable, separated by periods (synthesize).",
+    "usp": "2-4 selling points: what makes this fresh/marketable, separated by periods (synthesize).",     
     "showCross": "2-3 real comparable films/shows audiences will recognize, e.g. 'Jersey x Pelli Choopulu' (synthesize).",
     "targetAudience": "Who this is for: demographics, language market, viewing context (synthesize).",
     "releaseFit": "Best release path: OTT / theatrical / festival / regional, with reasoning (synthesize).",

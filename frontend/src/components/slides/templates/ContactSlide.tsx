@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame } from "../shared/SlideFrame";
 
 interface ContactSlideProps {
@@ -19,21 +20,36 @@ export function ContactSlide({ content }: ContactSlideProps) {
 
       <div className="relative flex h-full flex-col items-center justify-center p-[10%] text-center">
         <div className="mb-6 h-px w-16 bg-gradient-to-r from-transparent via-[#22d3ee] to-transparent" />
-        <h2 className="font-display text-[clamp(1.75rem,3.5vw,3rem)] font-semibold text-[#F5F1E8]">
-          {content.heading}
-        </h2>
+        <EditableText
+          k="heading"
+          as="h2"
+          className="font-display text-[clamp(1.75rem,3.5vw,3rem)] font-semibold text-[#F5F1E8]"
+          value={content.heading}
+        />
         {content.subheading && (
-          <p className="mt-3 text-sm text-[#22d3ee]">{content.subheading}</p>
+          <EditableText
+            k="subheading"
+            as="p"
+            className="mt-3 text-sm text-[#22d3ee]"
+            value={content.subheading}
+          />
         )}
         {content.body && (
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-[#9CA3AF]">
-            {content.body}
-          </p>
+          <EditableText
+            k="body"
+            as="p"
+            multiline
+            className="mt-6 max-w-md whitespace-pre-line text-sm leading-relaxed text-[#9CA3AF]"
+            value={content.body}
+          />
         )}
         {content.footer && (
-          <p className="mt-8 font-display text-lg italic text-[#F5F1E8]/80">
-            {content.footer}
-          </p>
+          <EditableText
+            k="footer"
+            as="p"
+            className="mt-8 font-display text-lg italic text-[#F5F1E8]/80"
+            value={content.footer}
+          />
         )}
         <div className="mt-6 h-px w-16 bg-gradient-to-r from-transparent via-[#22d3ee]/50 to-transparent" />
       </div>

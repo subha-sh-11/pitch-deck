@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/Button";
 import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideAppearance, SlideType } from "@/types/slide";
 import { SLIDE_STATUS_LABELS, SLIDE_TYPE_LABELS } from "@/types/slide";
-import { getProject } from "@/lib/api";
+import {
+  generateProjectImage,
+  getProject,
+  regenerateSlideImage,
+  uploadSlideImage,
+} from "@/lib/api";
 import { DEFAULT_SLIDE_APPEARANCE, SLIDE_TRANSITIONS } from "@/lib/slide-appearance";
 import { AiAssistantFab } from "./AiAssistantFab";
 import { EditorFlyout } from "./EditorFlyout";
@@ -24,6 +29,7 @@ interface DeckEditorProps {
   designDirection: DesignDirection;
   onDeleteSlide: (id: string) => boolean;
   onInsertAfter: (index: number, type: SlideType) => void;
+  onDuplicateSlide: (index: number) => void;
   onMoveSlide: (index: number, direction: "up" | "down") => void;
   onRegenerateSlide: (id: string) => Promise<void>;
   onUpdateSlide: (id: string, patch: Partial<Slide["content"]> & { title?: string }) => void;
@@ -42,6 +48,7 @@ export function DeckEditor({
   designDirection,
   onDeleteSlide,
   onInsertAfter,
+  onDuplicateSlide,
   onRegenerateSlide,
   onUpdateSlide,
   onUpdateSlideMeta,
@@ -200,8 +207,22 @@ export function DeckEditor({
             onAppearanceChange={(appearance) =>
               onUpdateSlideMeta(slide.id, { appearance })
             }
+            onContentChange={(patch) => onUpdateSlide(slide.id, patch)}
+            imageActions={{
+              upload: (file) => uploadSlideImage(projectId, file),
+              regenerate: async () => {
+                // Editor-added slides have client-only ("local-") ids with no DB row,
+                // so generate by slide type instead of regenerating a persisted slide.
+                if (slide.id.startsWith("local-")) {
+                  const r = await generateProjectImage(projectId, slide.slideType);
+                  return r.ok ? r.url ?? null : null;
+                }
+                const r = await regenerateSlideImage(slide.id);
+                return r.ok ? r.slide.content.imageUrl ?? null : null;
+              },
+            }}
             onDuplicate={() => {
-              onInsertAfter(safeIndex, slide.slideType);
+              onDuplicateSlide(safeIndex);
               setIndex(safeIndex + 1);
               showToast("Slide duplicated");
             }}

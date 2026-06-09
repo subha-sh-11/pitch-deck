@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface CharacterSlideProps {
@@ -16,27 +17,42 @@ export function CharacterSlide({ content }: CharacterSlideProps) {
         }`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
-        <SlideLabel>{content.heading || "Characters"}</SlideLabel>
+        <SlideLabel>
+          <EditableText k="heading" as="span" value={content.heading || "Characters"} />
+        </SlideLabel>
         <div className="mt-5 grid flex-1 grid-cols-3 gap-4">
-          {characters.map((char) => (
+          {characters.map((char, i) => (
             <div
-              key={char.name}
+              key={i}
               className="flex flex-col rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
             >
               <div className="mb-3 h-20 w-full rounded-md bg-gradient-to-br from-[#8A4B2A]/40 via-[#2A2A2A] to-[#3F5F4A]/30" />
-              <h3 className="font-display text-xl font-semibold text-[#F5F1E8]">
-                {char.name}
-              </h3>
-              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#22d3ee]">
-                {char.role}
-              </p>
-              <p className="mt-2 flex-1 text-xs leading-relaxed text-[#9CA3AF]">
-                {char.description}
-              </p>
+              <EditableText
+                k={`char-${i}-name`}
+                as="h3"
+                className="font-display text-xl font-semibold text-[#F5F1E8]"
+                value={char.name}
+              />
+              <EditableText
+                k={`char-${i}-role`}
+                as="p"
+                className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#22d3ee]"
+                value={char.role}
+              />
+              <EditableText
+                k={`char-${i}-desc`}
+                as="p"
+                multiline
+                className="mt-2 flex-1 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                value={char.description}
+              />
               {char.wound && (
-                <p className="mt-2 border-t border-white/[0.06] pt-2 text-[10px] italic text-[#6b7280]">
-                  Wound: {char.wound}
-                </p>
+                <EditableText
+                  k={`char-${i}-wound`}
+                  as="p"
+                  className="mt-2 border-t border-white/[0.06] pt-2 text-[10px] italic text-[#6b7280]"
+                  value={`Wound: ${char.wound}`}
+                />
               )}
             </div>
           ))}

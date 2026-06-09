@@ -42,58 +42,77 @@ def aspect_for(slide_type: str) -> str:
     return IMAGE_SLIDES.get(slide_type, ("background", "16:9"))[1]
 
 
-# Words that commonly trip diffusion safety filters; we keep prompts atmospheric instead.
-_UNSAFE = re.compile(
-    r"\b(kid|kids|child|children|minor|boy|girl|teen|drown|drowning|trapped|sealed|"
-    r"dying|dead|death|killed|blood|gore|corpse|suicide|abuse|victim|weapon|gun)\w*\b",
+# We now generate on Vertex Imagen with relaxed safety, so cinematic realism (tension,
+# period-accurate weapons for crime/action stories, etc.) is allowed. We only strip terms
+# involving MINORS (which hard-block regardless) and the most graphic gore that adds nothing
+# to pitch key art. Weapons/danger/tension are intentionally kept.
+_STRIP = re.compile(
+    r"\b(kids?|child(ren)?|minors?|boys?|girls?|teen\w*|toddlers?|infants?|bab(y|ies)|"
+    r"gore|corpses?|mutilat\w*|dismember\w*)\b",
     re.IGNORECASE,
 )
 
 
-def _safe(text: str) -> str:
-    """Strip peril/minor/violence terms so prompts pass image-model safety policies."""
-    return re.sub(r"\s{2,}", " ", _UNSAFE.sub("", text or "")).strip(" ,.-")
+def _clean(text: str) -> str:
+    """Drop only minor-related and extreme-gore terms; keep the rest for realism."""
+    return re.sub(r"\s{2,}", " ", _STRIP.sub("", text or "")).strip(" ,.-")
 
 
 def _subject(slide_type: str, intake: dict) -> str:
-    # Bias toward SETTING / MOOD / VISUAL fields — these are safe and on-brand for key art.
+    """The concrete focus of the frame, grounded in the intake."""
     if slide_type == "cover":
-        return _g(intake, "storyWorld") or _g(intake, "visualAesthetic") or _g(intake, "tagline")
+        return (_g(intake, "storyWorld") or _g(intake, "visualAesthetic")
+                or _g(intake, "logline") or _g(intake, "tagline"))
     if slide_type == "story_world":
         return _g(intake, "storyWorld") or _g(intake, "visualMood")
     if slide_type == "visual_aesthetic":
-        return _g(intake, "visualAesthetic") or _g(intake, "visualMood") or _g(intake, "designDirection")
+        return (_g(intake, "visualAesthetic") or _g(intake, "visualMood")
+                or _g(intake, "designDirection"))
     if slide_type in ("character", "supporting_characters"):
-        # Avoid literal (often minor/peril) descriptions → evoke mood, not a real person.
-        return _g(intake, "visualMood") or _g(intake, "storyWorld")
-    return _g(intake, "storyWorld") or _g(intake, "visualMood")
+        return _g(intake, "characterDynamics") or _g(intake, "visualMood") or _g(intake, "storyWorld")
+    return _g(intake, "storyWorld") or _g(intake, "visualMood") or _g(intake, "logline")
 
 
 def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
-    """Assemble a register-anchored, rights-safe diffusion prompt grounded in design language."""
+    """Assemble a prompt that captures THIS film's genre, tone, emotion, and regional setting."""
     design = design or {}
-    subject = _safe(_subject(slide_type, intake))
+    region = _g(intake, "storyWorld")          # where it's set → regional authenticity
+    genre = _g(intake, "genreBlend")           # genre cues (allows weapons/tension when fitting)
+    tone = _g(intake, "tone")                  # emotional register
+    themes = _g(intake, "themes")
+    mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
+    subject = _subject(slide_type, intake)
+
     image_style = design.get("imageStyle", "cinematic, realistic lighting")
-    visual_style = ", ".join((design.get("visualStyle") or [])[:5])
+    visual_style = ", ".join((design.get("visualStyle") or [])[:4])
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
+    # Framing per slide — people are allowed so scenes feel lived-in and emotional.
     framing = {
-        "cover": "ultra-wide cinematic establishing key art of the setting, no people",
-        "story_world": "wide environmental establishing shot of the setting, no people",
-        "visual_aesthetic": "cinematic mood and texture study, atmospheric, no people",
-        "character": "evocative cinematic character mood study, dramatic lighting, silhouette, "
-                     "no real-person likeness",
-        "supporting_characters": "evocative cinematic mood study, dramatic lighting, silhouette, "
-                                 "no real-person likeness",
-    }.get(slide_type, "cinematic atmospheric frame, no people")
+        "cover": "cinematic key art establishing the world and mood of the film",
+        "story_world": "wide environmental establishing shot, lived-in and authentic",
+        "visual_aesthetic": "cinematic mood and texture study, atmospheric",
+        "character": "evocative cinematic character study, dramatic lighting, expressive",
+        "supporting_characters": "evocative cinematic ensemble study, dramatic lighting",
+    }.get(slide_type, "cinematic atmospheric frame that captures the story's emotion")
 
     parts = [framing]
     if subject:
         parts.append(subject)
+    if region and region not in (subject or ""):
+        parts.append(f"authentic setting: {region}")
+    if genre:
+        parts.append(f"{genre}")
+    emotion = "; ".join(b for b in (tone, themes, mood) if b)
+    if emotion:
+        parts.append(f"emotional tone: {emotion}")
     parts.append(image_style)
     if visual_style:
         parts.append(visual_style)
     if palette:
         parts.append(f"color palette: {palette}")
-    parts.append("film still, professional cinematography, no text, no watermark, no logo")
-    return ", ".join(p for p in parts if p)
+    parts.append(
+        "authentic regional detail, period-accurate, emotionally resonant, film still, "
+        "professional cinematography, no text, no watermark, no logo, no real-person likeness"
+    )
+    return _clean(", ".join(p for p in parts if p))

@@ -1,8 +1,9 @@
 "use client";
 
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import type { ImageActions } from "@/components/slides/editing/SlideEditContext";
 import type { DesignDirection } from "@/types/design";
-import type { Slide, SlideAppearance } from "@/types/slide";
+import type { Slide, SlideAppearance, SlideContent } from "@/types/slide";
 import { SlideContextBar } from "./SlideContextBar";
 
 interface SlideCanvasProps {
@@ -10,6 +11,8 @@ interface SlideCanvasProps {
   zoom: number;
   designDirection?: DesignDirection;
   onAppearanceChange: (appearance: Partial<SlideAppearance>) => void;
+  onContentChange?: (patch: Partial<SlideContent>) => void;
+  imageActions?: ImageActions;
   onDuplicate?: () => void;
   onDelete?: () => void;
   onResetStyle?: () => void;
@@ -20,6 +23,8 @@ export function SlideCanvas({
   zoom,
   designDirection,
   onAppearanceChange,
+  onContentChange,
+  imageActions,
   onDuplicate,
   onDelete,
   onResetStyle,
@@ -38,6 +43,9 @@ export function SlideCanvas({
               slide={slide}
               designDirection={designDirection}
               className="rounded-none"
+              editing
+              onContentChange={onContentChange}
+              imageActions={imageActions}
             />
           </div>
         </div>
