@@ -1,0 +1,1865 @@
+{
+  "communities": {
+    "0": [
+      "api_deck",
+      "editor_deckeditor",
+      "editor_deckeditor_deckeditorprops",
+      "editor_presentationmode",
+      "editor_presentationmode_iconfullscreen",
+      "editor_propertiespanel",
+      "editor_propertiespanel_panelsection",
+      "editor_slidecanvas",
+      "editor_slidecanvas_slidecanvas",
+      "editor_slidecanvas_slidecanvasprops",
+      "editor_slidecontextbar",
+      "editor_slidecontextbar_slidecontextbar",
+      "editor_slidecontextbar_slidecontextbarprops",
+      "editor_slidenavigator",
+      "editor_slidenavigator_slidenavigator",
+      "editor_slidenavigator_slidenavigatorprops",
+      "landing_deckpreviewpanel",
+      "landing_deckpreviewpanel_genre_chips",
+      "landing_deckpreviewpanel_preview_slides",
+      "lib_regenerate_slide_addable_slide_types",
+      "lib_slide_appearance",
+      "lib_slide_appearance_getbackgroundcss",
+      "lib_slide_appearance_slide_background_options",
+      "lib_slide_appearance_slide_color_swatches",
+      "lib_slide_appearance_slide_style_options",
+      "lib_slide_appearance_slide_transitions",
+      "preview_addslidemenu",
+      "preview_content_reliability",
+      "preview_content_reliability_assessslidecontentreliability",
+      "preview_content_reliability_contentreliabilityresult",
+      "preview_content_reliability_contentreliabilitystatus",
+      "preview_content_reliability_countreliabilitysummary",
+      "preview_content_reliability_isplaceholdertext",
+      "preview_content_reliability_mockfindingforslide",
+      "preview_content_reliability_wordcount",
+      "preview_contentreviewpanel",
+      "preview_contentreviewpanel_reliabilitystyles",
+      "preview_contentslideindex",
+      "preview_contentslideindex_contentslideindexprops",
+      "preview_contentslideindex_statusdot",
+      "preview_deckslideindex",
+      "preview_deckslideindex_deckslideindexprops",
+      "preview_format_slide_content",
+      "preview_format_slide_content_applyeditabletexttoslide",
+      "preview_format_slide_content_blockstoeditabletext",
+      "preview_format_slide_content_formatslidepreviewblocks",
+      "preview_format_slide_content_titlecaseheading",
+      "preview_previeweditpanel",
+      "preview_previeweditpanel_sectionblock",
+      "preview_previewslidelist",
+      "preview_previewvisualdirection",
+      "preview_slide_content_utils",
+      "preview_slide_content_utils_slidecontenttotext",
+      "preview_slide_content_utils_texttoslidecontentpatch",
+      "preview_slidecontentcards",
+      "preview_slidecontentdetailpanel",
+      "preview_slideminiart",
+      "preview_slideminiart_minilayout",
+      "slides_sliderenderer_sliderenderer",
+      "slides_sliderenderer_sliderendererprops",
+      "slides_slidethumbnailpreview",
+      "slides_slidethumbnailpreview_slidethumbnailpreviewprops",
+      "slideupdate",
+      "templates_template_preview_themes",
+      "templates_template_preview_themes_gettemplatepreviewtheme",
+      "templates_template_preview_themes_templatepreviewlayout",
+      "types_deck",
+      "types_deck_deck",
+      "types_deck_deckoutlineitem",
+      "types_deck_deckstatus",
+      "types_design",
+      "types_design_colortoken",
+      "types_design_designdirection",
+      "types_design_designfonts",
+      "types_design_typographydirection",
+      "types_slide",
+      "types_slide_slide",
+      "types_slide_slide_status_labels",
+      "types_slide_slide_type_labels",
+      "types_slide_slidebackgroundkey",
+      "types_slide_slidelayout",
+      "types_slide_slidestatus",
+      "types_slide_slidestylevariant",
+      "types_slide_slidetype",
+      "types_template",
+      "types_template_pitchtemplate",
+      "ui_textarea",
+      "ui_textarea_textarea",
+      "ui_textarea_textareaprops"
+    ],
+    "1": [
+      "agents_intake_extract",
+      "agents_intake_extract_fallback",
+      "agents_intake_extract_rationale_1",
+      "agents_intake_extract_rationale_67",
+      "agents_intake_extract_rationale_76",
+      "agents_intake_extract_run",
+      "agents_intake_extract_title_from_filename",
+      "api_projects",
+      "api_projects_createproject",
+      "api_projects_extractscript",
+      "api_projects_intakeextractresult",
+      "api_projects_postfile",
+      "api_projects_projectdetail",
+      "api_projects_uploadslideimage",
+      "backend_app_ai_agents_intake_extract_py_str",
+      "backend_app_services_project_service_py_projectcreate",
+      "dashboard_projectcard",
+      "enum",
+      "layout_sectioncard",
+      "layout_sectioncard_sectioncardprops",
+      "layout_statusbadge",
+      "layout_statusbadge_statusbadgeprops",
+      "layout_statusbadge_statusvariant",
+      "lib_workflow",
+      "lib_workflow_buildworkflowsteps",
+      "lib_workflow_getphaselabel",
+      "lib_workflow_getprogressfromstatus",
+      "lib_workflow_getstepfrompathname",
+      "lib_workflow_getstepstatus",
+      "lib_workflow_step_to_status",
+      "lib_workflow_workflow_step_order",
+      "preview_content_preview_sections",
+      "preview_content_preview_sections_contentpreviewfield",
+      "preview_content_preview_sections_enrichvisualfromtemplate",
+      "preview_content_preview_sections_getsectionregeneratepatch",
+      "preview_contentpreviewsidebar",
+      "project_new_projectform",
+      "schemas_base",
+      "schemas_base_deckstatus",
+      "schemas_base_pitchpurpose",
+      "schemas_base_productionstatus",
+      "schemas_base_projectstatus",
+      "schemas_base_rationale_1",
+      "schemas_base_slidestatus",
+      "schemas_base_slidetype",
+      "schemas_base_storystage",
+      "str",
+      "types_project",
+      "types_project_pitchpurpose",
+      "types_project_productionstatus",
+      "types_project_project",
+      "types_project_project_status_labels",
+      "types_project_project_type_labels",
+      "types_project_projectstatus",
+      "types_project_projecttype",
+      "types_project_story_stage_labels",
+      "types_project_storystage",
+      "types_workflow",
+      "types_workflow_intakeanalysis",
+      "types_workflow_intakeformdata",
+      "types_workflow_qualityreview",
+      "types_workflow_qualityreviewfinding",
+      "types_workflow_workflowstep",
+      "types_workflow_workflowstepstatus",
+      "ui_card",
+      "ui_card_card",
+      "ui_card_cardprops",
+      "ui_input",
+      "ui_input_input",
+      "ui_input_inputprops",
+      "ui_progressbar",
+      "ui_progressbar_progressbar",
+      "ui_progressbar_progressbarprops"
+    ],
+    "2": [
+      "editing_editabletext",
+      "editing_editabletext_editabletextprops",
+      "editing_freetextlayer",
+      "editing_freetextlayer_freetextbox",
+      "editing_imagereplacecontrol",
+      "editing_imagereplacecontrol_iconimage",
+      "editing_slideeditcontext",
+      "editing_slideeditcontext_clientpointtopct",
+      "editing_slideeditcontext_default",
+      "editing_slideeditcontext_imageactions",
+      "editing_slideeditcontext_makeid",
+      "editing_slideeditcontext_noop",
+      "editing_slideeditcontext_pxdeltatopct",
+      "editing_slideeditcontext_slideeditprovider",
+      "editing_slideeditcontext_slideeditproviderprops",
+      "editing_slideeditcontext_slideeditvalue",
+      "editing_slideeditcontext_useslideedit",
+      "preview_generatingoverlay",
+      "preview_generatingoverlay_stages",
+      "preview_generatingoverlay_tips",
+      "preview_previewcinematicbackground",
+      "preview_previewcinematicbackground_particles",
+      "preview_slide_content_utils_getselectedslide",
+      "shared_slideframe",
+      "shared_slideframe_slideframeprops",
+      "shared_slideframe_slidelabel",
+      "slides_sliderenderer",
+      "slides_sliderenderer_byusage",
+      "slides_sliderenderer_font_vars",
+      "slides_sliderenderer_paletteaccent",
+      "templates_characterslide",
+      "templates_characterslide_characterslideprops",
+      "templates_contactslide",
+      "templates_contactslide_contactslideprops",
+      "templates_coverslide",
+      "templates_coverslide_coverslideprops",
+      "templates_genericslide",
+      "templates_genericslide_genericslideprops",
+      "templates_genreblendslide",
+      "templates_genreblendslide_genreblendslideprops",
+      "templates_index",
+      "templates_loglineslide",
+      "templates_loglineslide_loglineslideprops",
+      "templates_marketpotentialslide",
+      "templates_showcrossslide",
+      "templates_showcrossslide_showcrossslideprops",
+      "templates_storyworldslide",
+      "templates_storyworldslide_storyworldslideprops",
+      "templates_synopsisslide",
+      "templates_synopsisslide_synopsisslideprops",
+      "templates_targetaudienceslide",
+      "templates_targetaudienceslide_targetaudienceslideprops",
+      "templates_uspgridslide",
+      "templates_uspgridslide_uspgridslideprops",
+      "templates_visualaestheticslide",
+      "types_slide_slidecontent",
+      "types_slide_slideelementedit",
+      "types_slide_slidetextbox"
+    ],
+    "3": [
+      "ai_templates",
+      "ai_templates_build_outline",
+      "ai_templates_rationale_1",
+      "ai_templates_rationale_63",
+      "api_client",
+      "api_client_apierror",
+      "api_client_apierror_constructor",
+      "api_client_apifetch",
+      "api_deck_getdeck",
+      "api_deck_updateslide",
+      "api_generation",
+      "api_generation_generationjob",
+      "api_generation_getjob",
+      "api_generation_jobstatus",
+      "api_generation_polljob",
+      "api_generation_polloptions",
+      "api_projects_getproject",
+      "api_projects_recommendtemplate",
+      "api_projects_saveintake",
+      "api_templates_listtemplates",
+      "api_templates_templatesummary",
+      "backend_app_ai_templates_py_any",
+      "backend_app_ai_templates_py_str",
+      "backend_app_routers_decks_py_asyncsession",
+      "backend_app_routers_decks_py_project",
+      "backend_app_routers_decks_py_uuid",
+      "editor_page",
+      "editor_page_editorpage",
+      "lib_build_slides",
+      "lib_build_slides_buildslidefromoutline",
+      "lib_build_slides_buildslidesfromtemplate",
+      "lib_build_slides_contentforslidetype",
+      "lib_build_slides_imagepromptforslidetype",
+      "lib_build_slides_renumberslides",
+      "lib_slide_appearance_default_slide_appearance",
+      "preview_page",
+      "preview_page_previewpage",
+      "routers_decks",
+      "routers_decks_get_deck",
+      "routers_decks_rationale_1",
+      "routers_templates",
+      "routers_templates_rationale_1",
+      "setup_setupwizardcontext",
+      "setup_setupwizardcontext_default_state",
+      "setup_setupwizardcontext_isbackendslide",
+      "setup_setupwizardcontext_loadstate",
+      "setup_setupwizardcontext_savestate",
+      "setup_setupwizardcontext_setupwizardprovider",
+      "templates_page",
+      "templates_page_templatespage",
+      "types_setup",
+      "types_setup_empty_intake_form",
+      "types_setup_extractedscriptsummary",
+      "types_setup_generationstatus",
+      "types_setup_setupstepid",
+      "types_setup_setupwizardstate",
+      "types_slide_slidecomment"
+    ],
+    "4": [
+      "api_generation_generatedeck",
+      "api_generation_generatedesign",
+      "backend_app_core_db_py_asyncsession",
+      "backend_app_routers_generate_py_asyncsession",
+      "backend_app_routers_generate_py_backgroundtasks",
+      "backend_app_routers_generate_py_bool",
+      "backend_app_routers_generate_py_project",
+      "backend_app_routers_generate_py_str",
+      "backend_app_routers_generate_py_uuid",
+      "backend_app_services_generation_service_py_bool",
+      "backend_app_services_generation_service_py_int",
+      "backend_app_services_generation_service_py_project",
+      "backend_app_services_generation_service_py_slide",
+      "backend_app_services_generation_service_py_str",
+      "backend_app_workers_tasks_py_bool",
+      "backend_app_workers_tasks_py_str",
+      "core_db",
+      "core_db_get_db",
+      "core_db_rationale_1",
+      "core_db_rationale_36",
+      "core_db_rationale_56",
+      "core_db_session_scope",
+      "generationjob",
+      "lib_regenerate_slide",
+      "routers_generate",
+      "routers_generate_create_job",
+      "routers_generate_job_payload",
+      "routers_generate_rationale_1",
+      "services_generation_service",
+      "services_generation_service_generate_slide_image",
+      "services_generation_service_persist_image",
+      "services_generation_service_project_dict",
+      "services_generation_service_rationale_1",
+      "services_generation_service_rationale_109",
+      "services_generation_service_rationale_67",
+      "services_generation_service_rationale_78",
+      "services_generation_service_run_design",
+      "services_generation_service_run_full_deck",
+      "services_generation_service_set_job",
+      "services_generation_service_store_slide_image",
+      "session",
+      "workers_tasks",
+      "workers_tasks_rationale_1"
+    ],
+    "5": [
+      "editor_aiassistantfab",
+      "editor_editorflyout",
+      "editor_editorflyout_editorflyoutprops",
+      "editor_editoricons",
+      "editor_editoricons_iconanalytics",
+      "editor_editoricons_iconbell",
+      "editor_editoricons_iconcamera",
+      "editor_editoricons_iconchart",
+      "editor_editoricons_iconchecklist",
+      "editor_editoricons_iconchevronleft",
+      "editor_editoricons_iconchevronright",
+      "editor_editoricons_iconclose",
+      "editor_editoricons_iconcomment",
+      "editor_editoricons_iconembed",
+      "editor_editoricons_icongrid",
+      "editor_editoricons_iconhome",
+      "editor_editoricons_iconmagic",
+      "editor_editoricons_iconmedia",
+      "editor_editoricons_iconmenu",
+      "editor_editoricons_iconnotes",
+      "editor_editoricons_iconplay",
+      "editor_editoricons_iconplus",
+      "editor_editoricons_iconprops",
+      "editor_editoricons_iconrecord",
+      "editor_editoricons_iconshape",
+      "editor_editoricons_iconsparkle",
+      "editor_editoricons_icontable",
+      "editor_editoricons_icontext",
+      "editor_editoricons_icontransition",
+      "editor_editoricons_iconuser",
+      "editor_inserttoolbar",
+      "editor_inserttoolbar_inserttoolbar",
+      "editor_inserttoolbar_inserttoolbarprops",
+      "editor_inserttoolbar_tools",
+      "editor_pitchrightrail",
+      "editor_pitchrightrail_rail_items",
+      "editor_pitchrightrail_rightrailpanel",
+      "editor_pitchtopbar",
+      "editor_sharedialog",
+      "editor_sharedialog_sharedialog",
+      "editor_sharedialog_sharedialogprops"
+    ],
+    "6": [
+      "ai_llm",
+      "ai_llm_anthropic_complete",
+      "ai_llm_complete_json",
+      "ai_llm_extract_json",
+      "ai_llm_openai_complete",
+      "ai_llm_provider_name",
+      "ai_llm_rationale_1",
+      "ai_llm_rationale_121",
+      "ai_llm_rationale_69",
+      "ai_llm_resolve_provider",
+      "ai_tmdb",
+      "ai_tmdb_poster_for",
+      "ai_tmdb_rationale_1",
+      "ai_tmdb_rationale_17",
+      "backend_app_ai_llm_py_any",
+      "backend_app_ai_llm_py_int",
+      "backend_app_ai_llm_py_str",
+      "backend_app_ai_tmdb_py_str",
+      "backend_app_core_cache_py_any",
+      "backend_app_core_cache_py_int",
+      "backend_app_core_cache_py_str",
+      "core_cache",
+      "core_cache_cache_get",
+      "core_cache_cache_key",
+      "core_cache_cache_set",
+      "core_cache_cached_call",
+      "core_cache_get_cache",
+      "core_cache_rationale_1",
+      "core_cache_rationale_23",
+      "core_cache_rationale_65",
+      "float"
+    ],
+    "7": [
+      "content_page",
+      "content_page_contentredirect",
+      "design_page",
+      "design_page_designredirect",
+      "editor_slideeditorworkspace",
+      "editor_slideeditorworkspace_fallback_design",
+      "export_page",
+      "export_page_exportredirect",
+      "id_page",
+      "id_page_projectpage",
+      "intake_page",
+      "intake_page_intakeredirect",
+      "landing_herosection",
+      "landing_herosection_herosection",
+      "landing_landingpage",
+      "landing_landingpage_features",
+      "lib_routes",
+      "lib_routes_projectroutes",
+      "outline_page",
+      "outline_page_outlineredirect",
+      "preview_phasebreadcrumb",
+      "preview_phasebreadcrumb_phasebreadcrumb",
+      "preview_phasebreadcrumb_phases",
+      "preview_previewphasestepper",
+      "preview_previewphasestepper_phases",
+      "questions_page",
+      "questions_page_questionsredirect",
+      "review_page",
+      "review_page_reviewredirect",
+      "story_analysis_page",
+      "story_analysis_page_storyanalysisredirect"
+    ],
+    "8": [
+      "backend_app_models_base_py_uuid",
+      "declarativebase",
+      "mapped",
+      "models_asset",
+      "models_asset_asset",
+      "models_asset_generationjob",
+      "models_asset_rationale_1",
+      "models_base",
+      "models_base_base",
+      "models_base_rationale_1",
+      "models_base_timestampmixin",
+      "models_base_uuid_pk",
+      "models_deck",
+      "models_deck_deck",
+      "models_deck_rationale_1",
+      "models_project",
+      "models_project_project",
+      "models_project_rationale_1",
+      "models_slide",
+      "models_slide_rationale_1",
+      "models_slide_slide",
+      "models_user",
+      "models_user_rationale_1",
+      "models_user_user"
+    ],
+    "9": [
+      "basemodel",
+      "schemas_base_camelmodel",
+      "schemas_base_rationale_11",
+      "schemas_deck",
+      "schemas_deck_deckread",
+      "schemas_deck_rationale_1",
+      "schemas_deck_templateselect",
+      "schemas_design",
+      "schemas_design_colortoken",
+      "schemas_design_designdirection",
+      "schemas_design_qualityreview",
+      "schemas_design_qualityreviewfinding",
+      "schemas_design_rationale_1",
+      "schemas_design_typographydirection",
+      "schemas_intake",
+      "schemas_intake_extractedfield",
+      "schemas_intake_extractedscriptsummary",
+      "schemas_intake_followupquestion",
+      "schemas_intake_intakeanalysis",
+      "schemas_intake_rationale_1",
+      "schemas_user",
+      "schemas_user_usercreate",
+      "schemas_user_userread"
+    ],
+    "10": [
+      "frontend_eslint_config",
+      "frontend_package",
+      "frontend_package_dependencies",
+      "frontend_package_dependencies_next",
+      "frontend_package_dependencies_react",
+      "frontend_package_dependencies_react_dom",
+      "frontend_package_devdependencies",
+      "frontend_package_devdependencies_eslint",
+      "frontend_package_devdependencies_tailwindcss",
+      "frontend_package_devdependencies_tailwindcss_postcss",
+      "frontend_package_devdependencies_types_node",
+      "frontend_package_devdependencies_types_react",
+      "frontend_package_devdependencies_typescript",
+      "frontend_package_name",
+      "frontend_package_private",
+      "frontend_package_scripts",
+      "frontend_package_scripts_build",
+      "frontend_package_scripts_dev",
+      "frontend_package_scripts_lint",
+      "frontend_package_scripts_start",
+      "frontend_package_version"
+    ],
+    "11": [
+      "backend_app_core_storage_py_bool",
+      "backend_app_core_storage_py_bytes",
+      "backend_app_core_storage_py_int",
+      "backend_app_core_storage_py_str",
+      "backend_app_routers_assets_py_asyncsession",
+      "backend_app_routers_assets_py_uuid",
+      "core_storage",
+      "core_storage_data_uri",
+      "core_storage_ensure_bucket",
+      "core_storage_get_s3",
+      "core_storage_local_path",
+      "core_storage_presigned_url",
+      "core_storage_rationale_1",
+      "core_storage_rationale_92",
+      "core_storage_read_local_asset",
+      "core_storage_store_asset",
+      "core_storage_storedasset",
+      "routers_assets",
+      "routers_assets_get_asset",
+      "routers_assets_rationale_1"
+    ],
+    "12": [
+      "frontend_tsconfig",
+      "frontend_tsconfig_compileroptions",
+      "frontend_tsconfig_compileroptions_allowjs",
+      "frontend_tsconfig_compileroptions_esmoduleinterop",
+      "frontend_tsconfig_compileroptions_incremental",
+      "frontend_tsconfig_compileroptions_isolatedmodules",
+      "frontend_tsconfig_compileroptions_jsx",
+      "frontend_tsconfig_compileroptions_lib",
+      "frontend_tsconfig_compileroptions_module",
+      "frontend_tsconfig_compileroptions_moduleresolution",
+      "frontend_tsconfig_compileroptions_noemit",
+      "frontend_tsconfig_compileroptions_paths",
+      "frontend_tsconfig_compileroptions_plugins",
+      "frontend_tsconfig_compileroptions_resolvejsonmodule",
+      "frontend_tsconfig_compileroptions_skiplibcheck",
+      "frontend_tsconfig_compileroptions_strict",
+      "frontend_tsconfig_compileroptions_target",
+      "frontend_tsconfig_exclude",
+      "frontend_tsconfig_include",
+      "frontend_tsconfig_paths"
+    ],
+    "13": [
+      "api_projects_deleteproject",
+      "backend_app_routers_projects_py_asyncsession",
+      "backend_app_routers_projects_py_project",
+      "backend_app_routers_projects_py_projectcreate",
+      "intakeupdate",
+      "routers_projects",
+      "routers_projects_extract_intake",
+      "routers_projects_get_project",
+      "routers_projects_rationale_1",
+      "routers_projects_rationale_118",
+      "routers_projects_rationale_89",
+      "routers_projects_recommend",
+      "routers_projects_save_intake",
+      "routers_projects_upload_image",
+      "schemas_intake_intakeextractresult",
+      "schemas_intake_intakeupdate",
+      "schemas_intake_rationale_43",
+      "schemas_intake_rationale_49",
+      "uploadfile"
+    ],
+    "14": [
+      "api_projects_listprojects",
+      "api_projects_updateproject",
+      "backend_app_routers_projects_py_projectupdate",
+      "backend_app_routers_projects_py_user",
+      "backend_app_services_project_service_py_asyncsession",
+      "backend_app_services_project_service_py_project",
+      "backend_app_services_project_service_py_projectupdate",
+      "backend_app_services_project_service_py_user",
+      "backend_app_services_project_service_py_uuid",
+      "intakeformdata",
+      "readme_project_service",
+      "schemas_intake_intakeformdata",
+      "services_project_service_get_default_owner",
+      "services_project_service_get_project",
+      "services_project_service_rationale_1",
+      "services_project_service_rationale_17",
+      "services_project_service_save_intake"
+    ],
+    "15": [
+      "body_page",
+      "body_page_bodypage",
+      "identity_page",
+      "identity_page_identitypage",
+      "layout_workflowactionbar",
+      "layout_workflowactionbar_workflowactionbar",
+      "pitch_page",
+      "pitch_page_pitchpage",
+      "setup_bodystep",
+      "setup_bodystep_bodystep",
+      "setup_bodystep_bodystepprops",
+      "setup_identitystep",
+      "setup_pitchstep",
+      "setup_pitchstep_pitchstep",
+      "setup_pitchstep_pitchstepprops",
+      "setup_setupwizardcontext_usesetupwizard",
+      "ui_button_button"
+    ],
+    "16": [
+      "ai_images",
+      "ai_images_fal_generate",
+      "ai_images_fetch_bytes",
+      "ai_images_generate_image",
+      "ai_images_google_generate",
+      "ai_images_imageresult",
+      "ai_images_placeholder",
+      "ai_images_rationale_1",
+      "ai_images_rationale_165",
+      "ai_images_rationale_86",
+      "ai_images_replicate_generate",
+      "ai_images_resolve_image_provider",
+      "backend_app_ai_images_py_bytes",
+      "backend_app_ai_images_py_int",
+      "backend_app_ai_images_py_str"
+    ],
+    "17": [
+      "api_index",
+      "editor_editortoolbar",
+      "editor_editortoolbar_editortoolbar",
+      "editor_editortoolbar_toolbardivider",
+      "setup_scriptupload",
+      "setup_scriptupload_field_labels",
+      "setup_scriptupload_labelfor",
+      "templates_templategallery",
+      "templates_templategallery_templategalleryprops",
+      "ui_button",
+      "ui_button_buttonprops",
+      "ui_button_buttonsize",
+      "ui_button_buttonvariant",
+      "ui_button_sizeclasses",
+      "ui_button_variantclasses"
+    ],
+    "18": [
+      "agents_content",
+      "agents_content_content_fallback",
+      "agents_content_empty",
+      "agents_content_ensure_renderable",
+      "agents_content_g",
+      "agents_content_mood_blocks",
+      "agents_content_rationale_1",
+      "agents_content_rationale_131",
+      "agents_content_rationale_34",
+      "agents_content_run",
+      "agents_content_split",
+      "backend_app_ai_agents_content_py_bool",
+      "backend_app_ai_agents_content_py_int",
+      "backend_app_ai_agents_content_py_str"
+    ],
+    "19": [
+      "agents_image_prompt",
+      "agents_image_prompt_aspect_for",
+      "agents_image_prompt_build_prompt",
+      "agents_image_prompt_g",
+      "agents_image_prompt_image_kind",
+      "agents_image_prompt_rationale_1",
+      "agents_image_prompt_rationale_54",
+      "agents_image_prompt_rationale_73",
+      "agents_image_prompt_safe",
+      "agents_image_prompt_slide_needs_image",
+      "agents_image_prompt_subject",
+      "backend_app_ai_agents_image_prompt_py_bool",
+      "backend_app_ai_agents_image_prompt_py_str"
+    ],
+    "20": [
+      "app_page",
+      "app_page_home",
+      "dashboard_page",
+      "dashboard_page_dashboardpage",
+      "landing_landingbackground",
+      "landing_landingpage_landingpage",
+      "layout_marketingshell",
+      "layout_pageheader",
+      "layout_pageheader_pageheader",
+      "layout_pageheader_pageheaderprops",
+      "new_page",
+      "new_page_newprojectpage",
+      "project_new_projectform_projectform"
+    ],
+    "21": [
+      "backend_app_services_deck_service_py_asyncsession",
+      "backend_app_services_deck_service_py_slide",
+      "backend_app_services_deck_service_py_uuid",
+      "deck",
+      "readme_deck_service",
+      "readme_export_service",
+      "readme_review_service",
+      "readme_share_analytics_service",
+      "readme_visual_service",
+      "services_deck_service_get_deck_for_project",
+      "services_deck_service_rationale_1",
+      "services_deck_service_serialize_deck",
+      "services_deck_service_serialize_slide"
+    ],
+    "22": [
+      "camelmodel",
+      "schemas_slide",
+      "schemas_slide_characterblock",
+      "schemas_slide_compblock",
+      "schemas_slide_deckoutlineitem",
+      "schemas_slide_itemblock",
+      "schemas_slide_moodblock",
+      "schemas_slide_rationale_1",
+      "schemas_slide_rationale_60",
+      "schemas_slide_slide",
+      "schemas_slide_slidecontent",
+      "schemas_slide_slidelayout",
+      "schemas_slide_slideupdate"
+    ],
+    "23": [
+      "agents_design",
+      "agents_design_rationale_1",
+      "agents_design_run",
+      "ai_registers",
+      "ai_registers_design_direction_fallback",
+      "ai_registers_parse_palette_override",
+      "ai_registers_rationale_1",
+      "ai_registers_rationale_158",
+      "ai_registers_rationale_169",
+      "ai_registers_rationale_182",
+      "ai_registers_select_register",
+      "backend_app_ai_registers_py_str"
+    ],
+    "24": [
+      "ai_ingest",
+      "ai_ingest_ext",
+      "ai_ingest_extract_text",
+      "ai_ingest_from_docx",
+      "ai_ingest_from_fdx",
+      "ai_ingest_from_pdf",
+      "ai_ingest_from_txt",
+      "ai_ingest_rationale_1",
+      "ai_ingest_rationale_40",
+      "ai_ingest_rationale_56",
+      "backend_app_ai_ingest_py_bytes",
+      "backend_app_ai_ingest_py_str"
+    ],
+    "25": [
+      "backend_app_core_config_py_str",
+      "basesettings",
+      "core_config",
+      "core_config_get_settings",
+      "core_config_rationale_1",
+      "core_config_rationale_91",
+      "core_config_settings",
+      "core_config_settings_broker_url",
+      "core_config_settings_cors_origin_list",
+      "core_config_settings_result_backend",
+      "core_config_settings_sync_database_url"
+    ],
+    "26": [
+      "backend_app_core_rate_limit_py_int",
+      "backend_app_core_rate_limit_py_request",
+      "backend_app_core_rate_limit_py_str",
+      "core_rate_limit",
+      "core_rate_limit_client_ip",
+      "core_rate_limit_get_async_redis",
+      "core_rate_limit_ratelimiter",
+      "core_rate_limit_ratelimiter_call",
+      "core_rate_limit_ratelimiter_init",
+      "core_rate_limit_rationale_1",
+      "core_rate_limit_rationale_42"
+    ],
+    "27": [
+      "editor_editorheader",
+      "editor_editorheader_editorheader",
+      "editor_editorheader_editorheaderprops",
+      "templates_templatepreviewcard",
+      "templates_templatepreviewcard_template_icons",
+      "templates_templatepreviewcard_templatepreviewcardprops",
+      "ui_badge",
+      "ui_badge_badge",
+      "ui_badge_badgeprops",
+      "ui_badge_badgevariant",
+      "ui_badge_variantclasses"
+    ],
+    "28": [
+      "app_layout",
+      "app_layout_anton",
+      "app_layout_cormorant",
+      "app_layout_geistmono",
+      "app_layout_geistsans",
+      "app_layout_metadata",
+      "app_layout_oswald",
+      "app_layout_playfair",
+      "app_layout_poppins",
+      "app_layout_rootlayout"
+    ],
+    "29": [
+      "backend_app_routers_deps_py_asyncsession",
+      "backend_app_routers_deps_py_project",
+      "backend_app_routers_deps_py_user",
+      "backend_app_routers_deps_py_uuid",
+      "routers_deps",
+      "routers_deps_get_current_owner",
+      "routers_deps_get_owned_project",
+      "routers_deps_rationale_1",
+      "routers_deps_rationale_15"
+    ],
+    "30": [
+      "app_main",
+      "app_main_lifespan",
+      "app_main_log_requests",
+      "app_main_rationale_1",
+      "app_main_root",
+      "backend_app_main_py_request",
+      "backend_app_main_py_str",
+      "fastapi"
+    ],
+    "31": [
+      "backend_app_core_logging_py_int",
+      "backend_app_core_logging_py_str",
+      "core_logging",
+      "core_logging_get_logger",
+      "core_logging_rationale_1",
+      "core_logging_rationale_36",
+      "core_logging_setup_logging",
+      "logger"
+    ],
+    "32": [
+      "backend_app_routers_health_py_asyncsession",
+      "backend_app_routers_health_py_str",
+      "routers_health",
+      "routers_health_health",
+      "routers_health_rationale_1",
+      "routers_health_rationale_15",
+      "routers_health_rationale_21",
+      "routers_health_ready"
+    ],
+    "33": [
+      "agents_story_analysis",
+      "agents_story_analysis_fallback",
+      "agents_story_analysis_g",
+      "agents_story_analysis_rationale_1",
+      "agents_story_analysis_run",
+      "backend_app_ai_agents_story_analysis_py_str",
+      "schemas_design_rationale_35"
+    ],
+    "34": [
+      "schemas_project",
+      "schemas_project_projectcreate",
+      "schemas_project_projectread",
+      "schemas_project_projectsummary",
+      "schemas_project_projectupdate",
+      "schemas_project_rationale_1",
+      "schemas_project_rationale_44"
+    ],
+    "35": [
+      "setup_layout",
+      "setup_layout_setuplayout",
+      "setup_setupprogressbar",
+      "setup_setupprogressbar_setupprogressbar",
+      "setup_setupprogressbar_stepfrompath",
+      "setup_setupprogressbar_steps",
+      "setup_setupwizardlayout"
+    ],
+    "36": [
+      "backend_app_workers_dispatch_py_backgroundtasks",
+      "backend_app_workers_dispatch_py_str",
+      "workers_dispatch",
+      "workers_dispatch_dispatch",
+      "workers_dispatch_rationale_1",
+      "workers_dispatch_rationale_24"
+    ],
+    "37": [
+      "column",
+      "versions_0001_baseline",
+      "versions_0001_baseline_downgrade",
+      "versions_0001_baseline_timestamps",
+      "versions_0001_baseline_upgrade",
+      "versions_0001_baseline_uuid_pk"
+    ],
+    "38": [
+      "backend_app_routers_jobs_py_asyncsession",
+      "backend_app_routers_jobs_py_uuid",
+      "routers_jobs",
+      "routers_jobs_get_job",
+      "routers_jobs_rationale_1"
+    ],
+    "39": [
+      "agents_layout",
+      "agents_layout_rationale_1",
+      "agents_layout_run",
+      "backend_app_ai_agents_layout_py_str"
+    ],
+    "40": [
+      "alembic_env",
+      "alembic_env_rationale_1",
+      "alembic_env_run_migrations_offline",
+      "alembic_env_run_migrations_online"
+    ],
+    "41": [
+      "d7f0a836_698c_416e_892f_b88513f13530_character_art_f2e6c900a7f342ec94d32f314130e11e",
+      "d7f0a836_698c_416e_892f_b88513f13530_cover_image_c2c15ff4d10745eb9e6fb46362b00cd8",
+      "d7f0a836_698c_416e_892f_b88513f13530_mood_image_e5b2787b0d454e7d9bf069eaf5448cd2",
+      "d7f0a836_698c_416e_892f_b88513f13530_story_world_2ecf6b9b7b1544d0b00e0f30596bde74"
+    ],
+    "42": [
+      "df68c02b_aac0_4c87_ab76_d16b86985b40_character_art_4c6d5bed19f44837883da6660316aa7c_png",
+      "df68c02b_aac0_4c87_ab76_d16b86985b40_cover_image_741953f0e57949aeb4ef5000e573cc99_svg",
+      "df68c02b_aac0_4c87_ab76_d16b86985b40_mood_image_fd7ebe98684040ffb91b1f437f2971ee_png",
+      "df68c02b_aac0_4c87_ab76_d16b86985b40_story_world_449e9a9556f749cfbd9eccd87a9e9391_png"
+    ],
+    "43": [
+      "368a71c7ac5e4b4bb267f60f436c4297_png",
+      "d1e9e4a2e2a54825a6b50a6b0d99c68b_png",
+      "e656cf0cf9824d6fb9b1a1af24f7f270_png"
+    ],
+    "44": [
+      "backend_assets_generated_097dec91_1f1b_4475_83ae_33c54e9838a3_background_f320c641025745d7bb82a547648a358a_png",
+      "backend_assets_generated_097dec91_1f1b_4475_83ae_33c54e9838a3_character_art_4e3073f03ae54b1185e770612c4dc815_png",
+      "backend_assets_generated_097dec91_1f1b_4475_83ae_33c54e9838a3_cover_image_5e57d4bf649940c8ba3b339962724261_png"
+    ],
+    "45": [
+      "backend_assets_generated_30df7686_1c22_4004_9d7f_1f89cbc84e32_character_art_fd086cdb67b2453ea57d87e5ec6db325_png",
+      "backend_assets_generated_30df7686_1c22_4004_9d7f_1f89cbc84e32_cover_image_12666e9f65b34773bb85695f60b2db2f_png",
+      "backend_assets_generated_30df7686_1c22_4004_9d7f_1f89cbc84e32_mood_image_88592bda4c2e41fda023790009d2c018_png"
+    ],
+    "46": [
+      "backend_assets_generated_3f94a178_1fd5_4346_928e_649b53f50085_mood_image_efb4dd544c314c33aaf2f25770ceb284",
+      "backend_assets_generated_3f94a178_1fd5_4346_928e_649b53f50085_story_world_8d875c1a852f4f778620ae16ee7592d7",
+      "backend_assets_generated_3f94a178_1fd5_4346_928e_649b53f50085_story_world_e34e9c59afeb4b7ebf6314e71e5e1227"
+    ],
+    "47": [
+      "backend_assets_generated_5deedace65f748afabc0cec2802ce26d_background_ec5887e706bd471e85b5492c1042eb0b_png",
+      "backend_assets_generated_5deedace65f748afabc0cec2802ce26d_character_art_ce90afccaa00426688e1884c5184c764_png",
+      "backend_assets_generated_5deedace65f748afabc0cec2802ce26d_cover_image_4d90501b90444024b5f5602910c288db_png"
+    ],
+    "48": [
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_background_52c2bd7a8d214514adc54ccb9bb687be_png",
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_background_7f6b6810c8994a3f9ce95628126dc464_png",
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_background_acb7731c3b1a40dab71e3d52a20fa561_png"
+    ],
+    "49": [
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_mood_image_2bb116b2eb124e068953a4d7d57455c9",
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_story_world_3db01facd255485dafb58d02c7a87034",
+      "backend_assets_generated_5deedace_65f7_48af_abc0_cec2802ce26d_story_world_f4a16903f53b4ca3b1d6c84c346eece1"
+    ],
+    "50": [
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_background_7e108f777805457fa77c8ea8ab0db23c_png",
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_background_e706bf847ed448ed8e90ab31a30f9a80_png",
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_background_e8cdf4f14a17428f931cbda5ebe4a755_png"
+    ],
+    "51": [
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_background_dadaafcfbd774bdaac1d6516da13f08c_png",
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_character_art_c30bbb85e09d4cffbd335ae530fc48f7_png",
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_cover_image_4e8c598467074a51a4c572d1dcfc40d3_png"
+    ],
+    "52": [
+      "background_c78ab23ab1d14932a2061c2abe8fd792",
+      "background_e2c1f7478b3d47d792d8e3938653e437",
+      "background_e30ebbebced64361b2b63343f48dbd84"
+    ],
+    "53": [
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_background_cce9c576fe784c17abbf6ef33c7561b2",
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_background_f85db1dd6d4248148e59d7f88c28cdf7",
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_character_art_1ff2517655db4ae99e5b8c206c6eee3c"
+    ],
+    "54": [
+      "docker_compose_minio",
+      "docker_compose_postgres",
+      "docker_compose_redis"
+    ],
+    "55": [
+      "agents_init",
+      "agents_init_rationale_1"
+    ],
+    "56": [
+      "frontend_postcss_config",
+      "frontend_postcss_config_config"
+    ],
+    "57": [
+      "id_layout",
+      "id_layout_projectlayout"
+    ],
+    "58": [
+      "models_init",
+      "models_init_rationale_1"
+    ],
+    "59": [
+      "readme_intake_service",
+      "readme_nlp_generation_service"
+    ],
+    "60": [
+      "schemas_init",
+      "schemas_init_rationale_1"
+    ],
+    "61": [
+      "workers_celery_app",
+      "workers_celery_app_rationale_1"
+    ],
+    "62": [
+      "097dec91_1f1b_4475_83ae_33c54e9838a3_background_9fbc3baf002249e2866b1efeca816d54_png"
+    ],
+    "63": [
+      "097dec91_1f1b_4475_83ae_33c54e9838a3_background_c64b43d3bd5b4cc7bbe06c8ce804648d_png"
+    ],
+    "64": [
+      "097dec91_1f1b_4475_83ae_33c54e9838a3_background_d05fcbc9ba514187a0a441742dba60b3_png"
+    ],
+    "65": [
+      "097dec91_728efc00ed9840b1b5807b21aad09c2c"
+    ],
+    "66": [
+      "097dec91_85888f97ccf443259d12533b4a6dcd80"
+    ],
+    "67": [
+      "097dec91_905cd34efc8f485c9c4d00a5ac1ec613"
+    ],
+    "68": [
+      "3f94a178_1fd5_4346_928e_649b53f50085_character_art_f26ed01052464fc1ab08de2a5802ac61"
+    ],
+    "69": [
+      "3f94a178_1fd5_4346_928e_649b53f50085_character_art_f88d4246b0fd4999aa68a5b7b4af155b"
+    ],
+    "70": [
+      "3f94a178_1fd5_4346_928e_649b53f50085_cover_image_62fdf6a0238c40629f2cb66f852f5f6a"
+    ],
+    "71": [
+      "60cf0a07_65e0_4e2e_92e5_efc8519ebd30_mood_image_a5fe14a0978648d5822ad29c3c3374ae"
+    ],
+    "72": [
+      "60cf0a07_65e0_4e2e_92e5_efc8519ebd30_story_world_03f2edf13f4249ba82a6da87c78e5154"
+    ],
+    "73": [
+      "60cf0a07_65e0_4e2e_92e5_efc8519ebd30_story_world_3b89d64541894dea9e6bc730f8f8ca79"
+    ],
+    "74": [
+      "724cfd62_723f_4807_9c3a_e40a31b730c6_mood_image_1faaa7a985794b27b73047a551f39985"
+    ],
+    "75": [
+      "724cfd62_723f_4807_9c3a_e40a31b730c6_story_world_00c6cb87254f4f8cba3397471c6168d7"
+    ],
+    "76": [
+      "724cfd62_723f_4807_9c3a_e40a31b730c6_story_world_b1744fe37927413daadbbdda5dcd4d5f"
+    ],
+    "77": [
+      "ai_init"
+    ],
+    "78": [
+      "app_init"
+    ],
+    "79": [
+      "backend_alembic_readme"
+    ],
+    "80": [
+      "backend_app_ai_agents_readme"
+    ],
+    "81": [
+      "backend_app_core_readme"
+    ],
+    "82": [
+      "backend_app_models_readme"
+    ],
+    "83": [
+      "backend_app_routers_readme"
+    ],
+    "84": [
+      "backend_app_schemas_readme"
+    ],
+    "85": [
+      "backend_app_services_readme"
+    ],
+    "86": [
+      "backend_app_workers_readme"
+    ],
+    "87": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_background_0e3cff3714ad47898948c7bb0d1e705e_png"
+    ],
+    "88": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_background_3853f0bd9de14537a94f9c9077843115_png"
+    ],
+    "89": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_background_7209b534c5624c68a5024b53fc73f57d_png"
+    ],
+    "90": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_background_fcf89b12241243c38e3da2394d4e0f44_png"
+    ],
+    "91": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_background_fd18cae31ad1406ab411f0bd98282d53_png"
+    ],
+    "92": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_character_art_5005660fc25b42feb4a79ce7dbf0295c_png"
+    ],
+    "93": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_character_art_d445ab241c884f9791ed8e80587a311e_png"
+    ],
+    "94": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_cover_image_4dbd0c4df65644ffa0b92199ed605d25_png"
+    ],
+    "95": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_mood_image_226b29045ab94b3093e021aa7beffb83_png"
+    ],
+    "96": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_story_world_403af5f91dfc45e19a3d663a7e59414c_png"
+    ],
+    "97": [
+      "backend_assets_generated_1db3b8b8_da66_4f27_b421_e1b73285c194_story_world_89e74fd4a45347e2855a21a671081dfd_png"
+    ],
+    "98": [
+      "backend_assets_generated_30df7686_1c22_4004_9d7f_1f89cbc84e32_character_art_f318fd06f8314d5aa6c2ee25d3141e6c_png"
+    ],
+    "99": [
+      "backend_assets_generated_30df7686_1c22_4004_9d7f_1f89cbc84e32_story_world_3dbab94c7c11410eb5f6179acea73256_png"
+    ],
+    "100": [
+      "backend_assets_generated_3f94a178_1fd5_4346_928e_649b53f50085_background_0686f77be333479c9b8f6edf4cd26391_png"
+    ],
+    "101": [
+      "backend_assets_generated_3f94a178_1fd5_4346_928e_649b53f50085_background_11253e35e32f4608a6144873cfa48591_png"
+    ],
+    "102": [
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_background_d724604e65a940b192c84c494bc24659_svg"
+    ],
+    "103": [
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_character_art_35e12f95b81043f89ca759f55438b6bd_png"
+    ],
+    "104": [
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_character_art_c36b656c7b14434f9682355601cd9c27_png"
+    ],
+    "105": [
+      "backend_assets_generated_60cf0a07_65e0_4e2e_92e5_efc8519ebd30_cover_image_11709b790d9d4b1689d6076ec9c549ff_png"
+    ],
+    "106": [
+      "backend_assets_generated_724cfd62723f48079c3ae40a31b730c6_background_cec19923efab4b94b837485106c7657e_png"
+    ],
+    "107": [
+      "backend_assets_generated_724cfd62723f48079c3ae40a31b730c6_character_art_5099182073754df980f9f37e2aa4cdd9_png"
+    ],
+    "108": [
+      "backend_assets_generated_724cfd62723f48079c3ae40a31b730c6_cover_image_f2602958da5e437181b20af9e241ebf4_png"
+    ],
+    "109": [
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_mood_image_16879c253eca40e6b4ca788f197fcb11"
+    ],
+    "110": [
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_story_world_ef335a54d2a849adb2abf447cdc5dde9"
+    ],
+    "111": [
+      "backend_assets_generated_79915c9f_bf9c_47c7_af4e_e028a264989f_story_world_f97d2f4a1b6d4c21ac64f5b519c43c91"
+    ],
+    "112": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_background_9bce954f5f47460cbacb2929d687bf7e_png"
+    ],
+    "113": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_background_9cd29b2c0b074ee18d637d2cea570c2d_png"
+    ],
+    "114": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_character_art_93838a34efcc417093615a9b878cce5e_png"
+    ],
+    "115": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_character_art_a3bdcba94c504930862d9816b50fd0cc"
+    ],
+    "116": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_cover_image_99dd0146b22f42c5afeaba7700613dbb"
+    ],
+    "117": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_mood_image_a21a113bcfc945dc83a6be04268051b2"
+    ],
+    "118": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_story_world_0626475ea3a442d39aad3cd97f0e8015"
+    ],
+    "119": [
+      "backend_assets_generated_9ec2263e_30e8_47d5_be8e_1652691719f7_story_world_e2e1f873dbc84fbbb328fe72e20788e7"
+    ],
+    "120": [
+      "backend_assets_generated_bee92e8d_ce61_47dd_ae80_c31391dc7552_character_art_67ccc9d3ea3849198c3c7b0f2bb7400f"
+    ],
+    "121": [
+      "backend_assets_generated_da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_background_0e095c17977a4d199fafda7b1da8b3d5_png"
+    ],
+    "122": [
+      "backend_assets_generated_da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_background_1ad98f74c63f4e589938c17642a1e1af_png"
+    ],
+    "123": [
+      "backend_assets_generated_da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_background_29bc7ad1ce384867bddde9970a8fc446_png"
+    ],
+    "124": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_background_44a264b51aed4577a7856359630f6967_png"
+    ],
+    "125": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_background_7375f9aaa2d948fa82626f5efbeef7fb_png"
+    ],
+    "126": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_background_b7d809ea77f94e5a85322ecec777371f_png"
+    ],
+    "127": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_background_da88d2d507ea48138c99f6807ea488ab"
+    ],
+    "128": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_character_art_7400ef7e2dd8438f8cdbd1387e54ab5f"
+    ],
+    "129": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_cover_image_d168dd06a2c345b094fcce174e6d2851"
+    ],
+    "130": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_mood_image_8e5e9ccddeb141f0bb31100b329a39e7"
+    ],
+    "131": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_story_world_3b779c5126a643599bf125300fe111ff"
+    ],
+    "132": [
+      "backend_assets_generated_f9c80db5_5b64_4ef6_9363_68baff218308_story_world_7af75da4db264085976de3ab45327768"
+    ],
+    "133": [
+      "backend_requirements_alembic"
+    ],
+    "134": [
+      "backend_requirements_anthropic"
+    ],
+    "135": [
+      "backend_requirements_asyncpg"
+    ],
+    "136": [
+      "backend_requirements_boto3"
+    ],
+    "137": [
+      "backend_requirements_celery"
+    ],
+    "138": [
+      "backend_requirements_email_validator"
+    ],
+    "139": [
+      "backend_requirements_fal_client"
+    ],
+    "140": [
+      "backend_requirements_fastapi"
+    ],
+    "141": [
+      "backend_requirements_greenlet"
+    ],
+    "142": [
+      "backend_requirements_httpx"
+    ],
+    "143": [
+      "backend_requirements_openai"
+    ],
+    "144": [
+      "backend_requirements_passlib"
+    ],
+    "145": [
+      "backend_requirements_pdfplumber"
+    ],
+    "146": [
+      "backend_requirements_pgvector"
+    ],
+    "147": [
+      "backend_requirements_playwright"
+    ],
+    "148": [
+      "backend_requirements_psycopg2_binary"
+    ],
+    "149": [
+      "backend_requirements_pydantic"
+    ],
+    "150": [
+      "backend_requirements_pydantic_settings"
+    ],
+    "151": [
+      "backend_requirements_python_docx"
+    ],
+    "152": [
+      "backend_requirements_python_dotenv"
+    ],
+    "153": [
+      "backend_requirements_python_jose"
+    ],
+    "154": [
+      "backend_requirements_python_multipart"
+    ],
+    "155": [
+      "backend_requirements_python_pptx"
+    ],
+    "156": [
+      "backend_requirements_redis"
+    ],
+    "157": [
+      "backend_requirements_replicate"
+    ],
+    "158": [
+      "backend_requirements_sqlalchemy"
+    ],
+    "159": [
+      "backend_requirements_sse_starlette"
+    ],
+    "160": [
+      "backend_requirements_uvicorn"
+    ],
+    "161": [
+      "background_09ad47871f9d4cdfbb5b64def0a68ad6"
+    ],
+    "162": [
+      "background_0e095c17977a4d199fafda7b1da8b3d5"
+    ],
+    "163": [
+      "background_0e4af4feb8af41eaa156854fe954dc4a"
+    ],
+    "164": [
+      "background_0f32e6f2094448adb1a1b631359ea0fa"
+    ],
+    "165": [
+      "background_109377f0cb564fa0b8b2e4f29bf9520f"
+    ],
+    "166": [
+      "background_109377f0cb564fa0b8b2e4f29bf9520f_png"
+    ],
+    "167": [
+      "background_109e192373a84e0ea1b04049a5bef943"
+    ],
+    "168": [
+      "background_11e92ee0763f408a834cae06cd142a08"
+    ],
+    "169": [
+      "background_15380f6583dd45259a12779bed21f269"
+    ],
+    "170": [
+      "background_16a2280f0dc546038b8ee091df4e8433"
+    ],
+    "171": [
+      "background_18feea80ffdc4b8cb966bcd24825904e"
+    ],
+    "172": [
+      "background_1ad98f74c63f4e589938c17642a1e1af"
+    ],
+    "173": [
+      "background_1d9b55b3cef5485bbd6563480b7ea750"
+    ],
+    "174": [
+      "background_1f9d27167ec24e2f9fdbb26abb320caa"
+    ],
+    "175": [
+      "background_2131f1405ced4c4983c9ba2fd9c35d6a"
+    ],
+    "176": [
+      "background_21a80888256545dab08c4a7121b8f9a1"
+    ],
+    "177": [
+      "background_24e70461e71c41a29cd3e9455c1a824e"
+    ],
+    "178": [
+      "background_259db45b3c04466d8dd6662c80f48b9c"
+    ],
+    "179": [
+      "background_259db45b3c04466d8dd6662c80f48b9c_png"
+    ],
+    "180": [
+      "background_29bc7ad1ce384867bddde9970a8fc446"
+    ],
+    "181": [
+      "background_346015ae62cb471f82f5addfd5727433"
+    ],
+    "182": [
+      "background_35a5860a8c134c2e88a2b4d5f1537f19"
+    ],
+    "183": [
+      "background_35a5860a8c134c2e88a2b4d5f1537f19_png"
+    ],
+    "184": [
+      "background_37375b0131484df497df8d3df6f4dac7"
+    ],
+    "185": [
+      "background_374e7eab9c2e4aeb8190d40aa013c780"
+    ],
+    "186": [
+      "background_3a9c23e78d6e491aad8cd736fa07f418"
+    ],
+    "187": [
+      "background_424dd68a8dd84c5f88475f25c60f3fb8"
+    ],
+    "188": [
+      "background_478dc5b83a5a45fe90e02aaec58b9bc2"
+    ],
+    "189": [
+      "background_4ea1e3fca4fb4fb08d0503df116b0ad3"
+    ],
+    "190": [
+      "background_4faf8c9facdf4aa5a67eb981db0a0f45"
+    ],
+    "191": [
+      "background_52e355102df8485595d053f77ae38978"
+    ],
+    "192": [
+      "background_565da8fc235f47d38e4d2a6369af72ff"
+    ],
+    "193": [
+      "background_5dfb6d5b15964dc480e86d5bc3a5714b"
+    ],
+    "194": [
+      "background_666a9ee811e14908b44b42914f3f265f"
+    ],
+    "195": [
+      "background_753083b40d7e489a9538201f7b8a9a50"
+    ],
+    "196": [
+      "background_842de36641ca4bbfb6357d9f09d4b6f5"
+    ],
+    "197": [
+      "background_874d6c35d0904d8c80249646a8b8f290"
+    ],
+    "198": [
+      "background_8abc606551544f579836fb03860e82b1"
+    ],
+    "199": [
+      "background_a7c68820b6e04f4696178f67e41f0b8e"
+    ],
+    "200": [
+      "background_ad10b12af73a442a980245ff889e0fa1"
+    ],
+    "201": [
+      "background_b945e79cec394a00a0c046f3834c733a"
+    ],
+    "202": [
+      "background_baa95c6c64e04f258295bb4584cc6c70"
+    ],
+    "203": [
+      "background_e32e42f6489949d98d23f7e0e2c6ccc0"
+    ],
+    "204": [
+      "bee92e8d_ce61_47dd_ae80_c31391dc7552_cover_image_bf464eaf6b614b19bd0bcac4e162c44b"
+    ],
+    "205": [
+      "bee92e8d_ce61_47dd_ae80_c31391dc7552_mood_image_b264e08271ce4988898b885ecfb8caa8"
+    ],
+    "206": [
+      "bee92e8d_ce61_47dd_ae80_c31391dc7552_story_world_d8b8f1e666c0442b888e7b87be400532"
+    ],
+    "207": [
+      "core_init"
+    ],
+    "208": [
+      "d7f0a836_698c_416e_892f_b88513f13530_character_art_6969043595644eb58b060755ec7c3d04"
+    ],
+    "209": [
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_character_art_d62ecc24f8ea4462a8fd443282b134e8"
+    ],
+    "210": [
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_cover_image_6da54f25d1304220bc02cbc3ee910bba"
+    ],
+    "211": [
+      "da09f7e1_3d37_4963_8e09_f3ffc7e53fdc_mood_image_3893543053c049f784225cb5e486e14e"
+    ],
+    "212": [
+      "frontend_agents"
+    ],
+    "213": [
+      "frontend_claude"
+    ],
+    "214": [
+      "frontend_next_config"
+    ],
+    "215": [
+      "frontend_next_env_d"
+    ],
+    "216": [
+      "frontend_public_file_svg"
+    ],
+    "217": [
+      "frontend_public_globe_svg"
+    ],
+    "218": [
+      "frontend_public_next_svg"
+    ],
+    "219": [
+      "frontend_public_vercel_svg"
+    ],
+    "220": [
+      "frontend_public_window_svg"
+    ],
+    "221": [
+      "frontend_readme"
+    ],
+    "222": [
+      "frontend_src_components_readme"
+    ],
+    "223": [
+      "frontend_src_features_readme"
+    ],
+    "224": [
+      "frontend_src_lib_readme"
+    ],
+    "225": [
+      "frontend_src_styles_readme"
+    ],
+    "226": [
+      "readme_auth_service"
+    ],
+    "227": [
+      "readme_ingestion_service"
+    ],
+    "228": [
+      "routers_init"
+    ],
+    "229": [
+      "services_init"
+    ],
+    "230": [
+      "workers_init"
+    ]
+  },
+  "cohesion": {
+    "0": 0.05847803881511747,
+    "1": 0.05213089802130898,
+    "2": 0.08408953418027829,
+    "3": 0.05137844611528822,
+    "4": 0.08970099667774087,
+    "5": 0.07804878048780488,
+    "6": 0.12258064516129032,
+    "7": 0.0989247311827957,
+    "8": 0.13405797101449277,
+    "9": 0.13043478260869565,
+    "10": 0.09523809523809523,
+    "11": 0.17894736842105263,
+    "12": 0.1,
+    "13": 0.19298245614035087,
+    "14": 0.23529411764705882,
+    "15": 0.19852941176470587,
+    "16": 0.34285714285714286,
+    "17": 0.14285714285714285,
+    "18": 0.26373626373626374,
+    "19": 0.2692307692307692,
+    "20": 0.19230769230769232,
+    "21": 0.19230769230769232,
+    "22": 0.2564102564102564,
+    "23": 0.22727272727272727,
+    "24": 0.3787878787878788,
+    "25": 0.2545454545454545,
+    "26": 0.2545454545454545,
+    "27": 0.21818181818181817,
+    "28": 0.2,
+    "29": 0.2777777777777778,
+    "30": 0.2857142857142857,
+    "31": 0.25,
+    "32": 0.2857142857142857,
+    "33": 0.38095238095238093,
+    "34": 0.3333333333333333,
+    "35": 0.38095238095238093,
+    "36": 0.3333333333333333,
+    "37": 0.6,
+    "38": 0.5,
+    "39": 0.5,
+    "40": 0.5,
+    "41": 0.6666666666666666,
+    "42": 0.8333333333333334,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 0.6666666666666666,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0,
+    "149": 1.0,
+    "150": 1.0,
+    "151": 1.0,
+    "152": 1.0,
+    "153": 1.0,
+    "154": 1.0,
+    "155": 1.0,
+    "156": 1.0,
+    "157": 1.0,
+    "158": 1.0,
+    "159": 1.0,
+    "160": 1.0,
+    "161": 1.0,
+    "162": 1.0,
+    "163": 1.0,
+    "164": 1.0,
+    "165": 1.0,
+    "166": 1.0,
+    "167": 1.0,
+    "168": 1.0,
+    "169": 1.0,
+    "170": 1.0,
+    "171": 1.0,
+    "172": 1.0,
+    "173": 1.0,
+    "174": 1.0,
+    "175": 1.0,
+    "176": 1.0,
+    "177": 1.0,
+    "178": 1.0,
+    "179": 1.0,
+    "180": 1.0,
+    "181": 1.0,
+    "182": 1.0,
+    "183": 1.0,
+    "184": 1.0,
+    "185": 1.0,
+    "186": 1.0,
+    "187": 1.0,
+    "188": 1.0,
+    "189": 1.0,
+    "190": 1.0,
+    "191": 1.0,
+    "192": 1.0,
+    "193": 1.0,
+    "194": 1.0,
+    "195": 1.0,
+    "196": 1.0,
+    "197": 1.0,
+    "198": 1.0,
+    "199": 1.0,
+    "200": 1.0,
+    "201": 1.0,
+    "202": 1.0,
+    "203": 1.0,
+    "204": 1.0,
+    "205": 1.0,
+    "206": 1.0,
+    "207": 1.0,
+    "208": 1.0,
+    "209": 1.0,
+    "210": 1.0,
+    "211": 1.0,
+    "212": 1.0,
+    "213": 1.0,
+    "214": 1.0,
+    "215": 1.0,
+    "216": 1.0,
+    "217": 1.0,
+    "218": 1.0,
+    "219": 1.0,
+    "220": 1.0,
+    "221": 1.0,
+    "222": 1.0,
+    "223": 1.0,
+    "224": 1.0,
+    "225": 1.0,
+    "226": 1.0,
+    "227": 1.0,
+    "228": 1.0,
+    "229": 1.0,
+    "230": 1.0
+  },
+  "gods": [
+    {
+      "id": "types_slide_slidecontent",
+      "label": "SlideContent",
+      "degree": 48
+    },
+    {
+      "id": "types_slide_slide",
+      "label": "Slide",
+      "degree": 36
+    },
+    {
+      "id": "schemas_base_camelmodel",
+      "label": "CamelModel",
+      "degree": 32
+    },
+    {
+      "id": "lib_routes_projectroutes",
+      "label": "projectRoutes",
+      "degree": 29
+    },
+    {
+      "id": "schemas_intake_intakeformdata",
+      "label": "IntakeFormData",
+      "degree": 20
+    },
+    {
+      "id": "types_design_designdirection",
+      "label": "DesignDirection",
+      "degree": 20
+    },
+    {
+      "id": "api_client_apifetch",
+      "label": "apiFetch()",
+      "degree": 19
+    },
+    {
+      "id": "ui_button_button",
+      "label": "Button()",
+      "degree": 18
+    },
+    {
+      "id": "api_projects_createproject",
+      "label": "createProject()",
+      "degree": 16
+    },
+    {
+      "id": "types_slide_slidetype",
+      "label": "SlideType",
+      "degree": 16
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Deck reads + serialization to the frontend Deck shape (async session).",
+      "target": "deck_service",
+      "source_files": [
+        "backend/app/services/deck_service.py",
+        "README.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "rationale_for",
+      "why": "crosses file types (code \u2194 doc); connects across different repos/directories; peripheral node `Deck reads + serialization to the frontend Deck shape (async session).` unexpectedly reaches hub `deck_service`"
+    },
+    {
+      "source": "Project CRUD + intake persistence (async session).",
+      "target": "project_service",
+      "source_files": [
+        "backend/app/services/project_service.py",
+        "README.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "rationale_for",
+      "why": "crosses file types (code \u2194 doc); connects across different repos/directories; peripheral node `Project CRUD + intake persistence (async session).` unexpectedly reaches hub `project_service`"
+    },
+    {
+      "source": "recommendTemplate()",
+      "target": "str",
+      "source_files": [
+        "frontend/src/lib/api/projects.ts",
+        "backend/app/ai/templates.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; peripheral node `str` unexpectedly reaches hub `recommendTemplate()`"
+    },
+    {
+      "source": "updateSlide()",
+      "target": "AsyncSession",
+      "source_files": [
+        "frontend/src/lib/api/deck.ts",
+        "backend/app/routers/decks.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; peripheral node `AsyncSession` unexpectedly reaches hub `updateSlide()`"
+    },
+    {
+      "source": "updateSlide()",
+      "target": "UUID",
+      "source_files": [
+        "frontend/src/lib/api/deck.ts",
+        "backend/app/routers/decks.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; peripheral node `UUID` unexpectedly reaches hub `updateSlide()`"
+    }
+  ],
+  "tokens": {
+    "input": 2218993,
+    "output": 28029
+  }
+}
