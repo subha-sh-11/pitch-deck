@@ -9,7 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
-from app.routers import assets, decks, generate, health, jobs, projects, templates
+from app.routers import (
+    assets,
+    decks,
+    generate,
+    health,
+    interview,
+    jobs,
+    projects,
+    templates,
+)
 
 setup_logging()
 _req_log = get_logger("request")
@@ -53,6 +62,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
+app.include_router(interview.router, prefix=settings.api_v1_prefix)
 app.include_router(decks.router, prefix=settings.api_v1_prefix)
 app.include_router(generate.router, prefix=settings.api_v1_prefix)
 app.include_router(jobs.router, prefix=settings.api_v1_prefix)

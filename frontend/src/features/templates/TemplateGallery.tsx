@@ -14,7 +14,8 @@ interface TemplateGalleryProps {
 
 export function TemplateGallery({ projectId }: TemplateGalleryProps) {
   const router = useRouter();
-  const { selectedTemplateId, setSelectedTemplate, isStepComplete } = useSetupWizard();
+  const { selectedTemplateId, setSelectedTemplate, isStepComplete, initDraftSlides, approveContent } =
+    useSetupWizard();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [topPick, setTopPick] = useState<string | undefined>();
   const [selected, setSelected] = useState<string | null>(selectedTemplateId);
@@ -53,14 +54,18 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
     setSelectedTemplate(id);
   }
 
-  function continueToPreview() {
+  function continueToEditor() {
     if (!selected) return;
     setSelectedTemplate(selected);
-    // Generation runs when the preview page mounts (initDraftSlides → backend).
-    router.push(projectRoutes.preview(projectId));
+    // Kick off backend generation (design + content + images) and approve content,
+    // then go straight to the editor (the deck assembles there as slides arrive).
+    initDraftSlides();
+    approveContent();
+    router.push(projectRoutes.editor(projectId));
   }
 
   const activeTemplate = templates.find((t) => t.id === selected);
+
 
   return (
     <div className="w-full">
@@ -76,10 +81,10 @@ export function TemplateGallery({ projectId }: TemplateGalleryProps) {
         <Button
           size="sm"
           className="templates-continue-btn preview-cta-primary"
-          onClick={continueToPreview}
+          onClick={continueToEditor}
           disabled={!selected}
         >
-          Continue to slide preview →
+          Generate deck →
         </Button>
       </div>
 

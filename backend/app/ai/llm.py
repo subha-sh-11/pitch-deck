@@ -117,8 +117,14 @@ def complete_json(
     model: str | None = None,
     max_tokens: int | None = None,
     temperature: float | None = None,
+    use_cache: bool = True,
 ) -> Any:
-    """Return parsed JSON from the active LLM, with caching and deterministic fallback."""
+    """Return parsed JSON from the active LLM, with caching and deterministic fallback.
+
+    Set ``use_cache=False`` for conversational/non-deterministic calls (e.g. the intake
+    interview) where every turn must be fresh — caching identical (system, prompt) pairs
+    would make the agent repeat itself verbatim.
+    """
     resolved = resolve_provider()
     if resolved is None:
         _log.info("llm[%s] no provider → fallback", cache_prefix)
@@ -127,10 +133,11 @@ def complete_json(
     name, fn, default_model = resolved
     use_model = model or settings.llm_model or default_model
     key = cache_key(f"llm:{name}:{use_model}:{cache_prefix}", {"s": system, "p": prompt})
-    hit = cache_get(key)
-    if hit is not None:
-        _log.info("llm[%s] cache hit", cache_prefix)
-        return hit
+    if use_cache:
+        hit = cache_get(key)
+        if hit is not None:
+            _log.info("llm[%s] cache hit", cache_prefix)
+            return hit
 
     try:
         raw = fn(
@@ -146,5 +153,6 @@ def complete_json(
         _log.warning("llm[%s] %s failed (%s) → fallback", cache_prefix, name, exc)
         return fallback()
 
-    cache_set(key, result, ttl=86400)
+    if use_cache:
+        cache_set(key, result, ttl=86400)
     return result

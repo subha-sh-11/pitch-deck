@@ -1,10 +1,11 @@
-import { BodyStep } from "@/features/setup/BodyStep";
+import { redirect } from "next/navigation";
 
+// The three-step wizard is replaced by the conversational intake on /setup/identity.
 export default async function BodyPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <BodyStep projectId={id} />;
+  redirect(`/projects/${id}/setup/identity`);
 }

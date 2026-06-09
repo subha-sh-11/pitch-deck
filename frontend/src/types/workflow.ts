@@ -73,4 +73,17 @@ export interface IntakeFormData {
   themes: string;
   keyScenes: string;
   visualMood: string;
+  // Pitch-deck checklist additions (format, look, market, team, business, output)
+  format: string;
+  whyNow: string;
+  visualReferences: string;
+  moodBoard: string;
+  pitchingTo: string;
+  creativeTeam: string;
+  directorStatement: string;
+  budget: string;
+  productionStatus: string;
+  distribution: string;
+  deckLength: string;
+  deliveryFormat: string;
 }
