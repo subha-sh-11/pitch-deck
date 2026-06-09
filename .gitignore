@@ -1,2 +1,12 @@
 README.pdf
 docs/
+
+# Secrets — never commit
+.env
+.env.*
+
+# AI-generated build artifacts
+/backend/_assets/generated/
+
+# Reference PDFs (binary)
+*.pdf

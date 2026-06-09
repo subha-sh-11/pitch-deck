@@ -53,7 +53,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
   useEffect(() => {
     if (!contentApproved) {
       if (selectedTemplateId) {
-        router.replace(projectRoutes.preview(projectId));
+        router.replace(projectRoutes.templates(projectId));
       } else {
         router.replace(projectRoutes.setupIdentity(projectId));
       }

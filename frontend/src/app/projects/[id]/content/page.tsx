@@ -7,5 +7,5 @@ export default async function ContentRedirect({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(projectRoutes.preview(id));
+  redirect(projectRoutes.templates(id));
 }
