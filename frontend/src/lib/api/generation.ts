@@ -27,8 +27,50 @@ export const generateDeck = (projectId: string, templateId?: string, withImages 
 export const generateDesign = (projectId: string) =>
   apiFetch<GenerationJob>(`/generate/${projectId}/design`, { method: "POST" });
 
-export const regenerateSlide = (slideId: string) =>
-  apiFetch<GenerationJob>(`/generate/slides/${slideId}/regenerate`, { method: "POST" });
+/** Workshop step 1: analysis + design + outline → empty slide shells (no batch generation). */
+export const prepareDeck = (projectId: string, templateId?: string) => {
+  const params = new URLSearchParams();
+  if (templateId) params.set("template_id", templateId);
+  const qs = params.toString();
+  return apiFetch<GenerationJob>(`/generate/${projectId}/deck/prepare${qs ? `?${qs}` : ""}`, {
+    method: "POST",
+  });
+};
+
+export interface WorkshopGenerateInput {
+  /** Director's notes the content agent must follow for this slide. */
+  instructions?: string;
+  /** Edited diffusion prompt — used verbatim instead of the auto-built one. */
+  imagePrompt?: string;
+  /** The FULL writer prompt as edited in the workshop — used verbatim. */
+  contentPrompt?: string;
+  withImage?: boolean;
+}
+
+/** The EXACT prompt that will go to the LLM to prepare this slide. */
+export const getSlidePrompt = (slideId: string) =>
+  apiFetch<{ prompt: string; source: "edited" | "composed" }>(
+    `/generate/slides/${slideId}/prompt`,
+  );
+
+export const regenerateSlide = (slideId: string, input?: WorkshopGenerateInput) =>
+  apiFetch<GenerationJob>(`/generate/slides/${slideId}/regenerate`, {
+    method: "POST",
+    ...(input ? { body: JSON.stringify(input) } : {}),
+  });
+
+/** Workshop: regenerate ONLY the image as a tracked job, optionally from an edited prompt. */
+export const workshopSlideImage = (slideId: string, prompt?: string) =>
+  apiFetch<GenerationJob>(`/generate/slides/${slideId}/image`, {
+    method: "POST",
+    body: JSON.stringify({ prompt: prompt ?? null }),
+  });
+
+/** Workshop final step: all slides approved → deck becomes the presentation. */
+export const assembleDeck = (projectId: string) =>
+  apiFetch<import("@/types/deck").Deck>(`/projects/${projectId}/deck/assemble`, {
+    method: "POST",
+  });
 
 export interface RegenerateImageResult {
   slide: Slide;

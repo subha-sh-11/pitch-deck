@@ -193,7 +193,7 @@ export function useInterview(projectId: string): Interview {
     formData,
     updateForm,
     completeStep,
-    initDraftSlides,
+    prepareDraftSlides,
     approveContent,
     draftSlides,
     designDirection: ctxDesign,
@@ -288,16 +288,31 @@ export function useInterview(projectId: string): Interview {
     [projectId, applyResult],
   );
 
-  // Restore a saved session, or kick off the first turn.
+  // Restore a saved conversation — localStorage survives reloads and restarts, so the
+  // director resumes where they left off. Only the recent tail of the chat is shown
+  // (the full history/brief still ride along for the agent's continuity).
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     try {
-      const raw = sessionStorage.getItem(storageKey);
+      // localStorage is the durable home; fall back to a legacy sessionStorage save once.
+      const raw = localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey);
       if (raw) {
         const sv = JSON.parse(raw);
         if (sv.messages?.length) {
-          setMessages(sv.messages);
+          const tail = (sv.messages as ChatMessage[]).slice(-12);
+          const resumed =
+            (sv.messages as ChatMessage[]).length > tail.length
+              ? [
+                  {
+                    id: nextId(),
+                    role: "assistant" as const,
+                    text: "— picking up where we left off —",
+                  },
+                  ...tail,
+                ]
+              : tail;
+          setMessages(resumed);
           setSections(sv.sections ?? []);
           setAssumptions(sv.assumptions ?? []);
           setReady(!!sv.ready);
@@ -323,10 +338,10 @@ export function useInterview(projectId: string): Interview {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  // Persist the session so navigating away and back doesn't lose the chat or brief.
+  // Persist durably (localStorage) so closing the tab doesn't lose the chat or brief.
   useEffect(() => {
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         storageKey,
         JSON.stringify({ messages, sections, assumptions, ready, brief: brief.current, history: history.current }),
       );
@@ -350,6 +365,9 @@ export function useInterview(projectId: string): Interview {
   const runDeckCommand = useCallback(
     async (value: string) => {
       setMessages((m) => [...m, { id: nextId(), role: "user", text: value }]);
+      // Track deck-editing turns in the persistent history too, so conversations
+      // started from the Slides tab survive reloads and stay in the agent's context.
+      history.current = [...history.current, { role: "user", text: value }];
       setThinking(true);
       try {
         const slim = draftSlides.map((s) => ({
@@ -372,6 +390,7 @@ export function useInterview(projectId: string): Interview {
         };
         await applyDeckActions(res.actions, handlers);
         setMessages((m) => [...m, { id: nextId(), role: "assistant", text: res.message }]);
+        history.current = [...history.current, { role: "assistant", text: res.message }];
       } catch {
         setMessages((m) => [
           ...m,
@@ -551,9 +570,11 @@ export function useInterview(projectId: string): Interview {
     completeStep("body");
     completeStep("pitch");
     approveContent();
-    initDraftSlides(); // backend recommends a template + generates content/images, streaming slides
+    // Workshop flow: architect the outline as empty slide shells; the director then
+    // generates, refines, and approves each slide individually in the Slides tab.
+    void prepareDraftSlides();
     setBuilding(false);
-  }, [building, projectId, updateForm, completeStep, approveContent, initDraftSlides]);
+  }, [building, projectId, updateForm, completeStep, approveContent, prepareDraftSlides]);
 
   return {
     messages,

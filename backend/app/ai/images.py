@@ -135,18 +135,11 @@ def _google_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageR
                                     "prompt": prompt, "seed": seed})
 
 
-def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
-    """Google Imagen via Vertex AI (:predict). Auth is a service-account OAuth token, NOT an API key.
-
-    Credentials come from VERTEX_CREDENTIALS_PATH (a service-account .json) or, if that's blank,
-    ambient Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS / gcloud auth).
-    """
-    import base64
-
+def _vertex_token() -> str:
+    """Mint a short-lived OAuth token for Vertex AI (service account or ambient ADC)."""
     import os
 
     import google.auth
-    import httpx
     from google.auth.transport.requests import Request
 
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
@@ -157,8 +150,68 @@ def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageR
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.vertex_credentials_path
     creds, _ = google.auth.default(scopes=scopes)
     creds.refresh(Request())  # mints / refreshes the short-lived access token
+    return creds.token
 
+
+def _vertex_gemini_generate(prompt: str, aspect_ratio: str, seed: int | None,
+                            token: str, loc: str, proj: str, model: str) -> ImageResult:
+    """Gemini image models ("Nano Banana": gemini-2.5-flash-image / gemini-3-pro-image / …)
+    via Vertex AI :generateContent — a different request/response shape than Imagen's :predict."""
+    import base64
+
+    import httpx
+
+    url = (
+        f"https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}"
+        f"/locations/{loc}/publishers/google/models/{model}:generateContent"
+    )
+    generation_config: dict[str, Any] = {
+        "responseModalities": ["IMAGE"],
+        "imageConfig": {"aspectRatio": _GOOGLE_ASPECT.get(aspect_ratio, "16:9")},
+    }
+    if seed is not None:
+        generation_config["seed"] = seed
+    body = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": generation_config,
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+    if proj:
+        headers["x-goog-user-project"] = proj
+    resp = httpx.post(url, json=body, headers=headers, timeout=180)
+    if resp.status_code >= 400:
+        raise ValueError(f"Vertex {resp.status_code} ({model} @ {loc}, proj={proj}): {resp.text[:600]}")
+    payload = resp.json()
+    parts = (
+        (payload.get("candidates") or [{}])[0]
+        .get("content", {})
+        .get("parts", [])
+    )
+    inline = next((p["inlineData"] for p in parts if isinstance(p, dict) and p.get("inlineData")), None)
+    if not inline or not inline.get("data"):
+        finish = (payload.get("candidates") or [{}])[0].get("finishReason", "")
+        raise ValueError(f"Vertex Gemini returned no image (finishReason={finish or '?'}): "
+                         f"{str(payload)[:200]}")
+    data = base64.b64decode(inline["data"])
+    mime = inline.get("mimeType", "image/png")
+    return ImageResult(data, mime, {"provider": "vertex", "model": model, "prompt": prompt, "seed": seed})
+
+
+def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
+    """Google image models via Vertex AI. Routes by model name: gemini-* ("Nano Banana")
+    → :generateContent; imagen-* → :predict. Auth is a service-account OAuth token.
+
+    Credentials come from VERTEX_CREDENTIALS_PATH (a service-account .json) or, if that's blank,
+    ambient Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS / gcloud auth).
+    """
+    import base64
+
+    import httpx
+
+    token = _vertex_token()
     loc, proj, model = settings.vertex_location, settings.vertex_project, settings.vertex_image_model
+    if model.startswith("gemini"):
+        return _vertex_gemini_generate(prompt, aspect_ratio, seed, token, loc, proj, model)
     url = (
         f"https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}"
         f"/locations/{loc}/publishers/google/models/{model}:predict"
@@ -172,7 +225,7 @@ def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageR
         params["seed"] = seed
         params["addWatermark"] = False
     body = {"instances": [{"prompt": prompt}], "parameters": params}
-    headers = {"Authorization": f"Bearer {creds.token}"}
+    headers = {"Authorization": f"Bearer {token}"}
     # ADC (user) credentials need a billing/quota project; this header replaces
     # `gcloud auth application-default set-quota-project`.
     if proj:

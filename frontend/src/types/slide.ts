@@ -105,6 +105,14 @@ export interface SlideComment {
   createdAt: string;
 }
 
+/** The editable prompts behind a workshop slide. */
+export interface SlidePrompts {
+  contentInstructions?: string;
+  /** The full writer prompt as edited in the workshop (sent verbatim). */
+  contentPrompt?: string;
+  imagePrompt?: string;
+}
+
 export interface Slide {
   id: string;
   slideNumber: number;
@@ -120,6 +128,10 @@ export interface Slide {
   speakerNotes?: string;
   comments?: SlideComment[];
   transition?: string;
+  /** Workshop: the editable prompts behind this slide. */
+  prompts?: SlidePrompts;
+  /** Workshop: whether this slide has been generated at least once. */
+  generated?: boolean;
 }
 
 export const SLIDE_STATUS_LABELS: Record<SlideStatus, string> = {

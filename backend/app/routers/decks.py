@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -119,6 +120,29 @@ async def delete_slide(
     if slide is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
     await deck_service.delete_slide(db, slide)
+
+
+@router.post("/projects/{project_id}/deck/assemble")
+async def assemble_deck(
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Workshop final step: every slide approved → the deck becomes the presentation."""
+    deck = await _get_deck_or_404(db, project.id)
+    slides = (await db.execute(
+        select(Slide).where(Slide.deck_id == deck.id)
+    )).scalars().all()
+    not_approved = [s.slide_number for s in slides if s.status != "approved"]
+    if not_approved:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Slides not yet approved: {sorted(not_approved)}",
+        )
+    deck.status = "ready"
+    project.status = "editor"
+    await db.commit()
+    refreshed = await deck_service.get_deck_for_project(db, project.id)
+    return deck_service.serialize_deck(refreshed)
 
 
 @router.post("/projects/{project_id}/deck/slides/reorder")

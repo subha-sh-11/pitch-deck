@@ -17,6 +17,7 @@ import {
   getDeck,
   getProject,
   pollJob,
+  prepareDeck,
   regenerateSlide as apiRegenerateSlide,
   reorderSlides as apiReorderSlides,
   saveIntake,
@@ -81,6 +82,8 @@ interface SetupWizardContextValue extends SetupWizardState {
   setExtractedSummary: (summary: ExtractedScriptSummary | null) => void;
   setScriptUploaded: (value: boolean) => void;
   initDraftSlides: () => void;
+  prepareDraftSlides: () => Promise<void>;
+  replaceDraftSlide: (slide: Slide) => void;
   updateDraftSlide: (id: string, patch: Partial<SlideContent> & { title?: string }) => void;
   updateDraftSlideMeta: (
     id: string,
@@ -105,7 +108,9 @@ const SetupWizardContext = createContext<SetupWizardContextValue | null>(null);
 function loadState(projectId: string): SetupWizardState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(`${STORAGE_PREFIX}${projectId}`);
+    const raw =
+      localStorage.getItem(`${STORAGE_PREFIX}${projectId}`) ??
+      sessionStorage.getItem(`${STORAGE_PREFIX}${projectId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SetupWizardState;
     return { ...DEFAULT_STATE, ...parsed, formData: { ...EMPTY_INTAKE_FORM, ...parsed.formData } };
@@ -116,7 +121,7 @@ function loadState(projectId: string): SetupWizardState | null {
 
 function saveState(projectId: string, state: SetupWizardState) {
   try {
-    sessionStorage.setItem(`${STORAGE_PREFIX}${projectId}`, JSON.stringify(state));
+    localStorage.setItem(`${STORAGE_PREFIX}${projectId}`, JSON.stringify(state));
   } catch {
     /* ignore quota */
   }
@@ -324,6 +329,40 @@ export function SetupWizardProvider({
     if (stateRef.current.draftSlides.length > 0 || generatingRef.current) return;
     void runGeneration();
   }, [runGeneration]);
+
+  /** Workshop step 1: analysis + design + outline → empty slide shells (no batch generation). */
+  const prepareDraftSlides = useCallback(async () => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
+    setGenerationError(null);
+    setGenerationProgress(0);
+    setState((prev) => ({ ...prev, draftSlides: [], generationStatus: "generating" }));
+    try {
+      const job = await prepareDeck(projectId, stateRef.current.selectedTemplateId ?? undefined);
+      const final = await pollJob(job, { onProgress: (j) => setGenerationProgress(j.progress) });
+      if (final.status === "failed") throw new Error(final.error ?? "Preparation failed");
+      const deck = await getDeck(projectId);
+      setDesignDirection(deck.designDirection ?? null);
+      setState((prev) => ({
+        ...prev,
+        draftSlides: deck.slides ?? [],
+        generationStatus: "ready",
+      }));
+    } catch (err) {
+      setGenerationError((err as Error).message);
+      setState((prev) => ({ ...prev, generationStatus: "idle" }));
+    } finally {
+      generatingRef.current = false;
+    }
+  }, [projectId]);
+
+  /** Workshop: adopt a freshly (re)generated slide from the backend (local merge only). */
+  const replaceDraftSlide = useCallback((slide: Slide) => {
+    setState((prev) => ({
+      ...prev,
+      draftSlides: prev.draftSlides.map((s) => (s.id === slide.id ? { ...s, ...slide } : s)),
+    }));
+  }, []);
 
   const regenerateAllDraftSlides = useCallback(async () => {
     setState((prev) => ({ ...prev, draftSlides: [] }));
@@ -544,6 +583,8 @@ export function SetupWizardProvider({
       setExtractedSummary,
       setScriptUploaded,
       initDraftSlides,
+      prepareDraftSlides,
+      replaceDraftSlide,
       updateDraftSlide,
       updateDraftSlideMeta,
       addSlideComment,
@@ -560,7 +601,8 @@ export function SetupWizardProvider({
     [
       state, projectId, designDirection, generationProgress, generationError, saveStatus,
       updateForm, completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary,
-      setScriptUploaded, initDraftSlides, updateDraftSlide, updateDraftSlideMeta,
+      setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
+      updateDraftSlide, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
       regenerateDraftSlide, regenerateAllDraftSlides, setGenerationStatus, approveContent,
       getEditorSlides,
