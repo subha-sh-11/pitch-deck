@@ -1,15 +1,12 @@
-import { SlideEditorWorkspace } from "@/features/editor/SlideEditorWorkspace";
-import { SetupWizardProvider } from "@/features/setup/SetupWizardContext";
+import { redirect } from "next/navigation";
+import { projectRoutes } from "@/lib/routes";
 
-export default async function EditorPage({
+// The deck lives in the Presentation tab of the intake studio — no standalone editor.
+export default async function EditorRedirect({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <SetupWizardProvider projectId={id}>
-      <SlideEditorWorkspace projectId={id} />
-    </SetupWizardProvider>
-  );
+  redirect(projectRoutes.setupIdentity(id));
 }

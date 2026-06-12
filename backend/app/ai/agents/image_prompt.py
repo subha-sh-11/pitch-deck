@@ -89,12 +89,28 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
 
     # Framing per slide — people are allowed so scenes feel lived-in and emotional.
     framing = {
-        "cover": "cinematic key art establishing the world and mood of the film",
-        "story_world": "wide environmental establishing shot, lived-in and authentic",
-        "visual_aesthetic": "cinematic mood and texture study, atmospheric",
-        "character": "evocative cinematic character study, dramatic lighting, expressive",
-        "supporting_characters": "evocative cinematic ensemble study, dramatic lighting",
-    }.get(slide_type, "cinematic atmospheric frame that captures the story's emotion")
+        "cover": "epic theatrical key art, ultra-wide anamorphic establishing frame of the setting, "
+                 "monumental scale, layered depth from foreground texture to distant horizon, "
+                 "dramatic golden-hour or low-key lighting, no people",
+        "logline": "wide poetic frame of the story's world at a charged moment, strong single light "
+                   "source, generous negative space for overlaid text, no people",
+        "story_world": "rich environmental establishing shot of the setting, lived-in detail and "
+                       "atmosphere, volumetric light, deep perspective leading the eye, no people",
+        "visual_aesthetic": "painterly cinematic mood and texture study, macro surfaces and light "
+                            "play, atmospheric haze, evocative abstract composition, no people",
+        "character": "evocative cinematic character mood study, dramatic rim lighting, expressive "
+                     "silhouette against the story's world, shallow depth of field, "
+                     "no real-person likeness",
+        "supporting_characters": "evocative cinematic ensemble mood study, dramatic chiaroscuro "
+                                 "lighting, layered silhouettes, no real-person likeness",
+        "genre_blend": "moody atmospheric frame that fuses the story's genres in one image, "
+                       "contrast of light and shadow, no people",
+        "directors_vision": "contemplative wide cinematic frame, a single strong visual metaphor "
+                            "from the story's world, painterly light, no people",
+        "contact": "quiet minimal cinematic frame of the story's world at dusk, restrained and "
+                   "elegant, generous negative space, no people",
+    }.get(slide_type, "cinematic atmospheric frame of the story's world, soft directional light, "
+                      "texture and depth, generous negative space for text, no people")
 
     parts = [framing]
     if subject:
@@ -112,7 +128,8 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
     if palette:
         parts.append(f"color palette: {palette}")
     parts.append(
-        "authentic regional detail, period-accurate, emotionally resonant, film still, "
-        "professional cinematography, no text, no watermark, no logo, no real-person likeness"
+        "film still, shot on anamorphic lenses, professional cinematography, subtle film grain, "
+        "consistent color grade, authentic regional detail, period-accurate, "
+        "no text, no watermark, no logo, no real-person likeness"
     )
     return _clean(", ".join(p for p in parts if p))

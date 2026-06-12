@@ -98,7 +98,7 @@ export function QuestionsPanel({ iv }: { iv: Interview }) {
           type="button"
           disabled={!canBuild || iv.building}
           onClick={() => void iv.build()}
-          className="rounded-full bg-accent-neon px-6 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_0_20px_rgba(34,211,238,0.25)] transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/30 disabled:text-zinc-950/70 disabled:shadow-none"
+          className="rounded-full bg-accent-neon px-6 py-2.5 text-sm font-semibold text-zinc-950 shadow-[0_0_20px_rgba(248,201,164,0.25)] transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/30 disabled:text-zinc-950/70 disabled:shadow-none"
         >
           {iv.building ? "Building…" : "Build my deck →"}
         </button>

@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { DEFAULT_SLIDE_APPEARANCE, SLIDE_TRANSITIONS } from "@/lib/slide-appearance";
 import { AiAssistantFab } from "./AiAssistantFab";
+import { AiCommandPanel } from "./AiCommandPanel";
 import { EditorFlyout } from "./EditorFlyout";
 import { InsertToolbar } from "./InsertToolbar";
 import { PitchRightRail, type RightRailPanel } from "./PitchRightRail";
@@ -27,6 +28,8 @@ interface DeckEditorProps {
   projectId: string;
   slides: Slide[];
   designDirection: DesignDirection;
+  /** Backend sync state of edits; shown so users know their work is safe. */
+  saveStatus?: "idle" | "saving" | "saved" | "error";
   onDeleteSlide: (id: string) => boolean;
   onInsertAfter: (index: number, type: SlideType) => void;
   onDuplicateSlide: (index: number) => void;
@@ -42,12 +45,20 @@ interface DeckEditorProps {
   onAddComment: (id: string, text: string) => void;
 }
 
+const SAVE_STATUS_LABELS: Record<string, string> = {
+  saving: "Saving…",
+  saved: "All changes saved",
+  error: "Couldn't save — retrying on next edit",
+};
+
 export function DeckEditor({
   projectId,
   slides,
   designDirection,
+  saveStatus = "idle",
   onDeleteSlide,
   onInsertAfter,
+  onMoveSlide,
   onDuplicateSlide,
   onRegenerateSlide,
   onUpdateSlide,
@@ -55,6 +66,7 @@ export function DeckEditor({
   onAddComment,
 }: DeckEditorProps) {
   const [projectTitle, setProjectTitle] = useState("Project");
+  const [aiOpen, setAiOpen] = useState(false);
   useEffect(() => {
     getProject(projectId)
       .then((p) => setProjectTitle(p.title || "Project"))
@@ -190,6 +202,18 @@ export function DeckEditor({
         </div>
       )}
 
+      {saveStatus !== "idle" && (
+        <div
+          className={`pointer-events-none fixed bottom-4 right-4 z-40 rounded-full px-3 py-1.5 text-xs shadow ${
+            saveStatus === "error"
+              ? "bg-[#7F1D1D] text-white"
+              : "bg-[#1A1A1F]/80 text-white/90"
+          }`}
+        >
+          {SAVE_STATUS_LABELS[saveStatus]}
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1">
         <SlideNavigator
           slides={slides}
@@ -249,12 +273,21 @@ export function DeckEditor({
         />
       </div>
 
-      <AiAssistantFab
-        onClick={() => {
-          setRightPanel("design");
-          showToast("AI assistant ready — try Regenerate slide content");
-        }}
-      />
+      <AiAssistantFab onClick={() => setAiOpen((v) => !v)} />
+
+      <EditorFlyout title="AI assistant" open={aiOpen} onClose={() => setAiOpen(false)}>
+        <AiCommandPanel
+          projectId={projectId}
+          handlers={{
+            slides,
+            onUpdateSlide,
+            onMoveSlide,
+            onInsertAfter,
+            onDeleteSlide,
+            onRegenerateSlide,
+          }}
+        />
+      </EditorFlyout>
 
       <ShareDialog
         open={shareOpen}

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getProject } from "@/lib/api";
+import { projectRoutes } from "@/lib/routes";
 import { ChatPanel } from "./intake/ChatPanel";
 import { DeckCanvas } from "./intake/DeckCanvas";
 import { DesignBrief } from "./intake/DesignBrief";
@@ -39,24 +41,34 @@ export function IntakeStudio({ projectId }: { projectId: string }) {
       {/* Right — artifact */}
       <section className="hidden min-h-0 flex-col bg-surface-1/20 lg:flex">
         <header className="flex items-center justify-between gap-3 border-b border-border-glass bg-surface-0/60 px-4 py-2.5 backdrop-blur">
-          <div className="flex items-center gap-2 text-sm">
-            <FolderIcon />
-            <span className="text-text-dim">{iv.projectName}</span>
+          <nav className="flex items-center gap-2 text-sm">
+            <Link
+              href={projectRoutes.dashboard()}
+              className="flex items-center gap-1.5 text-text-dim transition-colors hover:text-text-primary"
+            >
+              <FolderIcon />
+              Dashboard
+            </Link>
             <span className="text-text-dim/50">/</span>
-            <span className="font-medium text-text-primary">Deck</span>
-          </div>
+            <span className="max-w-[180px] truncate text-text-dim">{iv.projectName}</span>
+            <span className="text-text-dim/50">/</span>
+            <span className="font-medium text-text-primary">{tab === "questions" ? "Brief" : "Deck"}</span>
+          </nav>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 rounded-lg bg-surface-2/60 p-0.5">
               <TabButton active={tab === "questions"} onClick={() => setTab("questions")}>Questions</TabButton>
-              <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>Preview</TabButton>
+              <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>Presentation</TabButton>
             </div>
             <button
               type="button"
-              disabled={!canBuild || iv.building}
-              onClick={() => void iv.build()}
-              className="rounded-full bg-accent-neon px-5 py-2 text-sm font-semibold text-zinc-950 shadow-[0_0_20px_rgba(34,211,238,0.25)] transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60 disabled:shadow-none"
+              disabled={!canBuild || iv.building || iv.generationStatus === "generating"}
+              onClick={() => {
+                setTab("preview"); // jump to the presentation tab; generation streams in there
+                void iv.build();
+              }}
+              className="rounded-full bg-accent-neon px-5 py-2 text-sm font-semibold text-zinc-950 shadow-[0_0_20px_rgba(248,201,164,0.3)] transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60 disabled:shadow-none"
             >
-              {iv.building ? "Building…" : "Build deck →"}
+              {iv.building || iv.generationStatus === "generating" ? "Building…" : "Build deck →"}
             </button>
           </div>
         </header>

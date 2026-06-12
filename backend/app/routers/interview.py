@@ -6,6 +6,8 @@ project's IntakeFormData so the existing generation pipeline runs unchanged.
 """
 from __future__ import annotations
 
+from functools import partial
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,28 @@ class InterviewTurn(BaseModel):
     history: list[dict] = Field(default_factory=list)
     pillars: dict = Field(default_factory=dict)
     brief: dict | None = None
+    # Reference images shared this turn: [{"name", "mediaType", "data": <base64>}].
+    # The frontend downscales before upload; we still cap count/size defensively.
+    images: list[dict] = Field(default_factory=list)
+
+
+_MAX_IMAGES = 4
+_MAX_IMAGE_B64 = 4_000_000  # ~3 MB binary per image
+
+
+def _clean_images(images: list[dict]) -> list[dict] | None:
+    cleaned = [
+        {
+            "name": str(img.get("name", "reference"))[:120],
+            "mediaType": str(img.get("mediaType", "image/jpeg")),
+            "data": img["data"],
+        }
+        for img in images
+        if isinstance(img, dict)
+        and isinstance(img.get("data"), str)
+        and 0 < len(img["data"]) <= _MAX_IMAGE_B64
+    ][:_MAX_IMAGES]
+    return cleaned or None
 
 
 class FinalizeBody(BaseModel):
@@ -45,9 +69,15 @@ async def interview_turn(
     project: Project = Depends(get_owned_project),
 ) -> dict:
     """Run one interview turn. The agent call is blocking, so keep it off the loop."""
-    result = await run_in_threadpool(
-        intake_interview.run, body.history, body.pillars, body.brief
+    run = partial(
+        intake_interview.run,
+        body.history,
+        body.pillars,
+        body.brief,
+        images=_clean_images(body.images),
+        script=project.script_text,
     )
+    result = await run_in_threadpool(run)
     if isinstance(result, dict):
         result.setdefault("provider", provider_name())
     return result

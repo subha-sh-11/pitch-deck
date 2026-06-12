@@ -4,9 +4,44 @@ import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface SynopsisSlideProps {
   content: SlideContent;
+  /** Layout variant: "split_image_text" (image right) | "text_columns" (editorial, no image panel). */
+  layout?: string;
 }
 
-export function SynopsisSlide({ content }: SynopsisSlideProps) {
+export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
+  const paragraphs = content.body?.split(/\n\n+/).filter(Boolean) ?? [content.body ?? ""];
+  const columns = layout === "text_columns";
+
+  if (columns) {
+    /* ── Editorial full-width columns — for image-less or very long synopses ── */
+    return (
+      <SlideFrame>
+        <div className="absolute inset-0 bg-[#0a0a0c]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,211,238,0.05),transparent_50%)]" />
+        <div className="relative flex h-full flex-col justify-center p-[8%]">
+          <SlideLabel>
+            <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
+          </SlideLabel>
+          <div
+            className="mt-6 gap-10 text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF] [column-fill:balance]"
+            style={{ columns: 2 }}
+          >
+            {paragraphs.map((para) => (
+              <p key={para.slice(0, 40)} className="mb-4 break-inside-avoid">
+                {para}
+              </p>
+            ))}
+          </div>
+          <div
+            className="mt-8 h-px w-24"
+            style={{ background: "linear-gradient(to right, var(--slide-accent), transparent)" }}
+          />
+        </div>
+      </SlideFrame>
+    );
+  }
+
+  /* ── Split: text left, imagery right ── */
   return (
     <SlideFrame>
       <div className="absolute inset-0 bg-[#0a0a0c]" />

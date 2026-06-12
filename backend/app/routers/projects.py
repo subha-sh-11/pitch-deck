@@ -85,6 +85,7 @@ async def save_intake(
 async def extract_intake(
     file: UploadFile = File(...),
     project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
 ):
     """Parse an uploaded script (PDF/DOCX/FDX/TXT) and auto-fill the intake fields."""
     data = await file.read()
@@ -101,6 +102,10 @@ async def extract_intake(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Could not read any text from this file. Try a PDF, DOCX, FDX, or TXT.",
         )
+    # Keep the full script on the project so the intake conversation can answer
+    # questions about specific scenes/characters, not just the extracted fields.
+    project.script_text = text
+    await db.commit()
     extracted = await run_in_threadpool(intake_extract.run, text, filename)
 
     form = IntakeFormData.model_validate(extracted)

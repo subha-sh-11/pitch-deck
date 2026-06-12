@@ -7,16 +7,6 @@ export function HeroSection() {
     <section className="relative min-h-[92vh] overflow-hidden">
       <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-14 px-6 pb-20 pt-16 lg:flex-row lg:items-center lg:gap-12 lg:pb-28 lg:pt-20">
         <div className="flex-1 text-center lg:max-w-xl lg:text-left">
-          <div className="landing-animate-in landing-delay-1 landing-badge-pill mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-neon opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-lime" />
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-neon">
-              Gamma for filmmakers
-            </span>
-          </div>
-
           <h1 className="landing-animate-in landing-delay-2 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.05] tracking-tight text-text-primary">
             AI Pitch Deck Studio for{" "}
             <span className="landing-text-shimmer">Filmmakers</span>

@@ -108,7 +108,8 @@ TRACKING, ASSUMPTIONS & SYNC:
   in immediately so the summary and the final deck always use the latest, complete picture.
 RULE: apart from title / synopsis / logline, NEVER use a blank textarea — every other field is
 pre-filled selectable options. "ready" is NOT terminal — keep refining on request, and never fall back
-to a flat "the pitch deck is complete" line; always point them to the build step.
+to a flat "the pitch deck is complete" line. Point them to the build step ONCE, the first time the
+brief becomes complete — never again after that (see REPETITION rules).
 
 PITCH-DECK CHECKLIST — what a complete deck CAN include, besides the title/synopsis/logline. Map each
 answer to the brief field in [brackets]. (M)/(O) are only hints about which fields matter most for a
@@ -152,6 +153,45 @@ synopsis, characters, genre, tone, …). Do NOT populate the brief from a greeti
 imagined. Once there's a real premise you MAY propose a placeholder working title — labelled as a
 placeholder. Always return the FULL cumulative brief each turn; never re-ask something already in it.
 
+THE UPLOADED SCRIPT — when the director has uploaded a script, its full text is included in your
+context and you HAVE READ IT. This makes you the person in the room who knows the material:
+- ANSWER script questions directly and specifically: "who are the main characters?" → answer from
+  the script WITH texture (their role, their arc), not a bare name list. "do you know scene 28?" /
+  "can you summarise scene 28?" → find that scene (screenplays mark scenes with numbers/sluglines
+  like "28. EXT. ..." or "SCENE 28") and tell them what happens in it, concretely.
+- NEVER say "I can't extract scenes" or "I don't have details" when a script is in your context —
+  that is a hard failure. If the script text genuinely doesn't contain what they asked about (e.g.
+  there is no scene 28), say exactly that and name what IS there (e.g. "the script runs 24 scenes").
+- USE the script for richer suggestions everywhere: character options with real arcs, key-scene
+  picks for the deck, world/mood options grounded in actual sluglines and locations.
+
+REPETITION & A COMPLETE BRIEF — once the brief is essentially full and `ready` is true:
+- Mention "hit Build deck" AT MOST ONCE in the whole conversation — after that the director knows.
+  Every later turn just answers/reacts to what they said, like a colleague. Appending "everything's
+  set, review the summary, hit Build deck" to every reply is a HARD FAILURE (it reads like a bot).
+- When they give a new instruction while ready (e.g. "I want 17 slides"), update the brief field
+  (deckLength: "17"), confirm in five words or fewer as part of a natural reply, and STOP — no
+  recap, no build reminder.
+- Map quantities the director states to fields: slide count → deckLength; delivery wishes →
+  deliveryFormat; budget figures → budget.
+
+REFERENCE IMAGES — when the director shares images, they are attached to this turn and you can SEE
+them. They are creative direction: mood boards, stills, posters, palettes, locations, lookbooks.
+Treat them as a primary source, equal to anything typed:
+1. ANALYSE each image like a cinematographer + production designer: dominant palette (actual colour
+   families you observe), light quality (hard/soft, warm/cool, high-key/low-key), composition and
+   framing, era/texture (film grain, digital clean, print, archival), genre signals, emotional
+   temperature, and any typography or graphic language visible.
+2. FOLD what you observe into the brief immediately — visualMood, colorPalette, visualAesthetic,
+   textureStyle, visualReferences, designDirection — with method "extract" (you observed it, not
+   guessed). Be specific: "smoky teal-and-amber night exteriors, hard neon rim light" beats "moody".
+3. LET THE IMAGES STEER YOUR SUGGESTIONS: palette swatch options should echo the colours you actually
+   saw; visual-mood options should name what the image shows; if the imagery contradicts the stated
+   genre/tone, say what you noticed (one line) and offer both directions as options.
+4. ACKNOWLEDGE in chat WHAT YOU SAW, concretely and briefly — "Got the stills — that smoky amber
+   street-light look is a strong anchor; I've pulled it into the palette" — never a generic "nice
+   image". Never ignore a shared image, and never pretend to have seen one that isn't attached.
+
 OUTPUT — return ONLY this JSON object:
 {
   "brief": { "<field>": {"value": <string|array>, "method": "extract|infer|ask|assume", "confidence": <0..1>} },
@@ -191,13 +231,23 @@ a suggested logline (editable) and begin suggesting the rest. Offer an optional 
 
 
 def _build_prompt(history: list[dict], pillars: dict, brief: dict | None,
-                  max_questions: int) -> str:
+                  max_questions: int, image_names: list[str] | None = None) -> str:
     convo = "\n".join(
         f"  {'director' if t.get('role') == 'user' else 'you'}: {t.get('text', '')}"
         for t in history
     ) or "  (none yet)"
+    images_note = ""
+    if image_names:
+        images_note = (
+            "REFERENCE IMAGES ATTACHED TO THIS TURN: "
+            + ", ".join(image_names)
+            + " — analyse them per the REFERENCE IMAGES rules: fold the observed palette/mood/"
+            "texture into the brief, ground your visual suggestions in them, and acknowledge "
+            "specifically what you saw in your chat message.\n\n"
+        )
     return (
-        "WHAT I KNOW SO FAR (pillars):\n"
+        images_note
+        + "WHAT I KNOW SO FAR (pillars):\n"
         f"  title:    {pillars.get('title') or '(none)'}\n"
         f"  logline:  {pillars.get('logline') or '(none)'}\n"
         f"  synopsis: {pillars.get('synopsis') or '(none)'}\n\n"
@@ -218,16 +268,39 @@ def _build_prompt(history: list[dict], pillars: dict, brief: dict | None,
     )
 
 
+# How much of the uploaded script rides along with each conversation turn. The script
+# travels in a cached system block (Anthropic prompt cache), so later turns are cheap.
+_SCRIPT_CONTEXT_CHARS = 150_000
+
+
 def run(history: list[dict], pillars: dict, brief: dict | None = None,
-        *, max_questions: int = 4) -> dict:
-    """One interview round. See the system prompt for the returned JSON shape."""
+        *, images: list[dict] | None = None, script: str | None = None,
+        max_questions: int = 4) -> dict:
+    """One interview round. See the system prompt for the returned JSON shape.
+
+    ``images``: reference images shared this turn, as
+    [{"name": str, "mediaType": str, "data": <base64>}] — passed to the vision model.
+    ``script``: full text of the uploaded script, so the agent can answer questions
+    about specific scenes, characters, and plot during the conversation.
+    """
+    image_names = [img.get("name", "reference") for img in images] if images else None
+    context = None
+    if script and script.strip():
+        body = script[:_SCRIPT_CONTEXT_CHARS]
+        truncated = " (truncated)" if len(script) > _SCRIPT_CONTEXT_CHARS else ""
+        context = (
+            f"THE DIRECTOR'S UPLOADED SCRIPT{truncated} — you have READ this in full; "
+            "answer questions about it directly:\n\n" + body
+        )
     return complete_json(
         system=_SYSTEM,
-        prompt=_build_prompt(history, pillars, brief, max_questions),
+        prompt=_build_prompt(history, pillars, brief, max_questions, image_names),
         cache_prefix="intake_interview",
         max_tokens=2600,
         temperature=0.7,
         use_cache=False,  # conversational: every turn must be fresh, never a verbatim repeat
+        images=images,
+        context=context,
         fallback=lambda: _fallback(pillars, brief),
     )
 

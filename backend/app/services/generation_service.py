@@ -17,9 +17,10 @@ from app.ai.agents import content as content_agent
 from app.ai.agents import design as design_agent
 from app.ai.agents import image_prompt as image_prompt_agent
 from app.ai.agents import layout as layout_agent
+from app.ai.agents import outline as outline_agent
 from app.ai.agents import story_analysis as story_agent
 from app.ai.images import generate_image
-from app.ai.templates import build_outline, recommend_template
+from app.ai.templates import recommend_template
 from app.core.config import settings
 from app.core.db import session_scope
 from app.core.logging import get_logger
@@ -133,10 +134,12 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                      design.get("_register"), palette)
             _set_job(session, job_id, progress=14)
 
-            # 3. Outline
+            # 3. Outline — brief-aware: honours deckLength, drops ungrounded slides,
+            # adds grounded extras for longer decks (LLM with deterministic fallback).
             tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
-            outline = build_outline(tpl)
-            log.info("  -outline -template=%s, %d slides", tpl, len(outline))
+            outline = outline_agent.run(pdict, intake, tpl)
+            log.info("  -outline -template=%s, %d slides (deckLength=%r)",
+                     tpl, len(outline), (intake or {}).get("deckLength") or "default")
 
             # 4. Replace any existing deck
             existing = session.execute(
@@ -190,7 +193,11 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                     title=item["title"],
                     purpose=item["purpose"],
                     content=contents[i],
-                    layout=layout_agent.run(item["slide_type"], design_clean),
+                    layout=layout_agent.run(item["slide_type"], design_clean,
+                                            contents[i], has_image=i in img_map),
+                    # Initial visual rhythm (bold/minimal/standard) — rendered via the
+                    # appearance channel; the director can override it in the editor.
+                    meta={"appearance": layout_agent.appearance_for(item["slide_type"], design_clean)},
                     status="draft",
                 )
                 session.add(slide)
@@ -253,7 +260,9 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             if old.get(key) is not None:
                 new_content[key] = old[key]
         slide.content = new_content
-        slide.layout = layout_agent.run(slide.slide_type, design)
+        will_have_image = with_image and image_prompt_agent.slide_needs_image(slide.slide_type)
+        slide.layout = layout_agent.run(slide.slide_type, design,
+                                        slide.content, has_image=will_have_image)
         slide.status = "draft"
         session.flush()
 

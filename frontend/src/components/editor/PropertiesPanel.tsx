@@ -174,7 +174,7 @@ export function PropertiesPanel({
           <button
             type="button"
             onClick={() => setExpandedPrompt(!expandedPrompt)}
-            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 text-left transition-colors hover:border-[#22d3ee]/30"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 text-left transition-colors hover:border-[#f8c9a4]/30"
           >
             <p
               className={`text-[11px] leading-relaxed text-[#9CA3AF] ${
@@ -183,7 +183,7 @@ export function PropertiesPanel({
             >
               {imagePrompt}
             </p>
-            <span className="mt-2 block text-[10px] text-[#22d3ee]">
+            <span className="mt-2 block text-[10px] text-[#f8c9a4]">
               {expandedPrompt ? "Show less" : "Show more"}
             </span>
           </button>

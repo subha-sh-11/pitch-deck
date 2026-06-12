@@ -2,13 +2,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Anchor the .env path to backend/ (two levels up from app/core/) so config loads
+# the same file regardless of the process working directory. Real environment
+# variables still take precedence over this file (12-factor / production).
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore", case_sensitive=False
     )
 
     # App
@@ -71,10 +77,13 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     # imagen-4.0-fast-generate-001 (fast) | imagen-4.0-generate-001 | imagen-4.0-ultra-generate-001
     google_image_model: str = "imagen-4.0-fast-generate-001"
-    # Vertex AI Imagen (uses Application Default Credentials — no API key). Set a project
-    # to enable; auth via `gcloud auth application-default login`.
-    vertex_project: str = ""
-    vertex_location: str = "us-central1"
+    # ─── Vertex AI (Google Cloud) Imagen — uses a SERVICE ACCOUNT, not an API key ───
+    # Set IMAGE_PROVIDER=vertex. Auth via service-account JSON: either VERTEX_CREDENTIALS_PATH
+    # or the standard GOOGLE_APPLICATION_CREDENTIALS env var (leave path blank to use that).
+    vertex_project: str = ""              # GCP project id
+    vertex_location: str = "us-central1"  # region the model is served from
+    vertex_credentials_path: str = ""     # path to the service-account .json (optional if GOOGLE_APPLICATION_CREDENTIALS set)
+    vertex_image_model: str = "imagen-3.0-generate-002"
 
     # TMDB — real comparable-film posters for the Show Cross slide (free API key)
     tmdb_api_key: str = ""

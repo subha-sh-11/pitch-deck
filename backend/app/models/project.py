@@ -5,7 +5,7 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +46,9 @@ class Project(Base, TimestampMixin):
     intake_form: Mapped[dict | None] = mapped_column(JSONB)
     # ExtractedScriptSummary from an uploaded script (PDF/DOCX/FDX)
     script_summary: Mapped[dict | None] = mapped_column(JSONB)
+    # Full text of the uploaded script — kept so the intake agent can answer
+    # questions about specific scenes/characters during the conversation.
+    script_text: Mapped[str | None] = mapped_column(Text)
     # StoryAnalysis agent output
     story_analysis: Mapped[dict | None] = mapped_column(JSONB)
 

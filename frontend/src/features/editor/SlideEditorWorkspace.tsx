@@ -40,6 +40,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     contentApproved,
     selectedTemplateId,
     designDirection,
+    saveStatus,
     deleteDraftSlide,
     insertDraftSlideAfter,
     duplicateDraftSlide,
@@ -81,6 +82,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
       projectId={projectId}
       slides={draftSlides}
       designDirection={designDirection ?? FALLBACK_DESIGN}
+      saveStatus={saveStatus}
       onDeleteSlide={deleteDraftSlide}
       onInsertAfter={insertDraftSlideAfter}
       onDuplicateSlide={duplicateDraftSlide}

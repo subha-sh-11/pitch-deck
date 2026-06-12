@@ -32,7 +32,7 @@ export function EditorHeader({
       <div className="flex min-w-0 items-center gap-3">
         <Link
           href={projectRoutes.dashboard()}
-          className="shrink-0 font-display text-sm font-semibold tracking-wide text-[#F5F1E8] transition-colors hover:text-[#22d3ee]"
+          className="shrink-0 font-display text-sm font-semibold tracking-wide text-[#F5F1E8] transition-colors hover:text-[#f8c9a4]"
         >
           Pitch Deck Studio
         </Link>
@@ -44,7 +44,7 @@ export function EditorHeader({
       </div>
 
       <div className="hidden items-center gap-2 md:flex">
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#22d3ee]">
+        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#f8c9a4]">
           Editor
         </span>
         <span className="text-[11px] text-[#6b7280]">{saveStatus}</span>

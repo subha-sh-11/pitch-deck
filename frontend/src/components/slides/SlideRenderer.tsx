@@ -81,18 +81,20 @@ export function SlideRenderer({
         ? "contrast-[1.08] saturate-[1.1]"
         : "";
 
+  // Backend layout decision (content-aware variant); templates fall back gracefully.
+  const layoutType = slide.layout?.layoutType;
   const template = (() => {
     switch (slideType) {
       case "cover":
-        return <CoverSlide content={content} />;
+        return <CoverSlide content={content} layout={layoutType} />;
       case "logline":
-        return <LoglineSlide content={content} />;
+        return <LoglineSlide content={content} layout={layoutType} />;
       case "genre_blend":
         return <GenreBlendSlide content={content} />;
       case "synopsis":
-        return <SynopsisSlide content={content} />;
+        return <SynopsisSlide content={content} layout={layoutType} />;
       case "story_world":
-        return <StoryWorldSlide content={content} />;
+        return <StoryWorldSlide content={content} layout={layoutType} />;
       case "character":
       case "supporting_characters":
         return <CharacterSlide content={content} />;
@@ -109,7 +111,7 @@ export function SlideRenderer({
       case "contact":
         return <ContactSlide content={content} />;
       default:
-        return <GenericSlide content={content} />;
+        return <GenericSlide content={content} layout={layoutType} />;
     }
   })();
 

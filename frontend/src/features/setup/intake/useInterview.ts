@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   extractScript,
   finalizeInterview,
@@ -9,15 +8,20 @@ import {
   type InterviewAssumption,
   type InterviewBrief,
   type InterviewHistoryTurn,
+  type InterviewImage,
   type InterviewInputType,
   type InterviewSection,
   type InterviewOption,
   type InterviewPillars,
   type InterviewResult,
 } from "@/lib/api";
-import { projectRoutes } from "@/lib/routes";
-import { EMPTY_INTAKE_FORM } from "@/types/setup";
+import { deckCommand } from "@/lib/api/deck";
+import { applyDeckActions, type DeckActionHandlers } from "@/lib/apply-deck-actions";
+import { FALLBACK_DESIGN, withAccent } from "@/lib/deck-themes";
+import { EMPTY_INTAKE_FORM, type GenerationStatus } from "@/types/setup";
 import type { IntakeFormData } from "@/types/workflow";
+import type { Slide } from "@/types/slide";
+import type { ColorToken, DesignDirection } from "@/types/design";
 import { useSetupWizard } from "../SetupWizardContext";
 
 // ── Shared interview state ────────────────────────────────────────────────
@@ -31,7 +35,8 @@ import { useSetupWizard } from "../SetupWizardContext";
 export type ChatMessage =
   | { id: string; role: "assistant"; text: string }
   | { id: string; role: "user"; text: string }
-  | { id: string; role: "tool"; label: string; detail: string[] };
+  | { id: string; role: "tool"; label: string; detail: string[] }
+  | { id: string; role: "attachment"; name: string; previewUrl?: string; note?: string };
 
 export interface AskedQuestion {
   id: string;
@@ -67,6 +72,31 @@ function briefToForm(brief: InterviewBrief): Partial<IntakeFormData> {
     if (v) out[k] = v;
   }
   return out as Partial<IntakeFormData>;
+}
+
+/** Downscale an image file to ≤1280px JPEG and return base64 (no data-URL prefix) for the vision model. */
+async function encodeReferenceImage(file: File): Promise<InterviewImage> {
+  const MAX_DIM = 1280;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("unreadable image"));
+      el.src = url;
+    });
+    const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no canvas context");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    return { name: file.name, mediaType: "image/jpeg", data: dataUrl.split(",")[1] ?? "" };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function deriveTitle(text: string): string {
@@ -143,6 +173,10 @@ export interface Interview {
   thinking: boolean;
   offline: boolean;
   building: boolean;
+  draftSlides: Slide[];
+  designDirection: DesignDirection | null;
+  generationStatus: GenerationStatus;
+  generationProgress: number;
   projectName: string;
   setProjectName: (name: string) => void;
   sendText: (text: string) => void;
@@ -155,8 +189,22 @@ export interface Interview {
 }
 
 export function useInterview(projectId: string): Interview {
-  const router = useRouter();
-  const { formData, updateForm, completeStep } = useSetupWizard();
+  const {
+    formData,
+    updateForm,
+    completeStep,
+    initDraftSlides,
+    approveContent,
+    draftSlides,
+    designDirection: ctxDesign,
+    generationStatus,
+    generationProgress,
+    updateDraftSlide,
+    deleteDraftSlide,
+    insertDraftSlideAfter,
+    moveDraftSlide,
+    regenerateDraftSlide,
+  } = useSetupWizard();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [questions, setQuestions] = useState<AskedQuestion[]>([]);
@@ -166,10 +214,16 @@ export function useInterview(projectId: string): Interview {
   const [thinking, setThinking] = useState(false);
   const [offline, setOffline] = useState(false);
   const [building, setBuilding] = useState(false);
+  // Agent-driven design override (instant, regen-free). Folded into the effective design below.
+  const [designOverride, setDesignOverride] = useState<DesignDirection | null>(null);
+  const designDirection = designOverride ?? ctxDesign;
   const [projectName, setProjectName] = useState("project");
 
   const history = useRef<InterviewHistoryTurn[]>([]);
   const brief = useRef<InterviewBrief | null>(null);
+  // Reference images waiting to be shown to the agent on the next turn (sent once, then cleared —
+  // the agent folds what it saw into the brief, so the analysis persists as text).
+  const pendingImages = useRef<InterviewImage[]>([]);
   const started = useRef(false);
   const storageKey = `pitch-interview-${projectId}`;
 
@@ -217,10 +271,13 @@ export function useInterview(projectId: string): Interview {
   const advance = useCallback(
     async (h: InterviewHistoryTurn[], p: InterviewPillars) => {
       setThinking(true);
+      const images = pendingImages.current.length ? [...pendingImages.current] : undefined;
       let res: InterviewResult;
       try {
-        res = await interview(projectId, { history: h, pillars: p, brief: brief.current });
+        res = await interview(projectId, { history: h, pillars: p, brief: brief.current, images });
         setOffline(false);
+        // Delivered to the agent — don't resend on later turns.
+        if (images) pendingImages.current = [];
       } catch {
         res = localTurn(p, brief.current);
         setOffline(true);
@@ -278,10 +335,67 @@ export function useInterview(projectId: string): Interview {
     }
   }, [messages, sections, assumptions, ready, storageKey]);
 
+  // Instant, regen-free design changes driven by the agent.
+  const setAccent = useCallback(
+    (hex: string) => setDesignOverride((p) => withAccent(p ?? ctxDesign ?? FALLBACK_DESIGN, hex)),
+    [ctxDesign],
+  );
+  const setTheme = useCallback(
+    (palette: ColorToken[]) => setDesignOverride((p) => ({ ...(p ?? ctxDesign ?? FALLBACK_DESIGN), palette })),
+    [ctxDesign],
+  );
+
+  // After the deck is built, the chat BECOMES the deck-editing agent: each message → slide_edit
+  // agent → structured actions applied live. Colour/theme actions are instant; content via mutations.
+  const runDeckCommand = useCallback(
+    async (value: string) => {
+      setMessages((m) => [...m, { id: nextId(), role: "user", text: value }]);
+      setThinking(true);
+      try {
+        const slim = draftSlides.map((s) => ({
+          id: s.id,
+          slideNumber: s.slideNumber,
+          slideType: s.slideType,
+          title: s.title,
+          content: s.content,
+        }));
+        const res = await deckCommand(projectId, value, slim);
+        const handlers: DeckActionHandlers = {
+          slides: draftSlides,
+          onUpdateSlide: updateDraftSlide,
+          onMoveSlide: moveDraftSlide,
+          onInsertAfter: insertDraftSlideAfter,
+          onDeleteSlide: deleteDraftSlide,
+          onRegenerateSlide: regenerateDraftSlide,
+          onSetAccent: setAccent,
+          onSetTheme: setTheme,
+        };
+        await applyDeckActions(res.actions, handlers);
+        setMessages((m) => [...m, { id: nextId(), role: "assistant", text: res.message }]);
+      } catch {
+        setMessages((m) => [
+          ...m,
+          { id: nextId(), role: "assistant", text: "I couldn't reach the editing model — try again in a moment." },
+        ]);
+      } finally {
+        setThinking(false);
+      }
+    },
+    [
+      projectId, draftSlides, updateDraftSlide, moveDraftSlide, insertDraftSlideAfter,
+      deleteDraftSlide, regenerateDraftSlide, setAccent, setTheme,
+    ],
+  );
+
   const submitAnswer = useCallback(
     (text: string) => {
       const value = text.trim();
       if (!value || thinking) return;
+      // Once the deck exists, the chat edits the deck instead of running intake.
+      if (draftSlides.length > 0) {
+        void runDeckCommand(value);
+        return;
+      }
       // Attach the answer to the pending (last) question.
       setQuestions((qs) => {
         if (!qs.length) return qs;
@@ -305,7 +419,7 @@ export function useInterview(projectId: string): Interview {
       history.current = baseHistory;
       void advance(baseHistory, pillars);
     },
-    [thinking, questions, pillarsNow, updateForm, advance],
+    [thinking, questions, pillarsNow, updateForm, advance, draftSlides, runDeckCommand],
   );
 
   const chooseOption = useCallback((opt: InterviewOption) => submitAnswer(opt.label), [submitAnswer]);
@@ -313,41 +427,79 @@ export function useInterview(projectId: string): Interview {
   const uploadFile = useCallback(
     async (file: File) => {
       if (thinking) return;
-      setMessages((m) => [...m, { id: nextId(), role: "user", text: `📎 ${file.name}` }]);
-      const toolId = nextId();
-      setMessages((m) => [...m, { id: toolId, role: "tool", label: `Reading ${file.name}`, detail: ["parsing document…"] }]);
-      setThinking(true);
-      try {
-        const res = await extractScript(projectId, file);
-        const f = (res.form ?? {}) as Partial<IntakeFormData>;
-        const filled = Object.entries(f).filter(([, v]) => typeof v === "string" && v.trim()).map(([k]) => k);
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === toolId && msg.role === "tool"
-              ? { ...msg, label: `Read ${res.fileName ?? file.name}`, detail: filled.length ? [`extracted: ${filled.join(", ")}`] : ["no fields found"] }
-              : msg,
-          ),
-        );
-        updateForm(f);
-        const pillars: InterviewPillars = {
-          title: f.title || formRef.current.title,
-          logline: f.logline || formRef.current.logline,
-          synopsis: f.synopsis || formRef.current.synopsis,
-        };
-        const baseHistory = [...history.current, { role: "user" as const, text: `(uploaded script: ${res.fileName ?? file.name})` }];
-        history.current = baseHistory;
-        setThinking(false);
-        await advance(baseHistory, pillars);
-      } catch {
-        setThinking(false);
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === toolId && msg.role === "tool" ? { ...msg, label: `Couldn't read ${file.name}`, detail: ["try PDF, DOCX, FDX, or TXT"] } : msg,
-          ),
-        );
+      const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
+      const isDoc = /\.(pdf|docx|fdx|txt|md|rtf)$/i.test(file.name) || /pdf|word|officedocument|text/.test(file.type);
+
+      // Images / inspiration boards / references → the agent SEES them: encode, attach to the
+      // next interview turn, and let the model's real analysis drive the reply and the brief.
+      if (isImage) {
+        const previewUrl = URL.createObjectURL(file);
+        setMessages((m) => [
+          ...m,
+          { id: nextId(), role: "attachment", name: file.name, previewUrl, note: "Reference image" },
+        ]);
+        const cur = (formRef.current.visualReferences || "").trim();
+        updateForm({ visualReferences: cur ? `${cur}, ${file.name}` : file.name });
+        try {
+          const encoded = await encodeReferenceImage(file);
+          pendingImages.current = [...pendingImages.current, encoded].slice(-4);
+          const baseHistory = [
+            ...history.current,
+            { role: "user" as const, text: `(shared a reference image: ${file.name})` },
+          ];
+          history.current = baseHistory;
+          await advance(baseHistory, pillarsNow());
+        } catch {
+          setMessages((m) => [
+            ...m,
+            { id: nextId(), role: "assistant", text: `I couldn't read ${file.name} — try a PNG or JPG and I'll fold it into the look.` },
+          ]);
+        }
+        return;
       }
+
+      // Scripts / treatments / docs → extract intake fields.
+      if (isDoc) {
+        setMessages((m) => [...m, { id: nextId(), role: "attachment", name: file.name, note: "Document" }]);
+        const toolId = nextId();
+        setMessages((m) => [...m, { id: toolId, role: "tool", label: `Reading ${file.name}`, detail: ["parsing document…"] }]);
+        setThinking(true);
+        try {
+          const res = await extractScript(projectId, file);
+          const f = (res.form ?? {}) as Partial<IntakeFormData>;
+          const filled = Object.entries(f).filter(([, v]) => typeof v === "string" && v.trim()).map(([k]) => k);
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === toolId && msg.role === "tool"
+                ? { ...msg, label: `Read ${res.fileName ?? file.name}`, detail: filled.length ? [`extracted: ${filled.join(", ")}`] : ["no fields found"] }
+                : msg,
+            ),
+          );
+          updateForm(f);
+          const pillars: InterviewPillars = {
+            title: f.title || formRef.current.title,
+            logline: f.logline || formRef.current.logline,
+            synopsis: f.synopsis || formRef.current.synopsis,
+          };
+          const baseHistory = [...history.current, { role: "user" as const, text: `(uploaded script: ${res.fileName ?? file.name})` }];
+          history.current = baseHistory;
+          setThinking(false);
+          await advance(baseHistory, pillars);
+        } catch {
+          setThinking(false);
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === toolId && msg.role === "tool" ? { ...msg, label: `Couldn't read ${file.name}`, detail: ["try PDF, DOCX, FDX, or TXT"] } : msg,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Anything else → just share it in the conversation.
+      setMessages((m) => [...m, { id: nextId(), role: "attachment", name: file.name, note: "Attached" }]);
     },
-    [thinking, projectId, updateForm, advance],
+    [thinking, projectId, updateForm, advance, pillarsNow],
   );
 
   const editAssumption = useCallback(
@@ -382,6 +534,8 @@ export function useInterview(projectId: string): Interview {
     void advance(baseHistory, pillarsNow());
   }, [thinking, advance, pillarsNow]);
 
+  // Build deck — no intermediate pages. Finalise the brief, then kick off real generation
+  // RIGHT HERE; the Preview tab renders the deck as it streams in (Cloud-Design style).
   const build = useCallback(async () => {
     if (building) return;
     setBuilding(true);
@@ -396,8 +550,10 @@ export function useInterview(projectId: string): Interview {
     completeStep("identity");
     completeStep("body");
     completeStep("pitch");
-    router.push(projectRoutes.templates(projectId));
-  }, [building, projectId, updateForm, completeStep, router]);
+    approveContent();
+    initDraftSlides(); // backend recommends a template + generates content/images, streaming slides
+    setBuilding(false);
+  }, [building, projectId, updateForm, completeStep, approveContent, initDraftSlides]);
 
   return {
     messages,
@@ -409,6 +565,10 @@ export function useInterview(projectId: string): Interview {
     thinking,
     offline,
     building,
+    draftSlides,
+    designDirection,
+    generationStatus,
+    generationProgress,
     projectName,
     setProjectName,
     sendText: submitAnswer,

@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { SlideThumbnailPreview } from "@/components/slides/SlideThumbnailPreview";
 import { buildSlideFromOutline } from "@/lib/build-slides";
+import { FALLBACK_DESIGN } from "@/lib/deck-themes";
 import type { SlideType } from "@/types/slide";
 import type { Interview } from "./useInterview";
 
-// Content-only gridded canvas where the deck appears live (toolbar lives in IntakeStudio).
+// The "presentation tab". Before Build it shows a live sketch from the brief; the moment the
+// director hits Build deck, real generation streams the actual slides in here — same page, no
+// intermediate routes (Cloud-Design style).
 const OUTLINE: { slideType: SlideType; title: string }[] = [
   { slideType: "cover", title: "Cover" },
   { slideType: "logline", title: "Logline" },
@@ -15,37 +18,42 @@ const OUTLINE: { slideType: SlideType; title: string }[] = [
   { slideType: "visual_aesthetic", title: "Visual Aesthetic" },
 ];
 
+const DOT_BG: CSSProperties = {
+  backgroundColor: "rgb(10 10 12)",
+  backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)",
+  backgroundSize: "22px 22px",
+};
+
 export function DeckCanvas({ iv }: { iv: Interview }) {
   const form = iv.form;
+  const real = iv.draftSlides;
+  const generating = iv.generationStatus === "generating";
+
+  // The deck's live design — driven by the agent (e.g. "make it blue") and applied to every
+  // slide instantly via CSS vars. useInterview folds any agent override into iv.designDirection.
+  const effectiveDesign = iv.designDirection ?? FALLBACK_DESIGN;
+
   const hasContent = Boolean(
     (form.title || "").trim() || (form.logline || "").trim() || (form.synopsis || "").trim(),
   );
-  const slides = useMemo(
+  const sketch = useMemo(
     () => OUTLINE.map((o, i) => buildSlideFromOutline({ ...o, purpose: "" }, form, i + 1, `canvas-${o.slideType}`)),
     [form],
   );
 
-  return (
-    <div
-      className="relative h-full overflow-y-auto"
-      style={{
-        backgroundColor: "rgb(10 10 12)",
-        backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)",
-        backgroundSize: "22px 22px",
-      }}
-    >
-      {!hasContent ? (
-        <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-          <SketchIcon />
-          <p className="font-display text-2xl text-text-muted">Your deck will appear here</p>
-          <p className="max-w-sm text-sm text-text-dim">
-            Describe your film on the left or fill the brief. As your story comes together, the
-            slides take shape here — live.
-          </p>
+  // 1 ── Real generated deck (after Build): stream slides as they arrive.
+  if (real.length > 0) {
+    return (
+      <div className="relative h-full overflow-y-auto" style={DOT_BG}>
+        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-glass bg-black/50 px-6 py-2.5 backdrop-blur">
+          <span className="text-xs text-text-dim">
+            {generating
+              ? `Building your deck… ${Math.round(iv.generationProgress)}%`
+              : `Deck ready · ${real.length} slides · ask the producer to restyle`}
+          </span>
         </div>
-      ) : (
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-          {slides.map((s, i) => (
+          {real.map((s, i) => (
             <figure key={s.id} className="group">
               <figcaption className="mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-dim">
                 <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-3 text-[9px] text-text-muted">
@@ -54,7 +62,60 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
                 {s.title}
               </figcaption>
               <div className="overflow-hidden rounded-xl border border-border-glass shadow-2xl shadow-black/40 ring-1 ring-white/5 transition-transform group-hover:-translate-y-0.5">
-                <SlideThumbnailPreview slide={s} />
+                <SlideThumbnailPreview slide={s} designDirection={effectiveDesign} />
+              </div>
+            </figure>
+          ))}
+          {generating && <p className="py-3 text-center text-xs text-text-dim">Adding more slides…</p>}
+          <div className="h-4" />
+        </div>
+      </div>
+    );
+  }
+
+  // 2 ── Generation kicked off but no slides yet: progress state.
+  if (generating) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-5 px-8 text-center" style={DOT_BG}>
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-neon/30 border-t-accent-neon" />
+        <div>
+          <p className="font-display text-2xl text-text-muted">Building your deck…</p>
+          <p className="mt-1 text-sm text-text-dim">Drafting story, copy, and cinematic art. This can take up to a minute.</p>
+        </div>
+        <div className="h-1.5 w-64 overflow-hidden rounded-full bg-surface-3">
+          <div
+            className="h-full rounded-full bg-accent-neon transition-[width] duration-500"
+            style={{ width: `${Math.max(6, Math.round(iv.generationProgress))}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // 3 ── Pre-build: live sketch from the brief, or empty state.
+  return (
+    <div className="relative h-full overflow-y-auto" style={DOT_BG}>
+      {!hasContent ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+          <SketchIcon />
+          <p className="font-display text-2xl text-text-muted">Your deck will appear here</p>
+          <p className="max-w-sm text-sm text-text-dim">
+            Describe your film on the left or fill the brief. When you hit{" "}
+            <span className="text-text-primary">Build deck</span>, the real slides generate right here.
+          </p>
+        </div>
+      ) : (
+        <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
+          {sketch.map((s, i) => (
+            <figure key={s.id} className="group">
+              <figcaption className="mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-dim">
+                <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-3 text-[9px] text-text-muted">
+                  {i + 1}
+                </span>
+                {s.title}
+              </figcaption>
+              <div className="overflow-hidden rounded-xl border border-border-glass shadow-2xl shadow-black/40 ring-1 ring-white/5 transition-transform group-hover:-translate-y-0.5">
+                <SlideThumbnailPreview slide={s} designDirection={effectiveDesign} />
               </div>
             </figure>
           ))}

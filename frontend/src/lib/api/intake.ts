@@ -69,10 +69,18 @@ export interface InterviewPillars {
   meta?: Record<string, unknown>;
 }
 
+/** A reference image shared this turn (downscaled client-side, base64 without data-URL prefix). */
+export interface InterviewImage {
+  name: string;
+  mediaType: string;
+  data: string;
+}
+
 export interface InterviewTurnInput {
   history: InterviewHistoryTurn[];
   pillars: InterviewPillars;
   brief?: InterviewBrief | null;
+  images?: InterviewImage[];
 }
 
 /** One interview turn — returns the agent's next message + ask, the cumulative brief, and a ready flag. */

@@ -8,7 +8,8 @@ export const projectRoutes = {
   setupBody: (id: string) => `/projects/${id}/setup/body`,
   setupPitch: (id: string) => `/projects/${id}/setup/pitch`,
   templates: (id: string) => `/projects/${id}/templates`,
-  editor: (id: string) => `/projects/${id}/editor`,
+  /** The deck lives in the Presentation tab of the intake studio. */
+  editor: (id: string) => `/projects/${id}/setup/identity`,
   /** @deprecated content-preview step removed; templates now generates straight to the editor */
   preview: (id: string) => `/projects/${id}/templates`,
   /** @deprecated use setupIdentity */
@@ -19,8 +20,8 @@ export const projectRoutes = {
   outline: (id: string) => `/projects/${id}/templates`,
   content: (id: string) => `/projects/${id}/templates`,
   design: (id: string) => `/projects/${id}/templates`,
-  review: (id: string) => `/projects/${id}/editor`,
-  export: (id: string) => `/projects/${id}/editor`,
+  review: (id: string) => `/projects/${id}/setup/identity`,
+  export: (id: string) => `/projects/${id}/setup/identity`,
   step: (id: string, stepId: WorkflowStepId) => {
     const map: Record<WorkflowStepId, (projectId: string) => string> = {
       intake: projectRoutes.setupIdentity,
