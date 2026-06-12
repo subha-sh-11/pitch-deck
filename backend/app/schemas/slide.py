@@ -56,12 +56,40 @@ class Slide(CamelModel):
     ai_rationale: str | None = None
 
 
+class SlideComment(CamelModel):
+    id: str
+    author: str
+    text: str
+    created_at: str
+
+
+class SlideMeta(CamelModel):
+    """Editor metadata persisted alongside content (frontend top-level Slide fields)."""
+
+    speaker_notes: str | None = None
+    transition: str | None = None
+    appearance: dict | None = None
+    comments: list[SlideComment] | None = None
+
+
 class SlideUpdate(CamelModel):
     """Manual edits from the slide editor."""
 
     title: str | None = None
     content: SlideContent | None = None
     status: SlideStatus | None = None
+    meta: SlideMeta | None = None
+
+
+class SlideCreate(CamelModel):
+    """A slide added from the editor (insert/duplicate)."""
+
+    slide_type: SlideType
+    slide_number: int  # desired 1-based position; existing slides at/after shift down
+    title: str | None = None
+    purpose: str | None = None
+    content: SlideContent | None = None
+    layout: SlideLayout | None = None
 
 
 class DeckOutlineItem(CamelModel):

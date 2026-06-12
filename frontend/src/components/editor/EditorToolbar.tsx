@@ -99,7 +99,7 @@ export function EditorToolbar({
         </Button>
 
         {toastMessage && (
-          <span className="ml-2 text-[11px] text-[#22d3ee]">{toastMessage}</span>
+          <span className="ml-2 text-[11px] text-[#f8c9a4]">{toastMessage}</span>
         )}
       </div>
     </div>

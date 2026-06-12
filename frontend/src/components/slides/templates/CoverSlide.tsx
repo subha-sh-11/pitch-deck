@@ -3,10 +3,14 @@ import { SlideFrame } from "../shared/SlideFrame";
 
 interface CoverSlideProps {
   content: SlideContent;
+  /** Layout variant from the backend layout agent: "full_bleed" | "centered_title". */
+  layout?: string;
 }
 
-export function CoverSlide({ content }: CoverSlideProps) {
+export function CoverSlide({ content, layout }: CoverSlideProps) {
   const hasImage = Boolean(content.imageUrl);
+  const centered = layout === "centered_title";
+
   return (
     <SlideFrame imageUrl={content.imageUrl}>
       {/* Base tint — translucent over a generated image, full gradient without one */}
@@ -21,44 +25,80 @@ export function CoverSlide({ content }: CoverSlideProps) {
       {/* Spotlight from top-right */}
       <div className="absolute -right-20 -top-20 h-[70%] w-[60%] rounded-full bg-gradient-to-bl from-[#22d3ee]/12 via-[#A9C6C7]/8 to-transparent blur-3xl" />
 
-      {/* Bottom-left scrim so the title stays legible over imagery */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-black/90 via-black/35 to-transparent" />
+      {/* Scrim so the title stays legible over imagery */}
+      <div
+        className={`absolute inset-0 ${
+          centered
+            ? "bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.55),rgba(0,0,0,0.25)_60%,transparent)]"
+            : "bg-gradient-to-tr from-black/90 via-black/35 to-transparent"
+        }`}
+      />
 
       {/* Vignette */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)]" />
 
-      {/* Accent line (story palette) */}
-      <div
-        className="absolute bottom-[28%] left-[8%] h-px w-24"
-        style={{ background: "linear-gradient(to right, var(--slide-accent), transparent)" }}
-      />
-
-      {/* Content — bottom-left */}
-      <div className="relative z-10 flex h-full flex-col justify-end p-[8%] pb-[10%]">
-        <div className="max-w-[58%]">
-          <h1 className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]">
+      {centered ? (
+        /* ── Centered typographic cover (no image, or symmetric design language) ── */
+        <div className="relative z-10 flex h-full flex-col items-center justify-center p-[8%] text-center">
+          <div
+            className="mb-6 h-px w-24"
+            style={{ background: "linear-gradient(to right, transparent, var(--slide-accent), transparent)" }}
+          />
+          <h1 className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]">
             {content.heading}
           </h1>
           {content.subheading && (
             <p
-              className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic"
+              className="mt-4 font-display text-[clamp(1rem,2vw,1.6rem)] italic"
               style={{ color: "var(--slide-accent)" }}
             >
               {content.subheading}
             </p>
           )}
           {content.body && (
-            <p className="mt-4 max-w-lg text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]">
+            <p className="mt-5 max-w-xl text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]">
               {content.body}
             </p>
           )}
-          {content.footer && (
-            <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
-              {content.footer}
-            </p>
-          )}
+          <div
+            className="mt-6 h-px w-24"
+            style={{ background: "linear-gradient(to right, transparent, var(--slide-accent), transparent)" }}
+          />
         </div>
-      </div>
+      ) : (
+        /* ── Full-bleed hero cover (image-led, bottom-left) ── */
+        <>
+          <div
+            className="absolute bottom-[28%] left-[8%] h-px w-24"
+            style={{ background: "linear-gradient(to right, var(--slide-accent), transparent)" }}
+          />
+          <div className="relative z-10 flex h-full flex-col justify-end p-[8%] pb-[10%]">
+            <div className="max-w-[58%]">
+              <h1 className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]">
+                {content.heading}
+              </h1>
+              {content.subheading && (
+                <p
+                  className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic"
+                  style={{ color: "var(--slide-accent)" }}
+                >
+                  {content.subheading}
+                </p>
+              )}
+              {content.body && (
+                <p className="mt-4 max-w-lg text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]">
+                  {content.body}
+                </p>
+              )}
+              {content.footer && (
+                <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
+                  {content.footer}
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Corner badge */}
       <div

@@ -90,7 +90,7 @@
   overflow: hidden;
 }
 
-/* Cursor-following cyan spotlight (replaces fixed corner orbs) */
+/* Cursor-following warm peach spotlight (replaces fixed corner orbs) */
 .landing-cursor-spotlight {
   position: absolute;
   inset: 0;
@@ -98,8 +98,8 @@
   --my: 35%;
   background: radial-gradient(
     circle  min(42vw, 420px) at var(--mx) var(--my),
-    rgba(34, 211, 238, 0.16) 0%,
-    rgba(34, 211, 238, 0.05) 38%,
+    rgba(248, 201, 164, 0.16) 0%,
+    rgba(248, 201, 164, 0.05) 38%,
     transparent 68%
   );
 }
@@ -110,7 +110,7 @@
   inset: 0;
   background: radial-gradient(
     ellipse 80% 50% at 50% -10%,
-    rgba(34, 211, 238, 0.04),
+    rgba(248, 201, 164, 0.04),
     transparent 55%
   );
   pointer-events: none;
@@ -207,9 +207,9 @@
   background: linear-gradient(
     105deg,
     #e4e4e7 0%,
-    #22d3ee 25%,
+    #f8c9a4 25%,
     #fafafa 50%,
-    #a3e635 75%,
+    #eaae83 75%,
     #e4e4e7 100%
   );
   background-size: 200% auto;
@@ -220,15 +220,15 @@
 }
 
 .landing-badge-pill {
-  background: rgba(34, 211, 238, 0.08);
-  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: rgba(248, 201, 164, 0.08);
+  border: 1px solid rgba(248, 201, 164, 0.28);
   backdrop-filter: blur(8px);
 }
 
 .landing-btn-primary {
-  background: linear-gradient(135deg, #22d3ee 0%, #0891b2 100%);
+  background: linear-gradient(135deg, #f8c9a4 0%, #eaae83 100%);
   box-shadow:
-    0 4px 24px rgba(34, 211, 238, 0.4),
+    0 4px 24px rgba(248, 201, 164, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   transition:
     transform 0.25s ease,
@@ -238,8 +238,8 @@
 .landing-btn-primary:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 8px 36px rgba(34, 211, 238, 0.55),
-    0 0 40px rgba(163, 230, 53, 0.15),
+    0 8px 36px rgba(248, 201, 164, 0.55),
+    0 0 40px rgba(248, 201, 164, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
@@ -255,8 +255,8 @@
 
 .landing-btn-glass:hover {
   background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(34, 211, 238, 0.4);
-  box-shadow: 0 0 24px rgba(34, 211, 238, 0.12);
+  border-color: rgba(248, 201, 164, 0.4);
+  box-shadow: 0 0 24px rgba(248, 201, 164, 0.12);
   transform: translateY(-2px);
 }
 
@@ -269,18 +269,18 @@
 
 .landing-feature-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(34, 211, 238, 0.3);
+  border-color: rgba(248, 201, 164, 0.3);
   box-shadow:
     0 20px 48px rgba(0, 0, 0, 0.45),
-    0 0 32px rgba(34, 211, 238, 0.08);
+    0 0 32px rgba(248, 201, 164, 0.08);
 }
 
 .landing-workflow-line {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(34, 211, 238, 0.45),
-    rgba(163, 230, 53, 0.25),
+    rgba(248, 201, 164, 0.45),
+    rgba(248, 201, 164, 0.25),
     transparent
   );
   animation: landing-gradient-shift 3s ease-in-out infinite;
@@ -299,7 +299,7 @@
   .landing-cursor-spotlight {
     background: radial-gradient(
       circle  min(42vw, 420px) at 50% 35%,
-      rgba(34, 211, 238, 0.1) 0%,
+      rgba(248, 201, 164, 0.1) 0%,
       transparent 68%
     );
   }

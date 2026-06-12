@@ -33,6 +33,8 @@ class Slide(Base, TimestampMixin):
     layout: Mapped[dict | None] = mapped_column(JSONB)   # SlideLayout
     # draft | approved | needs_review
     status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
+    # Editor metadata: speakerNotes, transition, appearance, comments (frontend Slide shape)
+    meta: Mapped[dict | None] = mapped_column(JSONB)
     ai_rationale: Mapped[str | None] = mapped_column(Text)
     # The generated image bound to this slide (cover/world/character/mood), if any
     image_asset_id: Mapped[uuid.UUID | None] = mapped_column(

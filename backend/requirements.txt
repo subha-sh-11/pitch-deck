@@ -34,13 +34,17 @@ anthropic>=0.25.0
 openai>=1.30.0
 httpx>=0.27.0
 
-# ─── AI providers (image generation — both optional) ───
+# ─── AI providers (image generation — all optional) ───
 fal-client>=0.4.0
 replicate>=0.25.0
+google-auth>=2.23.0          # Vertex AI Imagen (service-account OAuth)
+requests>=2.31.0             # transport used by google-auth's token refresh
 
 # ─── Ingestion (script parsing) ───────────────────────────────────
 python-docx>=1.1.0
 pdfplumber>=0.11.0
+pypdfium2>=4.28.0            # render scanned-PDF pages to images (OCR fallback)
+Pillow>=10.2.0               # page image encoding for the vision-model OCR
 
 # ─── Export ───────────────────────────────────────────────────────
 python-pptx>=0.6.23

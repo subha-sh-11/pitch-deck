@@ -16,7 +16,7 @@ interface BadgeProps {
 
 const variantClasses: Record<BadgeVariant, string> = {
   default: "bg-surface-2 text-text-primary border-border-glass",
-  neon: "bg-accent-neon/15 text-accent-neon border-accent-neon/30 shadow-[0_0_12px_rgba(34,211,238,0.08)]",
+  neon: "bg-accent-neon/15 text-accent-neon border-accent-neon/30 shadow-[0_0_12px_rgba(248,201,164,0.08)]",
   success: "bg-[#a3e635]/15 text-[#a3e635] border-[#a3e635]/30",
   warning: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   muted: "bg-surface-3 text-text-muted border-border-glass",

@@ -39,9 +39,21 @@ _PROVIDER_KEY = {
 }
 
 
+def _vertex_configured() -> bool:
+    """Vertex needs a project + a service account (explicit path or ambient ADC)."""
+    import os
+
+    return bool(
+        settings.vertex_project
+        and (settings.vertex_credentials_path or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+    )
+
+
 def _resolve_image_provider() -> str:
     if settings.ai_offline or settings.image_provider == "none":
         return "placeholder"
+    if settings.image_provider == "vertex":
+        return "vertex" if _vertex_configured() else "placeholder"
     if settings.image_provider in _PROVIDER_KEY:
         has_key = bool(getattr(settings, _PROVIDER_KEY[settings.image_provider]))
         return settings.image_provider if has_key else "placeholder"
@@ -50,6 +62,8 @@ def _resolve_image_provider() -> str:
         return "fal"
     if settings.replicate_api_token:
         return "replicate"
+    if _vertex_configured():
+        return "vertex"
     if settings.google_api_key:
         return "google"
     return "placeholder"
@@ -73,6 +87,8 @@ def generate_image(
             return _replicate_generate(prompt, w, h, negative_prompt, seed)
         if provider == "google":
             return _google_generate(prompt, aspect_ratio, seed)
+        if provider == "vertex":
+            return _vertex_generate(prompt, aspect_ratio, seed)
     except Exception as exc:  # noqa: BLE001
         _log.warning("image provider %r failed, using placeholder: %s", provider, exc)
     return _placeholder(prompt or label, w, h, palette or [])
@@ -115,6 +131,64 @@ def _google_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageR
     mime = preds[0].get("mimeType", "image/png")
     return ImageResult(data, mime, {"provider": "google", "model": model,
                                     "prompt": prompt, "seed": seed})
+
+
+def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
+    """Google Imagen via Vertex AI (:predict). Auth is a service-account OAuth token, NOT an API key.
+
+    Credentials come from VERTEX_CREDENTIALS_PATH (a service-account .json) or, if that's blank,
+    ambient Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS / gcloud auth).
+    """
+    import base64
+
+    import os
+
+    import google.auth
+    import httpx
+    from google.auth.transport.requests import Request
+
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+    # google.auth.default() transparently handles BOTH a service-account key and a gcloud ADC
+    # (authorized_user) file — so we route any explicit path through GOOGLE_APPLICATION_CREDENTIALS
+    # rather than assuming a service-account file.
+    if settings.vertex_credentials_path:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.vertex_credentials_path
+    creds, _ = google.auth.default(scopes=scopes)
+    creds.refresh(Request())  # mints / refreshes the short-lived access token
+
+    loc, proj, model = settings.vertex_location, settings.vertex_project, settings.vertex_image_model
+    url = (
+        f"https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}"
+        f"/locations/{loc}/publishers/google/models/{model}:predict"
+    )
+    params: dict[str, Any] = {
+        "sampleCount": 1,
+        "aspectRatio": _GOOGLE_ASPECT.get(aspect_ratio, "16:9"),
+    }
+    if seed is not None:
+        # Vertex only allows a fixed seed when the watermark is off.
+        params["seed"] = seed
+        params["addWatermark"] = False
+    body = {"instances": [{"prompt": prompt}], "parameters": params}
+    headers = {"Authorization": f"Bearer {creds.token}"}
+    # ADC (user) credentials need a billing/quota project; this header replaces
+    # `gcloud auth application-default set-quota-project`.
+    if proj:
+        headers["x-goog-user-project"] = proj
+    resp = httpx.post(url, json=body, headers=headers, timeout=120)
+    if resp.status_code >= 400:
+        # Surface Vertex's actual message (SERVICE_DISABLED / PERMISSION_DENIED / billing / model).
+        raise ValueError(f"Vertex {resp.status_code} ({model} @ {loc}, proj={proj}): {resp.text[:600]}")
+    payload = resp.json()
+    preds = payload.get("predictions", [])
+    if not preds or "bytesBase64Encoded" not in preds[0]:
+        reason = preds[0].get("raiFilteredReason", "") if preds and isinstance(preds[0], dict) else ""
+        raise ValueError(
+            f"Vertex Imagen returned no image (safety filter?): {reason or str(payload)[:200]}"
+        )
+    data = base64.b64decode(preds[0]["bytesBase64Encoded"])
+    mime = preds[0].get("mimeType", "image/png")
+    return ImageResult(data, mime, {"provider": "vertex", "model": model, "prompt": prompt, "seed": seed})
 
 
 def _fetch_bytes(url: str) -> tuple[bytes, str]:

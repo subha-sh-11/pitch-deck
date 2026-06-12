@@ -7,8 +7,8 @@
 @import "../styles/preview-page-refined.css";
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #0c0a09;
+  --foreground: #f7f3ee;
 }
 
 body {
@@ -23,5 +23,5 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(34, 211, 238, 0.28) transparent;
+  scrollbar-color: rgba(248, 201, 164, 0.28) transparent;
 }

@@ -280,12 +280,7 @@ export function DesignBrief({ iv }: { iv: Interview }) {
 
         <div className="mt-3 space-y-8">
           {visibleSections.map((s) => (
-            <section
-              key={s.id}
-              className={`rounded-xl transition-shadow ${
-                s.field && recent.has(s.field) ? "ring-1 ring-accent-neon/40" : ""
-              }`}
-            >
+            <section key={s.id} className="rounded-xl">
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-text-primary">{s.title}</h2>
                 <div className="flex shrink-0 items-center gap-2">
@@ -313,7 +308,7 @@ export function DesignBrief({ iv }: { iv: Interview }) {
                   }}
                   rows={4}
                   placeholder="Tell me the story…"
-                  className="mt-3 w-full resize-y rounded-xl border border-border-glass bg-surface-2/50 px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-dim focus:border-accent-neon/50 focus:outline-none"
+                  className="mt-3 w-full resize-none rounded-xl border border-border-glass bg-surface-2/50 px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-dim focus:border-accent-neon/50 focus:outline-none"
                 />
               )}
 
@@ -419,7 +414,9 @@ const STATUS_STYLES: Record<FieldStatus, { label: string; cls: string }> = {
 };
 
 function StatusPill({ status }: { status: FieldStatus | null }) {
-  if (!status) return null;
+  // "Suggested" is intentionally not shown — the agent's suggestion is already
+  // reflected by the highlighted chips / pre-filled value, so a badge is redundant.
+  if (!status || status === "suggested") return null;
   const s = STATUS_STYLES[status];
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide ${s.cls}`}>
@@ -457,7 +454,7 @@ function CapturedField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={Math.min(6, Math.max(2, Math.ceil((value.length || 1) / 56)))}
-          className="mt-1 w-full resize-y bg-transparent text-sm leading-relaxed text-text-primary focus:outline-none"
+          className="mt-1 w-full resize-none bg-transparent text-sm leading-relaxed text-text-primary focus:outline-none"
         />
       ) : (
         <input

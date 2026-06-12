@@ -78,14 +78,28 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
     framing = {
-        "cover": "ultra-wide cinematic establishing key art of the setting, no people",
-        "story_world": "wide environmental establishing shot of the setting, no people",
-        "visual_aesthetic": "cinematic mood and texture study, atmospheric, no people",
-        "character": "evocative cinematic character mood study, dramatic lighting, silhouette, "
+        "cover": "epic theatrical key art, ultra-wide anamorphic establishing frame of the setting, "
+                 "monumental scale, layered depth from foreground texture to distant horizon, "
+                 "dramatic golden-hour or low-key lighting, no people",
+        "logline": "wide poetic frame of the story's world at a charged moment, strong single light "
+                   "source, generous negative space for overlaid text, no people",
+        "story_world": "rich environmental establishing shot of the setting, lived-in detail and "
+                       "atmosphere, volumetric light, deep perspective leading the eye, no people",
+        "visual_aesthetic": "painterly cinematic mood and texture study, macro surfaces and light "
+                            "play, atmospheric haze, evocative abstract composition, no people",
+        "character": "evocative cinematic character mood study, dramatic rim lighting, expressive "
+                     "silhouette against the story's world, shallow depth of field, "
                      "no real-person likeness",
-        "supporting_characters": "evocative cinematic mood study, dramatic lighting, silhouette, "
-                                 "no real-person likeness",
-    }.get(slide_type, "cinematic atmospheric frame, no people")
+        "supporting_characters": "evocative cinematic ensemble mood study, dramatic chiaroscuro "
+                                 "lighting, layered silhouettes, no real-person likeness",
+        "genre_blend": "moody atmospheric frame that fuses the story's genres in one image, "
+                       "contrast of light and shadow, no people",
+        "directors_vision": "contemplative wide cinematic frame, a single strong visual metaphor "
+                            "from the story's world, painterly light, no people",
+        "contact": "quiet minimal cinematic frame of the story's world at dusk, restrained and "
+                   "elegant, generous negative space, no people",
+    }.get(slide_type, "cinematic atmospheric frame of the story's world, soft directional light, "
+                      "texture and depth, generous negative space for text, no people")
 
     parts = [framing]
     if subject:
@@ -95,5 +109,8 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
         parts.append(visual_style)
     if palette:
         parts.append(f"color palette: {palette}")
-    parts.append("film still, professional cinematography, no text, no watermark, no logo")
+    parts.append(
+        "film still, shot on anamorphic lenses, professional cinematography, subtle film grain, "
+        "consistent color grade, no text, no watermark, no logo"
+    )
     return ", ".join(p for p in parts if p)

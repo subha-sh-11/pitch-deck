@@ -11,13 +11,17 @@ import {
   type ReactNode,
 } from "react";
 import {
+  createSlide as apiCreateSlide,
+  deleteSlide as apiDeleteSlide,
   generateDeck,
   getDeck,
   getProject,
   pollJob,
   regenerateSlide as apiRegenerateSlide,
+  reorderSlides as apiReorderSlides,
   saveIntake,
   updateSlide,
+  type SlideMetaInput,
 } from "@/lib/api";
 import { buildSlideFromOutline, renumberSlides } from "@/lib/build-slides";
 import { DEFAULT_SLIDE_APPEARANCE } from "@/lib/slide-appearance";
@@ -61,11 +65,15 @@ const DEFAULT_STATE: SetupWizardState = {
 
 const isBackendSlide = (id: string) => !id.startsWith("local-");
 
+/** Sync state of editor changes against the backend. */
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 interface SetupWizardContextValue extends SetupWizardState {
   projectId: string;
   designDirection: DesignDirection | null;
   generationProgress: number;
   generationError: string | null;
+  saveStatus: SaveStatus;
   updateForm: (patch: Partial<IntakeFormData>) => void;
   completeStep: (step: SetupStepId) => void;
   isStepComplete: (step: SetupStepId) => boolean;
@@ -124,13 +132,78 @@ export function SetupWizardProvider({
   const [designDirection, setDesignDirection] = useState<DesignDirection | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [hydrated, setHydrated] = useState(false);
 
   const stateRef = useRef<SetupWizardState>(DEFAULT_STATE);
   const generatingRef = useRef(false);
   stateRef.current = state;
 
-  // Hydrate: sessionStorage (working copy w/ appearance/comments) + backend (intake + deck).
+  // ── Save tracking: every backend write goes through trackSave so the UI can
+  // show saving / saved / error instead of silently losing edits. ──
+  const pendingSavesRef = useRef(0);
+  const trackSave = useCallback((p: Promise<unknown>) => {
+    pendingSavesRef.current += 1;
+    setSaveStatus("saving");
+    p.then(() => {
+      pendingSavesRef.current -= 1;
+      if (pendingSavesRef.current <= 0) setSaveStatus("saved");
+    }).catch(() => {
+      pendingSavesRef.current -= 1;
+      setSaveStatus("error");
+    });
+  }, []);
+
+  // Debounced per-slide meta saves (notes typing etc. → one PATCH, not one per keystroke).
+  const metaTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const metaQueueRef = useRef(new Map<string, SlideMetaInput & { title?: string }>());
+  const queueMetaSave = useCallback(
+    (id: string, patch: SlideMetaInput & { title?: string }) => {
+      if (!isBackendSlide(id)) return;
+      metaQueueRef.current.set(id, { ...(metaQueueRef.current.get(id) ?? {}), ...patch });
+      const existing = metaTimersRef.current.get(id);
+      if (existing) clearTimeout(existing);
+      metaTimersRef.current.set(
+        id,
+        setTimeout(() => {
+          metaTimersRef.current.delete(id);
+          const queued = metaQueueRef.current.get(id);
+          metaQueueRef.current.delete(id);
+          if (!queued) return;
+          const { title, ...meta } = queued;
+          trackSave(
+            updateSlide(id, {
+              ...(title !== undefined ? { title } : {}),
+              ...(Object.keys(meta).length > 0 ? { meta } : {}),
+            }),
+          );
+        }, 600),
+      );
+    },
+    [trackSave],
+  );
+
+  // Debounced slide-order sync: rapid up/down moves collapse into one reorder call.
+  const reorderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queueReorder = useCallback(() => {
+    if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
+    reorderTimerRef.current = setTimeout(() => {
+      reorderTimerRef.current = null;
+      const ids = stateRef.current.draftSlides.map((s) => s.id).filter(isBackendSlide);
+      if (ids.length > 0) trackSave(apiReorderSlides(projectId, ids));
+    }, 800);
+  }, [projectId, trackSave]);
+
+  useEffect(() => {
+    const metaTimers = metaTimersRef.current;
+    return () => {
+      metaTimers.forEach((t) => clearTimeout(t));
+      if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
+    };
+  }, []);
+
+  // Hydrate: sessionStorage (transient wizard state) + backend (intake + deck).
+  // The backend deck is the source of truth for slides now that edits persist.
   useEffect(() => {
     let cancelled = false;
     const saved = loadState(projectId);
@@ -156,11 +229,14 @@ export function SetupWizardProvider({
           const deck = await getDeck(projectId);
           if (!cancelled && deck) {
             setDesignDirection(deck.designDirection ?? null);
-            if (deck.slides?.length && (!saved || saved.draftSlides.length === 0)) {
+            if (deck.slides?.length) {
               setState((prev) => ({
                 ...prev,
                 draftSlides: deck.slides,
                 generationStatus: "ready",
+                // A persisted deck means content exists — keep the editor
+                // reachable from any browser, not just the one that built it.
+                contentApproved: true,
               }));
             }
           }
@@ -265,13 +341,15 @@ export function SetupWizardProvider({
         ),
       }));
       if (isBackendSlide(id)) {
-        void updateSlide(id, {
-          ...(title !== undefined ? { title } : {}),
-          content: contentPatch as SlideContent,
-        }).catch(() => {});
+        trackSave(
+          updateSlide(id, {
+            ...(title !== undefined ? { title } : {}),
+            content: contentPatch as SlideContent,
+          }),
+        );
       }
     },
-    [],
+    [trackSave],
   );
 
   const updateDraftSlideMeta = useCallback(
@@ -281,6 +359,12 @@ export function SetupWizardProvider({
         appearance?: Partial<SlideAppearance>;
       },
     ) => {
+      // Compute the merged appearance up front so we persist the full object,
+      // not just the partial patch (the backend stores appearance atomically).
+      const current = stateRef.current.draftSlides.find((s) => s.id === id);
+      const nextAppearance = patch.appearance
+        ? { ...(current?.appearance ?? DEFAULT_SLIDE_APPEARANCE), ...patch.appearance }
+        : undefined;
       setState((prev) => ({
         ...prev,
         draftSlides: prev.draftSlides.map((s) =>
@@ -295,63 +379,111 @@ export function SetupWizardProvider({
             : s,
         ),
       }));
-      // Title is the only meta field the backend persists.
-      if (patch.title !== undefined && isBackendSlide(id)) {
-        void updateSlide(id, { title: patch.title }).catch(() => {});
-      }
+      // Persist everything the editor can change (debounced per slide).
+      const metaPatch: SlideMetaInput & { title?: string } = {};
+      if (patch.title !== undefined) metaPatch.title = patch.title;
+      if (patch.speakerNotes !== undefined) metaPatch.speakerNotes = patch.speakerNotes;
+      if (patch.transition !== undefined) metaPatch.transition = patch.transition;
+      if (patch.comments !== undefined) metaPatch.comments = patch.comments;
+      if (nextAppearance) metaPatch.appearance = nextAppearance;
+      if (Object.keys(metaPatch).length > 0) queueMetaSave(id, metaPatch);
     },
-    [],
+    [queueMetaSave],
   );
 
-  const addSlideComment = useCallback((id: string, text: string) => {
-    const comment: SlideComment = {
-      id: `comment-${Date.now()}`,
-      author: "You",
-      text,
-      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-    setState((prev) => ({
-      ...prev,
-      draftSlides: prev.draftSlides.map((s) =>
-        s.id === id ? { ...s, comments: [...(s.comments ?? []), comment] } : s,
-      ),
-    }));
-  }, []);
+  const addSlideComment = useCallback(
+    (id: string, text: string) => {
+      const comment: SlideComment = {
+        id: `comment-${Date.now()}`,
+        author: "You",
+        text,
+        createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      const current = stateRef.current.draftSlides.find((s) => s.id === id);
+      const nextComments = [...(current?.comments ?? []), comment];
+      setState((prev) => ({
+        ...prev,
+        draftSlides: prev.draftSlides.map((s) =>
+          s.id === id ? { ...s, comments: [...(s.comments ?? []), comment] } : s,
+        ),
+      }));
+      queueMetaSave(id, { comments: nextComments });
+    },
+    [queueMetaSave],
+  );
 
-  const deleteDraftSlide = useCallback((id: string): boolean => {
-    let deleted = false;
-    setState((prev) => {
-      if (prev.draftSlides.length <= 1) return prev;
-      deleted = true;
-      return { ...prev, draftSlides: renumberSlides(prev.draftSlides.filter((s) => s.id !== id)) };
-    });
-    return deleted;
-  }, []);
+  const deleteDraftSlide = useCallback(
+    (id: string): boolean => {
+      let deleted = false;
+      setState((prev) => {
+        if (prev.draftSlides.length <= 1) return prev;
+        deleted = true;
+        return {
+          ...prev,
+          draftSlides: renumberSlides(prev.draftSlides.filter((s) => s.id !== id)),
+        };
+      });
+      if (deleted && isBackendSlide(id)) {
+        trackSave(apiDeleteSlide(id));
+      }
+      return deleted;
+    },
+    [trackSave],
+  );
 
-  const insertDraftSlideAfter = useCallback((index: number, slideType: SlideType) => {
-    setState((prev) => {
+  const insertDraftSlideAfter = useCallback(
+    (index: number, slideType: SlideType) => {
       const meta =
         ADDABLE_SLIDE_TYPES.find((t) => t.slideType === slideType) ??
         ADDABLE_SLIDE_TYPES[ADDABLE_SLIDE_TYPES.length - 1];
-      const newSlide = buildSlideFromOutline(meta, prev.formData, index + 2);
-      // mark as a client-only slide so we don't issue backend updates for it
-      newSlide.id = `local-${newSlide.id}`;
-      const next = [...prev.draftSlides];
-      next.splice(index + 1, 0, newSlide);
-      return { ...prev, draftSlides: renumberSlides(next) };
-    });
-  }, []);
+      const newSlide = buildSlideFromOutline(meta, stateRef.current.formData, index + 2);
+      // optimistic local id; swapped for the backend id once the create lands
+      const localId = `local-${newSlide.id}`;
+      newSlide.id = localId;
+      setState((prev) => {
+        const next = [...prev.draftSlides];
+        next.splice(index + 1, 0, newSlide);
+        return { ...prev, draftSlides: renumberSlides(next) };
+      });
+      // Persist: create the slide on the backend, then adopt its real id so
+      // subsequent edits to it also persist.
+      trackSave(
+        apiCreateSlide(projectId, {
+          slideType,
+          slideNumber: index + 2,
+          title: newSlide.title,
+          purpose: newSlide.purpose,
+          content: newSlide.content,
+          layout: newSlide.layout,
+        }).then((saved) => {
+          setState((prev) => ({
+            ...prev,
+            draftSlides: prev.draftSlides.map((s) =>
+              s.id === localId ? { ...s, id: saved.id } : s,
+            ),
+          }));
+          // Make sure the server's order matches what the editor shows.
+          queueReorder();
+        }),
+      );
+    },
+    [projectId, trackSave, queueReorder],
+  );
 
-  const moveDraftSlide = useCallback((index: number, direction: "up" | "down") => {
-    setState((prev) => {
-      const target = direction === "up" ? index - 1 : index + 1;
-      if (target < 0 || target >= prev.draftSlides.length) return prev;
-      const next = [...prev.draftSlides];
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
-      return { ...prev, draftSlides: renumberSlides(next) };
-    });
-  }, []);
+  const moveDraftSlide = useCallback(
+    (index: number, direction: "up" | "down") => {
+      setState((prev) => {
+        const target = direction === "up" ? index - 1 : index + 1;
+        if (target < 0 || target >= prev.draftSlides.length) return prev;
+        const next = [...prev.draftSlides];
+        const [item] = next.splice(index, 1);
+        next.splice(target, 0, item);
+        return { ...prev, draftSlides: renumberSlides(next) };
+      });
+      queueReorder();
+    },
+    [queueReorder],
+  );
 
   const regenerateDraftSlide = useCallback(async (id: string) => {
     if (!isBackendSlide(id)) return;
@@ -388,6 +520,7 @@ export function SetupWizardProvider({
       designDirection,
       generationProgress,
       generationError,
+      saveStatus,
       updateForm,
       completeStep,
       isStepComplete,
@@ -408,11 +541,12 @@ export function SetupWizardProvider({
       getEditorSlides,
     }),
     [
-      state, projectId, designDirection, generationProgress, generationError, updateForm,
-      completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary, setScriptUploaded,
-      initDraftSlides, updateDraftSlide, updateDraftSlideMeta, addSlideComment, deleteDraftSlide,
-      insertDraftSlideAfter, moveDraftSlide, regenerateDraftSlide, regenerateAllDraftSlides,
-      setGenerationStatus, approveContent, getEditorSlides,
+      state, projectId, designDirection, generationProgress, generationError, saveStatus,
+      updateForm, completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary,
+      setScriptUploaded, initDraftSlides, updateDraftSlide, updateDraftSlideMeta,
+      addSlideComment, deleteDraftSlide, insertDraftSlideAfter, moveDraftSlide,
+      regenerateDraftSlide, regenerateAllDraftSlides, setGenerationStatus, approveContent,
+      getEditorSlides,
     ],
   );
 

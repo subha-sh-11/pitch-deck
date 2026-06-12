@@ -20,17 +20,44 @@ _log = get_logger("llm")
 
 # ─── Provider backends (each returns raw assistant text) ───
 
-def _anthropic_complete(system: str, prompt: str, model: str, max_tokens: int, temp: float) -> str:
+def _anthropic_complete(system: str, prompt: str, model: str, max_tokens: int, temp: float,
+                        images: list[dict] | None = None,
+                        context: str | None = None) -> str:
     from anthropic import Anthropic  # lazy
 
     client = Anthropic(api_key=settings.anthropic_api_key)
+    system_blocks: list[dict] = [
+        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+    ]
+    if context:
+        # Large per-project material (e.g. an uploaded script) goes in its own cached
+        # block: later turns of the same conversation hit the prompt cache instead of
+        # re-paying for the whole document.
+        system_blocks.append(
+            {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}}
+        )
+    if images:
+        content: Any = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.get("mediaType", "image/jpeg"),
+                    "data": img["data"],
+                },
+            }
+            for img in images
+        ]
+        content.append({"type": "text", "text": prompt})
+    else:
+        content = prompt
     msg = client.messages.create(
         model=model,
         max_tokens=max_tokens,
         temperature=temp,
-        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        system=system_blocks,
         messages=[
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": content},
             {"role": "assistant", "content": "{"},  # prefill to force JSON object
         ],
     )
@@ -38,21 +65,37 @@ def _anthropic_complete(system: str, prompt: str, model: str, max_tokens: int, t
     return "{" + text
 
 
-def _openai_complete(system: str, prompt: str, model: str, max_tokens: int, temp: float) -> str:
+def _openai_complete(system: str, prompt: str, model: str, max_tokens: int, temp: float,
+                     images: list[dict] | None = None,
+                     context: str | None = None) -> str:
     from openai import OpenAI  # lazy
 
     kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
     if settings.openai_base_url:
         kwargs["base_url"] = settings.openai_base_url
     client = OpenAI(**kwargs)
+    full_system = f"{system}\n\n{context}" if context else system
+    if images:
+        user_content: Any = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{img.get('mediaType', 'image/jpeg')};base64,{img['data']}",
+                },
+            }
+            for img in images
+        ]
+        user_content.append({"type": "text", "text": prompt})
+    else:
+        user_content = prompt
     resp = client.chat.completions.create(
         model=model,
         max_tokens=max_tokens,
         temperature=temp,
         response_format={"type": "json_object"},
         messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": full_system},
+            {"role": "user", "content": user_content},
         ],
     )
     return resp.choices[0].message.content or ""
@@ -118,6 +161,8 @@ def complete_json(
     max_tokens: int | None = None,
     temperature: float | None = None,
     use_cache: bool = True,
+    images: list[dict] | None = None,
+    context: str | None = None,
 ) -> Any:
     """Return parsed JSON from the active LLM, with caching and deterministic fallback.
 
@@ -132,7 +177,12 @@ def complete_json(
 
     name, fn, default_model = resolved
     use_model = model or settings.llm_model or default_model
-    key = cache_key(f"llm:{name}:{use_model}:{cache_prefix}", {"s": system, "p": prompt})
+    img_sig = [img.get("data", "")[:64] for img in images] if images else []
+    ctx_sig = f"{len(context)}:{context[:128]}" if context else ""
+    key = cache_key(
+        f"llm:{name}:{use_model}:{cache_prefix}",
+        {"s": system, "p": prompt, "i": img_sig, "c": ctx_sig},
+    )
     if use_cache:
         hit = cache_get(key)
         if hit is not None:
@@ -146,6 +196,8 @@ def complete_json(
             use_model,
             max_tokens or settings.llm_max_tokens,
             settings.llm_temperature if temperature is None else temperature,
+            images,
+            context,
         )
         result = _extract_json(raw)
         _log.info("llm[%s] %s/%s ok", cache_prefix, name, use_model)

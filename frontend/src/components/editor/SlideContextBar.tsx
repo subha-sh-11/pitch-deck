@@ -30,7 +30,7 @@ export function SlideContextBar({
 
   const appearance = slide.appearance ?? {
     styleVariant: "cinematic",
-    accentColor: "#22d3ee",
+    accentColor: "#f8c9a4",
     backgroundKey: "default",
   };
 

@@ -31,7 +31,7 @@ export function MarketingShell({ children }: MarketingShellProps) {
             </Link>
             <Link
               href={projectRoutes.newProject()}
-              className="landing-btn-primary rounded-xl px-5 py-2.5 text-sm font-semibold text-zinc-950"
+              className="rounded-xl border border-border-glass bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-accent-neon/40 hover:bg-white/[0.07]"
             >
               New Project
             </Link>
