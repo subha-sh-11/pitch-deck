@@ -115,6 +115,10 @@ _SYSTEM = (
     "their want, their wound, their contradiction.\n"
     "  • EMOTIONAL THROUGHLINE: echo the story's central tension in the slide's language so the "
     "deck reads as one voice from cover to contact.\n"
+    "  • DIRECTOR'S INSTRUCTIONS: if the prompt contains a DIRECTOR'S INSTRUCTIONS section, it "
+    "comes from the filmmaker reviewing this exact slide — follow it faithfully (tone, angle, "
+    "what to emphasise or drop), even over the rules above, while staying grounded in the "
+    "story material.\n"
     "Return ONLY a JSON object using ONLY the fields relevant to this slide type, from this set: "
     "heading (required), subheading, body, bullets (array of strings), items (array of {title, "
     "description}), characters (array of {name, role, description}), comps (array of {title, note}), "
@@ -158,23 +162,58 @@ def _ensure_renderable(slide_type: str, result: dict, fb: dict) -> dict:
     return result
 
 
-def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None) -> dict:
+def _label(camel: str) -> str:
+    """genreBlend → Genre Blend."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", camel).replace("_", " ").title()
+
+
+def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
+                   design: dict | None, instructions: str | None = None) -> str:
+    """The exact user-prompt string sent to the LLM for this slide — plain English,
+    so the workshop's prompt panel reads like a brief, not code. Generation uses
+    this same text verbatim."""
+    design = design or {}
+    lines: list[str] = [
+        f'Write the "{title}" slide of this film pitch deck.',
+        "",
+        f"SLIDE TYPE: {slide_type.replace('_', ' ')}",
+        f"PURPOSE: {purpose or '—'}",
+    ]
+    if design.get("cinematicTone"):
+        lines.append(f"DECK TONE: {design['cinematicTone']}")
+    if design.get("mood"):
+        lines.append(f"DECK MOOD: {design['mood']}")
+    visual_style = design.get("visualStyle")
+    if isinstance(visual_style, list) and visual_style:
+        lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style))
+
+    lines += ["", "STORY MATERIAL (ground every word strictly in this; never invent):"]
+    for key, value in (intake or {}).items():
+        if isinstance(value, str) and value.strip():
+            lines.append(f"- {_label(key)}: {value.strip()}")
+
+    if instructions and instructions.strip():
+        lines += ["", "DIRECTOR'S INSTRUCTIONS (follow faithfully):", instructions.strip()]
+
+    return "\n".join(lines)
+
+
+def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None,
+        instructions: str | None = None, raw_prompt: str | None = None) -> dict:
+    """``raw_prompt``: a director-edited prompt from the workshop — used VERBATIM as
+    the user prompt (the system prompt stays), bypassing composition and cache."""
     fb = content_fallback(slide_type, intake, design)
-    payload = {
-        "slideType": slide_type,
-        "title": title,
-        "purpose": purpose,
-        "intake": intake,
-        # Deck-wide design language so the copy speaks with the same voice as the visuals.
-        "deckTone": (design or {}).get("cinematicTone"),
-        "deckMood": (design or {}).get("mood"),
-        "visualStyle": (design or {}).get("visualStyle"),
-    }
+    edited = bool(raw_prompt and raw_prompt.strip())
+    prompt = raw_prompt.strip() if edited else compose_prompt(
+        slide_type, title, purpose, intake, design, instructions
+    )
     result = complete_json(
         system=_SYSTEM,
-        prompt="Write this slide:\n" + json.dumps(payload, ensure_ascii=False),
+        prompt=prompt,
         fallback=lambda: fb,
         cache_prefix=f"content:{slide_type}",
+        # Director-touched prompts must be fresh, never a cache hit of the old copy.
+        use_cache=not (edited or (instructions and instructions.strip())),
     )
     if not isinstance(result, dict):
         result = fb

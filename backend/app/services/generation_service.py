@@ -221,6 +221,81 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             raise
 
 
+def prepare_deck(project_id: str, template_id: str | None = None,
+                 job_id: str | None = None) -> dict:
+    """Workshop step 1: story analysis + design + outline → EMPTY slides, no batch generation.
+
+    Each slide is created as a pending shell carrying its purpose and a pre-seeded,
+    EDITABLE image prompt in meta.prompts. The director then generates/refines each
+    slide individually in the workshop before assembling the deck.
+    """
+    with session_scope() as session:
+        try:
+            _set_job(session, job_id, status="running", progress=5)
+            project = session.get(Project, uuid.UUID(project_id))
+            if project is None:
+                raise ValueError("project not found")
+            intake = project.intake_form or {}
+            pdict = _project_dict(project)
+            log.info("> Preparing workshop deck for %r", project.title)
+
+            project.story_analysis = story_agent.run(pdict, intake)
+            _set_job(session, job_id, progress=25)
+
+            design = design_agent.run(pdict, intake)
+            design_clean = {k: v for k, v in design.items() if k != "_register"}
+            _set_job(session, job_id, progress=55)
+
+            tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
+            outline = outline_agent.run(pdict, intake, tpl)
+            _set_job(session, job_id, progress=80)
+
+            existing = session.execute(
+                select(Deck).where(Deck.project_id == project.id)
+            ).scalars().all()
+            for d in existing:
+                session.execute(delete(Slide).where(Slide.deck_id == d.id))
+                session.delete(d)
+            session.flush()
+            deck = Deck(project_id=project.id, template_id=tpl, slide_count=len(outline),
+                        status="workshop", design_direction=design)
+            session.add(deck)
+            session.flush()
+
+            for item in outline:
+                seeded_prompt = image_prompt_agent.build_prompt(
+                    item["slide_type"], intake, design_clean
+                ) if image_prompt_agent.slide_needs_image(item["slide_type"]) else ""
+                slide = Slide(
+                    deck_id=deck.id,
+                    slide_number=item["slide_number"],
+                    slide_type=item["slide_type"],
+                    title=item["title"],
+                    purpose=item["purpose"],
+                    # Minimal shell so the preview renders something before generation.
+                    content={"heading": item["title"]},
+                    layout=layout_agent.run(item["slide_type"], design_clean),
+                    meta={
+                        "appearance": layout_agent.appearance_for(item["slide_type"], design_clean),
+                        "prompts": {"contentInstructions": "", "imagePrompt": seeded_prompt},
+                        "generated": False,
+                    },
+                    status="draft",
+                )
+                session.add(slide)
+            project.status = "content"  # deck-bearing: the studio now fetches the skeleton
+            project.last_edited_at = datetime.datetime.now(datetime.timezone.utc)
+            session.flush()
+            result = {"deckId": str(deck.id), "slideCount": len(outline)}
+            log.info(">> Workshop skeleton ready - %s (%d slides)", deck.id, len(outline))
+            _set_job(session, job_id, status="succeeded", progress=100, result=result)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[x] Deck preparation failed: %s", exc)
+            _set_job(session, job_id, status="failed", error=str(exc))
+            raise
+
+
 def run_design(project_id: str, job_id: str | None = None) -> dict:
     with session_scope() as session:
         project = session.get(Project, uuid.UUID(project_id))
@@ -239,7 +314,14 @@ def run_design(project_id: str, job_id: str | None = None) -> dict:
         return design_clean
 
 
-def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool = True) -> dict:
+def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool = True,
+                     instructions: str | None = None, image_prompt: str | None = None,
+                     content_prompt: str | None = None) -> dict:
+    """(Re)generate one slide. Workshop parameters (all editable in the UI):
+    ``instructions`` — director's notes the content agent must follow for this slide;
+    ``image_prompt`` — an edited diffusion prompt, used verbatim instead of the built one;
+    ``content_prompt`` — the FULL writer prompt, edited in the workshop, used verbatim.
+    """
     with session_scope() as session:
         slide = session.get(Slide, uuid.UUID(slide_id))
         if slide is None:
@@ -254,7 +336,8 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         # generation never wipes good art).
         old = dict(slide.content or {})
         new_content = content_agent.run(
-            slide.slide_type, slide.title or "", slide.purpose or "", intake, design
+            slide.slide_type, slide.title or "", slide.purpose or "", intake, design,
+            instructions=instructions, raw_prompt=content_prompt,
         )
         for key in ("edits", "textBoxes", "imageUrl", "imagePrompt"):
             if old.get(key) is not None:
@@ -266,8 +349,17 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         slide.status = "draft"
         session.flush()
 
+        used_image_prompt = ""
         if with_image and image_prompt_agent.slide_needs_image(slide.slide_type):
-            prompt, img = _generate_slide_image(slide.slide_type, intake, design)
+            # An edited prompt from the workshop wins over the auto-built one.
+            used_image_prompt = (image_prompt or "").strip() or image_prompt_agent.build_prompt(
+                slide.slide_type, intake, design
+            )
+            img = generate_image(
+                used_image_prompt,
+                aspect_ratio=image_prompt_agent.aspect_for(slide.slide_type),
+                palette=design.get("palette"),
+            )
             had_image = bool((slide.content or {}).get("imageUrl"))
             if img.meta.get("provider") == "placeholder" and had_image:
                 # Provider unavailable (e.g. quota/429) — keep the existing image.
@@ -276,8 +368,20 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
                     slide.id,
                 )
             else:
-                _persist_image(session, project.id, slide, prompt, img)
+                _persist_image(session, project.id, slide, used_image_prompt, img)
             session.flush()
+
+        # Record what was used so the workshop can show + re-edit it next time.
+        meta = dict(slide.meta or {})
+        meta["prompts"] = {
+            **(meta.get("prompts") or {}),
+            "contentInstructions": instructions or "",
+            **({"contentPrompt": content_prompt.strip()} if content_prompt and content_prompt.strip() else {}),
+            **({"imagePrompt": used_image_prompt} if used_image_prompt else {}),
+        }
+        meta["generated"] = True
+        slide.meta = meta
+        session.flush()
 
         log.info("✓ regenerated slide %s (%s)", slide.id, slide.slide_type)
         from app.services.deck_service import serialize_slide
@@ -286,38 +390,65 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         return result
 
 
-def regenerate_slide_image(slide_id: str) -> dict:
+def regenerate_slide_image(slide_id: str, job_id: str | None = None,
+                           prompt: str | None = None) -> dict:
     """Regenerate ONLY the slide image (text/content/edits untouched).
 
+    ``prompt``: an edited diffusion prompt from the workshop — used verbatim when given;
+    otherwise the prompt is rebuilt from intake + design.
     Returns {slide, ok, reason}. On provider failure (e.g. quota/429 → placeholder)
     the existing image is kept and ok=False so the UI can tell the user.
     """
     from app.services.deck_service import serialize_slide
 
     with session_scope() as session:
-        slide = session.get(Slide, uuid.UUID(slide_id))
-        if slide is None:
-            raise ValueError("slide not found")
-        deck = session.get(Deck, slide.deck_id)
-        project = session.get(Project, deck.project_id)
-        intake = project.intake_form or {}
-        design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
+        try:
+            _set_job(session, job_id, status="running", progress=10)
+            slide = session.get(Slide, uuid.UUID(slide_id))
+            if slide is None:
+                raise ValueError("slide not found")
+            deck = session.get(Deck, slide.deck_id)
+            project = session.get(Project, deck.project_id)
+            intake = project.intake_form or {}
+            design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
 
-        if not image_prompt_agent.slide_needs_image(slide.slide_type):
-            return {"slide": serialize_slide(slide), "ok": False, "reason": "slide_has_no_image"}
+            if not image_prompt_agent.slide_needs_image(slide.slide_type):
+                result = {"slide": serialize_slide(slide), "ok": False, "reason": "slide_has_no_image"}
+                _set_job(session, job_id, status="succeeded", progress=100, result=result)
+                return result
 
-        prompt, img = _generate_slide_image(slide.slide_type, intake, design)
-        if img.meta.get("provider") == "placeholder":
-            log.warning("image regen unavailable (placeholder) for slide %s", slide.id)
-            return {
-                "slide": serialize_slide(slide),
-                "ok": False,
-                "reason": "image_provider_unavailable",
-            }
-        _persist_image(session, project.id, slide, prompt, img)
-        session.flush()
-        log.info("✓ regenerated image for slide %s (%s)", slide.id, slide.slide_type)
-        return {"slide": serialize_slide(slide), "ok": True}
+            use_prompt = (prompt or "").strip()
+            if use_prompt:
+                img = generate_image(
+                    use_prompt,
+                    aspect_ratio=image_prompt_agent.aspect_for(slide.slide_type),
+                    palette=design.get("palette"),
+                )
+            else:
+                use_prompt, img = _generate_slide_image(slide.slide_type, intake, design)
+            if img.meta.get("provider") == "placeholder":
+                log.warning("image regen unavailable (placeholder) for slide %s", slide.id)
+                result = {
+                    "slide": serialize_slide(slide),
+                    "ok": False,
+                    "reason": "image_provider_unavailable",
+                }
+                _set_job(session, job_id, status="succeeded", progress=100, result=result)
+                return result
+            _persist_image(session, project.id, slide, use_prompt, img)
+            # Remember the prompt that made this image so the workshop can re-edit it.
+            meta = dict(slide.meta or {})
+            meta["prompts"] = {**(meta.get("prompts") or {}), "imagePrompt": use_prompt}
+            slide.meta = meta
+            session.flush()
+            log.info("✓ regenerated image for slide %s (%s)", slide.id, slide.slide_type)
+            result = {"slide": serialize_slide(slide), "ok": True}
+            _set_job(session, job_id, status="succeeded", progress=100, result=result)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[x] Slide image regeneration failed: %s", exc)
+            _set_job(session, job_id, status="failed", error=str(exc))
+            raise
 
 
 def generate_project_image(project_id: str, slide_type: str) -> dict:

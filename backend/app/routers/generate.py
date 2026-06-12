@@ -8,6 +8,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,10 +73,38 @@ async def generate_design(
     return _job_payload(job, mode)
 
 
+class WorkshopGenerateBody(BaseModel):
+    """Workshop per-slide generation — every knob the director can turn is editable."""
+
+    instructions: str | None = None   # director's notes to the content agent
+    imagePrompt: str | None = None    # edited diffusion prompt (used verbatim)
+    contentPrompt: str | None = None  # the FULL writer prompt, edited (used verbatim)
+    withImage: bool = True
+
+
+class ImageRegenBody(BaseModel):
+    prompt: str | None = None         # edited diffusion prompt; blank → rebuild from design
+
+
+@router.post("/{project_id}/deck/prepare", dependencies=[Depends(ai_generate_limit)])
+async def prepare_deck(
+    background_tasks: BackgroundTasks,
+    template_id: str | None = Query(default=None),
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Workshop step 1: analysis + design + outline → empty slide shells (no batch generation)."""
+    job = await _create_job(db, project.id, "prepare_deck", {"templateId": template_id})
+    mode = await dispatch("prepare_deck", generation_service.prepare_deck,
+                          [str(project.id), template_id, str(job.id)], background_tasks)
+    return _job_payload(job, mode)
+
+
 @router.post("/slides/{slide_id}/regenerate", dependencies=[Depends(image_generate_limit)])
 async def regenerate_slide(
     slide_id: uuid.UUID,
     background_tasks: BackgroundTasks,
+    body: WorkshopGenerateBody | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     slide = await db.get(Slide, slide_id)
@@ -83,8 +112,60 @@ async def regenerate_slide(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
     deck = await db.get(Deck, slide.deck_id)
     job = await _create_job(db, deck.project_id, "content", {"slideId": str(slide_id)})
+    b = body or WorkshopGenerateBody()
     mode = await dispatch("regenerate_slide", generation_service.regenerate_slide,
-                          [str(slide_id), str(job.id)], background_tasks)
+                          [str(slide_id), str(job.id), b.withImage,
+                           b.instructions, b.imagePrompt, b.contentPrompt],
+                          background_tasks)
+    return _job_payload(job, mode)
+
+
+@router.get("/slides/{slide_id}/prompt")
+async def get_slide_prompt(
+    slide_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """The EXACT prompt that will be sent to the LLM to prepare this slide.
+
+    Returns the director-edited version when one is stored; otherwise composes the
+    real prompt from the slide brief + intake + design — same code path generation uses.
+    """
+    from app.ai.agents import content as content_agent
+
+    slide = await db.get(Slide, slide_id)
+    if slide is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
+    deck = await db.get(Deck, slide.deck_id)
+    project = await db.get(Project, deck.project_id)
+    meta = dict(slide.meta or {})
+    stored = ((meta.get("prompts") or {}).get("contentPrompt") or "").strip()
+    if stored:
+        return {"prompt": stored, "source": "edited"}
+    design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
+    prompt = content_agent.compose_prompt(
+        slide.slide_type, slide.title or "", slide.purpose or "",
+        project.intake_form or {}, design,
+        instructions=(meta.get("prompts") or {}).get("contentInstructions"),
+    )
+    return {"prompt": prompt, "source": "composed"}
+
+
+@router.post("/slides/{slide_id}/image", dependencies=[Depends(image_generate_limit)])
+async def workshop_slide_image(
+    slide_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    body: ImageRegenBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Workshop: regenerate ONLY the image as a tracked job, optionally from an edited prompt."""
+    slide = await db.get(Slide, slide_id)
+    if slide is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
+    deck = await db.get(Deck, slide.deck_id)
+    job = await _create_job(db, deck.project_id, "image", {"slideId": str(slide_id)})
+    mode = await dispatch("regenerate_slide_image", generation_service.regenerate_slide_image,
+                          [str(slide_id), str(job.id), (body.prompt if body else None)],
+                          background_tasks)
     return _job_payload(job, mode)
 
 

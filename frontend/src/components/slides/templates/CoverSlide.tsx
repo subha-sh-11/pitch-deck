@@ -120,16 +120,6 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
         </>
       )}
 
-      {/* Corner badge */}
-      <div
-        className="absolute right-[8%] top-[8%] rounded border bg-black/40 px-2 py-1 text-[9px] uppercase tracking-widest backdrop-blur-sm"
-        style={{
-          borderColor: "color-mix(in srgb, var(--slide-accent) 35%, transparent)",
-          color: "var(--slide-accent)",
-        }}
-      >
-        Feature Pitch
-      </div>
     </SlideFrame>
   );
 }

@@ -94,6 +94,9 @@ def serialize_slide(slide: Slide) -> dict:
         "transition": meta.get("transition"),
         "appearance": meta.get("appearance"),
         "comments": meta.get("comments"),
+        # Workshop: the editable prompts behind this slide + whether it's been generated
+        "prompts": meta.get("prompts"),
+        "generated": bool(meta.get("generated")),
     }
 
 

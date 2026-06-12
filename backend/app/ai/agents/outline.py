@@ -46,6 +46,15 @@ _EXTRA_CANDIDATES: list[dict] = [
      "purpose": "The filmmaker's voice, in their own words.", "fields": ("directorStatement",)},
     {"slide_type": "generic", "title": "Themes",
      "purpose": "The ideas the story explores beneath the plot.", "fields": ("themes",)},
+    {"slide_type": "generic", "title": "Mood Board",
+     "purpose": "The visual references anchoring the film's look.",
+     "fields": ("moodBoard", "visualReferences")},
+    {"slide_type": "generic", "title": "Character Dynamics",
+     "purpose": "The relationships that carry the story's emotional spine.",
+     "fields": ("characterDynamics",)},
+    {"slide_type": "generic", "title": "The Ask",
+     "purpose": "What the production needs from this room, plainly.",
+     "fields": ("budget", "pitchingTo")},
 ]
 
 
@@ -161,7 +170,11 @@ def _sanitize(result: dict, fallback: list[dict], target: int) -> list[dict]:
     contacts = [s for s in out if s["slide_type"] == "contact"]
     if contacts and out[-1]["slide_type"] != "contact":
         out = [s for s in out if s["slide_type"] != "contact"] + [contacts[0]]
-    if not (_MIN_SLIDES <= len(out) <= _MAX_SLIDES) or abs(len(out) - target) > 3:
+    # The director chose the count — accept at most ±1 from the LLM, and only keep its
+    # version when it lands at least as close to the target as the deterministic outline.
+    if not (_MIN_SLIDES <= len(out) <= _MAX_SLIDES):
+        return fallback
+    if abs(len(out) - target) > 1 or abs(len(out) - target) > abs(len(fallback) - target):
         return fallback
     return [{**item, "slide_number": n + 1} for n, item in enumerate(out)]
 
