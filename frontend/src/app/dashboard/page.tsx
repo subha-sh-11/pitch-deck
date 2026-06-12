@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MarketingShell } from "@/components/layout/MarketingShell";
 import { ProjectCard } from "@/features/dashboard/ProjectCard";
-import { listProjects } from "@/lib/api";
+import { API_BASE_URL, listProjects } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import { getProgressFromStatus } from "@/lib/workflow";
 import type { Project, ProjectStatus } from "@/types/project";
@@ -67,7 +67,7 @@ export default function DashboardPage() {
 
         {error && (
           <p className="mb-6 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-            {error} — is the backend running?
+            {error} — is the backend running at {API_BASE_URL}?
           </p>
         )}
 

@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     openai_default_model: str = "gpt-4o"
 
     # ─── Image generation (provider-agnostic) ───
-    # auto | fal | replicate | google | none ("none" => palette-driven SVG placeholder)
+    # auto | fal | replicate | google | vertex | none ("none" => palette-driven SVG placeholder)
     image_provider: str = "auto"
     fal_key: str = ""
     fal_image_model: str = "fal-ai/flux/schnell"
@@ -77,7 +77,6 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     # imagen-4.0-fast-generate-001 (fast) | imagen-4.0-generate-001 | imagen-4.0-ultra-generate-001
     google_image_model: str = "imagen-4.0-fast-generate-001"
-
     # ─── Vertex AI (Google Cloud) Imagen — uses a SERVICE ACCOUNT, not an API key ───
     # Set IMAGE_PROVIDER=vertex. Auth via service-account JSON: either VERTEX_CREDENTIALS_PATH
     # or the standard GOOGLE_APPLICATION_CREDENTIALS env var (leave path blank to use that).

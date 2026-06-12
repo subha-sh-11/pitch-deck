@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame } from "../shared/SlideFrame";
 
 interface CoverSlideProps {
@@ -44,21 +45,29 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
             className="mb-6 h-px w-24"
             style={{ background: "linear-gradient(to right, transparent, var(--slide-accent), transparent)" }}
           />
-          <h1 className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]">
-            {content.heading}
-          </h1>
+          <EditableText
+            k="heading"
+            as="h1"
+            className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]"
+            value={content.heading}
+          />
           {content.subheading && (
-            <p
+            <EditableText
+              k="subheading"
+              as="p"
               className="mt-4 font-display text-[clamp(1rem,2vw,1.6rem)] italic"
               style={{ color: "var(--slide-accent)" }}
-            >
-              {content.subheading}
-            </p>
+              value={content.subheading}
+            />
           )}
           {content.body && (
-            <p className="mt-5 max-w-xl text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]">
-              {content.body}
-            </p>
+            <EditableText
+              k="body"
+              as="p"
+              multiline
+              className="mt-5 max-w-xl whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]"
+              value={content.body}
+            />
           )}
           <div
             className="mt-6 h-px w-24"
@@ -74,26 +83,37 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
           />
           <div className="relative z-10 flex h-full flex-col justify-end p-[8%] pb-[10%]">
             <div className="max-w-[58%]">
-              <h1 className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]">
-                {content.heading}
-              </h1>
+              <EditableText
+                k="heading"
+                as="h1"
+                className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]"
+                value={content.heading}
+              />
               {content.subheading && (
-                <p
+                <EditableText
+                  k="subheading"
+                  as="p"
                   className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic"
                   style={{ color: "var(--slide-accent)" }}
-                >
-                  {content.subheading}
-                </p>
+                  value={content.subheading}
+                />
               )}
               {content.body && (
-                <p className="mt-4 max-w-lg text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]">
-                  {content.body}
-                </p>
+                <EditableText
+                  k="body"
+                  as="p"
+                  multiline
+                  className="mt-4 max-w-lg whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]"
+                  value={content.body}
+                />
               )}
               {content.footer && (
-                <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
-                  {content.footer}
-                </p>
+                <EditableText
+                  k="footer"
+                  as="p"
+                  className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]"
+                  value={content.footer}
+                />
               )}
             </div>
           </div>

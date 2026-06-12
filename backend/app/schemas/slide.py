@@ -26,7 +26,9 @@ class MoodBlock(CamelModel):
 
 
 class SlideContent(CamelModel):
-    heading: str
+    # Optional so the editor can PATCH partial content (e.g. just `edits` or `textBoxes`)
+    # without resending the whole object; the update endpoint merges onto existing content.
+    heading: str | None = None
     subheading: str | None = None
     body: str | None = None
     bullets: list[str] | None = None
@@ -37,6 +39,9 @@ class SlideContent(CamelModel):
     # Extension: generated image bound to this slide (backend-only; prototype ignores it)
     image_url: str | None = None
     image_prompt: str | None = None
+    # PPT-style editor: per-element overrides + free-form text boxes (opaque pass-through).
+    edits: dict | None = None
+    text_boxes: list[dict] | None = None
 
 
 class SlideLayout(CamelModel):

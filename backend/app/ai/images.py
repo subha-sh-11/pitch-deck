@@ -58,6 +58,8 @@ def _resolve_image_provider() -> str:
         has_key = bool(getattr(settings, _PROVIDER_KEY[settings.image_provider]))
         return settings.image_provider if has_key else "placeholder"
     # auto
+    if settings.vertex_project:
+        return "vertex"
     if settings.fal_key:
         return "fal"
     if settings.replicate_api_token:
@@ -85,10 +87,10 @@ def generate_image(
             return _fal_generate(prompt, w, h, negative_prompt, seed)
         if provider == "replicate":
             return _replicate_generate(prompt, w, h, negative_prompt, seed)
-        if provider == "google":
-            return _google_generate(prompt, aspect_ratio, seed)
         if provider == "vertex":
             return _vertex_generate(prompt, aspect_ratio, seed)
+        if provider == "google":
+            return _google_generate(prompt, aspect_ratio, seed)
     except Exception as exc:  # noqa: BLE001
         _log.warning("image provider %r failed, using placeholder: %s", provider, exc)
     return _placeholder(prompt or label, w, h, palette or [])

@@ -41,6 +41,41 @@ export interface SlideContent {
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
+  /** PPT-style editing: per-element overrides keyed by a stable element key. */
+  edits?: Record<string, SlideElementEdit>;
+  /** PPT-style editing: free-form text boxes the user added anywhere on the slide. */
+  textBoxes?: SlideTextBox[];
+}
+
+/** Override applied to a built-in template text element (inline editing + drag + restyle). */
+export interface SlideElementEdit {
+  /** Replacement text (when the user edits the copy in place). */
+  text?: string;
+  /** Drag offset as a percentage of slide width/height (container-query units). */
+  dxPct?: number;
+  dyPct?: number;
+  /** Text color override. */
+  color?: string;
+  /** Multiplier on the element's font size (0.5–2). */
+  fontScale?: number;
+  /** Hide this element. */
+  hidden?: boolean;
+}
+
+/** A free-form text box placed anywhere on the slide (PowerPoint-style). */
+export interface SlideTextBox {
+  id: string;
+  text: string;
+  /** Position + width as a percentage of the slide (container-query units). */
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  /** Font size in cqw units (≈ % of slide width). */
+  fontSize: number;
+  color?: string;
+  align?: "left" | "center" | "right";
+  bold?: boolean;
+  italic?: boolean;
 }
 
 export interface SlideLayout {

@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import ingest
 from app.ai.agents import intake_extract
 from app.ai.templates import recommend_template
+from app.core.config import settings
 from app.core.db import get_db
-from app.models import Project, User
+from app.core.storage import store_asset
+from app.models import Asset, Project, User
 from app.routers.deps import get_current_owner, get_owned_project
 from app.schemas.intake import IntakeExtractResult, IntakeFormData, IntakeUpdate
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectSummary, ProjectUpdate
@@ -17,6 +19,15 @@ from app.services import project_service
 
 # Reject uploads larger than this before reading them into memory.
 _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
+# Accepted image uploads (slide image replacement) → file extension.
+_IMAGE_MIME_EXT = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -103,10 +114,50 @@ async def extract_intake(
     return IntakeExtractResult(file_name=filename, form=form, filled_fields=filled)
 
 
+@router.post("/{project_id}/assets/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Store a user-uploaded image and return its served URL (for slide image replacement)."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file.")
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 15 MB).")
+    mime = (file.content_type or "").lower()
+    ext = _IMAGE_MIME_EXT.get(mime)
+    if ext is None:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "Unsupported image type. Use PNG, JPG, WEBP, or GIF.",
+        )
+
+    asset = Asset(
+        project_id=project.id,
+        kind="upload_ref",
+        storage_key="",
+        mime=mime,
+        generation_meta={"source": "user_upload"},
+    )
+    db.add(asset)
+    await db.flush()  # assign asset.id
+    key = f"{project.id}/uploads/{asset.id}.{ext}"
+    stored = await run_in_threadpool(store_asset, key, data, mime)
+    asset.storage_key = key
+    asset.generation_meta = {**(asset.generation_meta or {}), "stored_in_s3": stored.stored_in_s3}
+    await db.commit()
+
+    url = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
+    return {"url": url}
+
+
 @router.delete("/{project_id}", status_code=204)
 async def delete_project(
     project: Project = Depends(get_owned_project),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db),                   
+      
 ):
     # FK cascade removes decks, slides, assets, and generation jobs.
     await db.delete(project)

@@ -43,6 +43,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     saveStatus,
     deleteDraftSlide,
     insertDraftSlideAfter,
+    duplicateDraftSlide,
     moveDraftSlide,
     regenerateDraftSlide,
     updateDraftSlide,
@@ -84,6 +85,7 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
       saveStatus={saveStatus}
       onDeleteSlide={deleteDraftSlide}
       onInsertAfter={insertDraftSlideAfter}
+      onDuplicateSlide={duplicateDraftSlide}
       onMoveSlide={moveDraftSlide}
       onRegenerateSlide={regenerateDraftSlide}
       onUpdateSlide={updateDraftSlide}

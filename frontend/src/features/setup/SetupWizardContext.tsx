@@ -91,6 +91,7 @@ interface SetupWizardContextValue extends SetupWizardState {
   addSlideComment: (id: string, text: string) => void;
   deleteDraftSlide: (id: string) => boolean;
   insertDraftSlideAfter: (index: number, slideType: SlideType) => void;
+  duplicateDraftSlide: (index: number) => void;
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
   regenerateDraftSlide: (id: string) => Promise<void>;
   regenerateAllDraftSlides: () => Promise<void>;
@@ -470,6 +471,21 @@ export function SetupWizardProvider({
     [projectId, trackSave, queueReorder],
   );
 
+  const duplicateDraftSlide = useCallback((index: number) => {
+    setState((prev) => {
+      const src = prev.draftSlides[index];
+      if (!src) return prev;
+      // Deep clone so the copy carries the image, text edits, and free text boxes,
+      // while staying fully independent. Client-only id (not persisted to the backend).
+      const clone: Slide = structuredClone(src);
+      clone.id = `local-dup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      clone.comments = [];
+      const next = [...prev.draftSlides];
+      next.splice(index + 1, 0, clone);
+      return { ...prev, draftSlides: renumberSlides(next) };
+    });
+  }, []);
+
   const moveDraftSlide = useCallback(
     (index: number, direction: "up" | "down") => {
       setState((prev) => {
@@ -533,6 +549,7 @@ export function SetupWizardProvider({
       addSlideComment,
       deleteDraftSlide,
       insertDraftSlideAfter,
+      duplicateDraftSlide,
       moveDraftSlide,
       regenerateDraftSlide,
       regenerateAllDraftSlides,
@@ -544,7 +561,7 @@ export function SetupWizardProvider({
       state, projectId, designDirection, generationProgress, generationError, saveStatus,
       updateForm, completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary,
       setScriptUploaded, initDraftSlides, updateDraftSlide, updateDraftSlideMeta,
-      addSlideComment, deleteDraftSlide, insertDraftSlideAfter, moveDraftSlide,
+      addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
       regenerateDraftSlide, regenerateAllDraftSlides, setGenerationStatus, approveContent,
       getEditorSlides,
     ],

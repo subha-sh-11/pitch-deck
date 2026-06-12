@@ -8,6 +8,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -85,3 +86,26 @@ async def regenerate_slide(
     mode = await dispatch("regenerate_slide", generation_service.regenerate_slide,
                           [str(slide_id), str(job.id)], background_tasks)
     return _job_payload(job, mode)
+
+
+@router.post("/slides/{slide_id}/regenerate-image", dependencies=[Depends(image_generate_limit)])
+async def regenerate_slide_image(
+    slide_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate only the image for a slide (synchronous). Keeps text/edits intact."""
+    slide = await db.get(Slide, slide_id)
+    if slide is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
+    return await run_in_threadpool(generation_service.regenerate_slide_image, str(slide_id))
+
+
+@router.post("/{project_id}/slide-image", dependencies=[Depends(image_generate_limit)])
+async def generate_slide_image(
+    slide_type: str = Query(...),
+    project: Project = Depends(get_owned_project),
+):
+    """Generate an image for a slide TYPE (for editor-added slides with no DB row)."""
+    return await run_in_threadpool(
+        generation_service.generate_project_image, str(project.id), slide_type
+    )

@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface SynopsisSlideProps {
@@ -18,7 +19,9 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
         <div className="absolute inset-0 bg-[#0a0a0c]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,211,238,0.05),transparent_50%)]" />
         <div className="relative flex h-full flex-col justify-center p-[8%]">
-          <SlideLabel>{content.heading || "Synopsis"}</SlideLabel>
+          <SlideLabel>
+            <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
+          </SlideLabel>
           <div
             className="mt-6 gap-10 text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF] [column-fill:balance]"
             style={{ columns: 2 }}
@@ -44,17 +47,16 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
       <div className="absolute inset-0 bg-[#0a0a0c]" />
       <div className="relative grid h-full grid-cols-2 gap-0">
         <div className="flex flex-col justify-center p-[8%] pr-[6%]">
-          <SlideLabel>{content.heading || "Synopsis"}</SlideLabel>
-          <div className="mt-5 space-y-4">
-            {paragraphs.map((para) => (
-              <p
-                key={para.slice(0, 40)}
-                className="text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF]"
-              >
-                {para}
-              </p>
-            ))}
-          </div>
+          <SlideLabel>
+            <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
+          </SlideLabel>
+          <EditableText
+            k="body"
+            as="div"
+            multiline
+            className="mt-5 whitespace-pre-line text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF]"
+            value={content.body ?? ""}
+          />
         </div>
         <div className="relative overflow-hidden">
           {content.imageUrl ? (

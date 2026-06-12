@@ -1,7 +1,8 @@
 import type { CSSProperties } from "react";
 import type { DesignDirection } from "@/types/design";
-import type { Slide } from "@/types/slide";
+import type { Slide, SlideContent } from "@/types/slide";
 import { DEFAULT_SLIDE_APPEARANCE, getBackgroundCss } from "@/lib/slide-appearance";
+import { SlideEditProvider, type ImageActions } from "./editing/SlideEditContext";
 import {
   CharacterSlide,
   ContactSlide,
@@ -45,9 +46,22 @@ interface SlideRendererProps {
   slide: Slide;
   className?: string;
   designDirection?: DesignDirection;
+  /** Enable PPT-style inline editing (canvas only). */
+  editing?: boolean;
+  /** Persist a content patch (edited text, moved elements, text boxes, image). */
+  onContentChange?: (patch: Partial<SlideContent>) => void;
+  /** Image replace handlers (upload / regenerate). */
+  imageActions?: ImageActions;
 }
 
-export function SlideRenderer({ slide, className = "", designDirection }: SlideRendererProps) {
+export function SlideRenderer({
+  slide,
+  className = "",
+  designDirection,
+  editing = false,
+  onContentChange,
+  imageActions,
+}: SlideRendererProps) {
   const { content, slideType } = slide;
   const appearance = { ...DEFAULT_SLIDE_APPEARANCE, ...slide.appearance };
   const bgCss = getBackgroundCss(appearance.backgroundKey);
@@ -126,7 +140,14 @@ export function SlideRenderer({ slide, className = "", designDirection }: SlideR
             : undefined
         }
       >
-        {template}
+        <SlideEditProvider
+          content={content}
+          editing={editing}
+          onContentChange={onContentChange}
+          imageActions={imageActions}
+        >
+          {template}
+        </SlideEditProvider>
       </div>
     </div>
   );

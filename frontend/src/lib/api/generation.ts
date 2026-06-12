@@ -1,3 +1,4 @@
+import type { Slide } from "@/types/slide";
 import { apiFetch } from "./client";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
@@ -28,6 +29,33 @@ export const generateDesign = (projectId: string) =>
 
 export const regenerateSlide = (slideId: string) =>
   apiFetch<GenerationJob>(`/generate/slides/${slideId}/regenerate`, { method: "POST" });
+
+export interface RegenerateImageResult {
+  slide: Slide;
+  ok: boolean;
+  reason?: string;
+}
+
+/** Regenerate only the slide image (keeps text/edits). Returns ok=false when the
+ *  image provider is unavailable (e.g. quota) — the existing image is kept. */
+export const regenerateSlideImage = (slideId: string) =>
+  apiFetch<RegenerateImageResult>(`/generate/slides/${slideId}/regenerate-image`, {
+    method: "POST",
+  });
+
+export interface ProjectImageResult {
+  ok: boolean;
+  url?: string;
+  reason?: string;
+}
+
+/** Generate an image for a slide TYPE — used by editor-added (client-only) slides
+ *  that have no backend row yet. */
+export const generateProjectImage = (projectId: string, slideType: string) =>
+  apiFetch<ProjectImageResult>(
+    `/generate/${projectId}/slide-image?slide_type=${encodeURIComponent(slideType)}`,
+    { method: "POST" },
+  );
 
 export const getJob = (jobId: string) => apiFetch<GenerationJob>(`/jobs/${jobId}`);
 

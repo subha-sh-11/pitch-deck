@@ -1,4 +1,5 @@
 import type { SlideContent } from "@/types/slide";
+import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface TargetAudienceSlideProps {
@@ -17,34 +18,48 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
         }`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
-        <SlideLabel>{content.heading || "Target Audience"}</SlideLabel>
+        <SlideLabel>
+          <EditableText k="heading" as="span" value={content.heading || "Target Audience"} />
+        </SlideLabel>
         {items.length > 0 ? (
           <div className="mt-6 grid flex-1 grid-cols-2 gap-3 content-start">
-            {items.map((item) => (
+            {items.map((item, i) => (
               <div
-                key={item.title}
+                key={i}
                 className="rounded-lg border p-4"
                 style={{
                   borderColor: "color-mix(in srgb, var(--slide-accent) 20%, transparent)",
                   background: "color-mix(in srgb, var(--slide-accent) 6%, transparent)",
                 }}
               >
-                <h3 className="text-sm font-semibold" style={{ color: "var(--slide-accent)" }}>
-                  {item.title}
-                </h3>
+                <EditableText
+                  k={`item-${i}-title`}
+                  as="h3"
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--slide-accent)" }}
+                  value={item.title}
+                />
                 {item.description && (
-                  <p className="mt-2 text-xs leading-relaxed text-[#9CA3AF]">
-                    {item.description}
-                  </p>
+                  <EditableText
+                    k={`item-${i}-desc`}
+                    as="p"
+                    multiline
+                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                    value={item.description}
+                  />
                 )}
               </div>
             ))}
           </div>
         ) : (
           content.body && (
-            <p className="mt-6 max-w-2xl text-sm leading-relaxed text-[#C9CDD3]">
-              {content.body}
-            </p>
+            <EditableText
+              k="body"
+              as="p"
+              multiline
+              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[#C9CDD3]"
+              value={content.body}
+            />
           )
         )}
       </div>
