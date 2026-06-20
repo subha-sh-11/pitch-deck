@@ -23,7 +23,11 @@ _SYSTEM = (
     "is a piece of visual storytelling that must make a producer FEEL the film before a single "
     "scene is shot. You are given the project's genre, tone, intake notes (which may include "
     "observations from the director's own reference images — honour those above all), and a "
-    "recommended style register with a base palette.\n"
+    "recommended style register with a base palette. The payload may also include a "
+    "`referenceDeck` with the dominant colours (hex) and font names pulled from a deck the "
+    "director uploaded — when present, ANCHOR the palette to those colours and echo those "
+    "fonts in typography, so the result clearly resembles their reference, then refine for "
+    "cinematic quality and contrast.\n"
     "Craft rules:\n"
     "  • PALETTE (6 colors, real hex): build it like a colorist grading the film — a dominant "
     "dark base for slide grounds, one signature accent that carries the story's emotional "
@@ -51,7 +55,7 @@ _SYSTEM = (
 )
 
 
-def run(project: dict, intake: dict) -> dict:
+def run(project: dict, intake: dict, reference: dict | None = None) -> dict:
     genres = project.get("genres") or []
     tone = project.get("tone") or []
     register_id = select_register(genres, tone, (intake or {}).get("genreBlend", ""))
@@ -66,11 +70,19 @@ def run(project: dict, intake: dict) -> dict:
                     "designDirection", "genreBlend")},
         "recommendedRegister": {"id": register_id, "label": reg["label"], "palette": reg["palette"]},
     }
+    # A director-supplied reference deck: anchor the palette/typography to its real
+    # colours and fonts so the generated deck looks like the one they handed us.
+    if reference and (reference.get("colors") or reference.get("fonts")):
+        payload["referenceDeck"] = {
+            "colors": (reference.get("colors") or [])[:6],
+            "fonts": (reference.get("fonts") or [])[:3],
+        }
     result = complete_json(
         system=_SYSTEM,
         prompt="Design brief:\n" + json.dumps(payload, ensure_ascii=False),
         fallback=fallback,
-        cache_prefix="design",
+        # Reference-anchored designs must not collide with the cached generic one.
+        cache_prefix="design:ref" if payload.get("referenceDeck") else "design",
     )
     # Always tag the register + apply its font pairing (deterministic, not LLM-chosen).
     if isinstance(result, dict):

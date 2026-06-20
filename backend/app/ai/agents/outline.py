@@ -90,6 +90,12 @@ _SYSTEM = (
     "'Story World'), and write each slide's purpose as one concrete line for the copywriter "
     "who will write that slide.\n"
     "  • Each slide type may appear once (generic may repeat with different titles).\n"
+    "  • REFERENCE DECK: if the payload has a `referenceDeck`, the director handed you an "
+    "existing deck to replicate — the TARGET COUNT already equals its slide count. Produce "
+    "ONE slide per reference slide, in the SAME ORDER, mapping each to the closest slide "
+    "type (use 'generic' carrying the reference slide's own title when no canonical type "
+    "fits). Keep the reference's section framing in your titles. The reference defines the "
+    "structure and section order; the intake supplies the content for this film.\n"
     "Return ONLY JSON: {\"slides\": [{\"slideType\": \"...\", \"title\": \"...\", "
     "\"purpose\": \"...\"}]} using ONLY the provided slide types."
 )
@@ -179,11 +185,24 @@ def _sanitize(result: dict, fallback: list[dict], target: int) -> list[dict]:
     return [{**item, "slide_number": n + 1} for n, item in enumerate(out)]
 
 
-def run(project: dict, intake: dict, template_id: str | None = None) -> list[dict]:
-    """Return the ordered outline: [{slide_type, title, purpose, required, slide_number}]."""
+def run(project: dict, intake: dict, template_id: str | None = None,
+        reference: dict | None = None) -> list[dict]:
+    """Return the ordered outline: [{slide_type, title, purpose, required, slide_number}].
+
+    ``reference``: a parsed uploaded deck ({slideCount, slides:[{title,text}]}). When given,
+    the outline mirrors its length and slide sequence/titles so the generated deck follows
+    the structure the director handed us.
+    """
     intake = intake or {}
     base = build_outline(template_id)
-    target = parse_target(intake.get("deckLength"), len(base))
+    ref_slides = [s for s in (reference or {}).get("slides", []) if isinstance(s, dict)]
+    # A reference deck is an explicit "build it like THIS" — its slide count wins over the
+    # generic deckLength range so the generated deck mirrors the reference's structure.
+    ref_count = (reference or {}).get("slideCount") if ref_slides else None
+    if ref_count:
+        target = max(_MIN_SLIDES, min(_MAX_SLIDES, int(ref_count)))
+    else:
+        target = parse_target(intake.get("deckLength"), len(base))
     fb = _fallback(template_id, intake, target)
 
     availability = {}
@@ -202,11 +221,17 @@ def run(project: dict, intake: dict, template_id: str | None = None) -> list[dic
                         for c in _EXTRA_CANDIDATES],
         "intake": {k: v for k, v in intake.items() if isinstance(v, str) and v.strip()},
     }
+    if ref_slides:
+        payload["referenceDeck"] = {
+            "slideCount": (reference or {}).get("slideCount"),
+            "slides": [{"title": s.get("title", ""), "text": (s.get("text") or "")[:200]}
+                       for s in ref_slides[:40]],
+        }
     result = complete_json(
         system=_SYSTEM,
         prompt="Architect this deck:\n" + json.dumps(payload, ensure_ascii=False),
         fallback=lambda: {"slides": None},  # sanitizer falls back to the deterministic outline
-        cache_prefix="outline",
+        cache_prefix="outline:ref" if ref_slides else "outline",
         max_tokens=2000,
         temperature=0.4,
     )

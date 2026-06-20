@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { InterviewSection } from "@/lib/api";
+import {
+  clearReferenceDeck,
+  getProject,
+  uploadReferenceDeck,
+  type ReferenceDeck,
+} from "@/lib/api/projects";
 import type { Interview } from "./useInterview";
 
 type FieldStatus = "confirmed" | "suggested" | "skipped";
@@ -48,10 +54,55 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["deliveryFormat", "Delivery format"],
 ];
 
-export function DesignBrief({ iv }: { iv: Interview }) {
+export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: string }) {
   const form = iv.form as unknown as FormShape;
   const sections = iv.sections;
   const [sel, setSel] = useState<Record<string, string[]>>({});
+
+  // Reference deck: the director can upload an existing .pptx; the generated deck then
+  // mirrors its slide structure and visual style (handled in the generation pipeline).
+  const [reference, setReference] = useState<ReferenceDeck | null>(null);
+  const [refBusy, setRefBusy] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
+  const refInput = useRef<HTMLInputElement>(null);
+
+  // Hydrate any reference already saved on the project.
+  useEffect(() => {
+    getProject(projectId)
+      .then((p) => setReference(p.referenceDeck ?? null))
+      .catch(() => {});
+  }, [projectId]);
+
+  const handleReferenceUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pptx")) {
+      setRefError("Only PowerPoint .pptx files are supported. Export your deck as .pptx and retry.");
+      return;
+    }
+    setRefBusy(true);
+    setRefError(null);
+    try {
+      setReference(await uploadReferenceDeck(projectId, file));
+    } catch (e) {
+      setRefError((e as Error)?.message || "Couldn't read that deck — make sure it's a valid .pptx.");
+    } finally {
+      setRefBusy(false);
+      if (refInput.current) refInput.current.value = "";
+    }
+  };
+
+  const handleReferenceRemove = async () => {
+    setRefBusy(true);
+    try {
+      await clearReferenceDeck(projectId);
+      setReference(null);
+      setRefError(null);
+    } catch {
+      /* keep the chip; the next upload overwrites it anyway */
+    } finally {
+      setRefBusy(false);
+    }
+  };
 
   // Status tracking: which fields the user actively confirmed, skipped, or just changed.
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
@@ -205,6 +256,65 @@ export function DesignBrief({ iv }: { iv: Interview }) {
                 />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Reference deck — mimic an existing .pptx's structure + look */}
+        {!visibleSections.length && (
+          <div className="mt-7">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+              Reference deck (optional)
+            </h2>
+            <p className="mt-1 text-xs text-text-dim">
+              Upload a PowerPoint <span className="text-text-muted">.pptx</span> and I&apos;ll match its
+              slide structure and visual style when building your deck.
+            </p>
+            <input
+              ref={refInput}
+              type="file"
+              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              className="hidden"
+              onChange={(e) => void handleReferenceUpload(e.target.files?.[0])}
+            />
+            {reference ? (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-accent-neon/40 bg-accent-neon/5 px-3.5 py-2.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm text-text-primary">{reference.fileName}</div>
+                  <div className="mt-0.5 text-xs text-text-dim">
+                    {reference.slideCount} slides
+                    {reference.colors?.length ? ` · ${reference.colors.length} colours` : ""}
+                    {reference.fonts?.length ? ` · ${reference.fonts.slice(0, 2).join(", ")}` : ""}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {reference.colors?.length > 0 && (
+                    <div className="flex overflow-hidden rounded-md border border-border-glass">
+                      {reference.colors.slice(0, 5).map((c, i) => (
+                        <span key={i} className="h-5 w-5" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleReferenceRemove()}
+                    disabled={refBusy}
+                    className="text-[11px] text-text-dim transition-colors hover:text-text-primary disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => refInput.current?.click()}
+                disabled={refBusy}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border-glass bg-surface-2/40 px-4 py-3 text-sm text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary disabled:opacity-50"
+              >
+                {refBusy ? "Reading deck…" : "↑ Upload reference .pptx"}
+              </button>
+            )}
+            {refError && <p className="mt-2 text-xs text-red-400/90">{refError}</p>}
           </div>
         )}
 

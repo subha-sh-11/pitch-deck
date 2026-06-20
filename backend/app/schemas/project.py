@@ -61,5 +61,6 @@ class ProjectRead(ProjectSummary):
     intake_form: IntakeFormData | None
     script_summary: dict | None
     story_analysis: dict | None
+    reference_deck: dict | None = None
     last_edited_at: datetime.datetime | None
     created_at: datetime.datetime

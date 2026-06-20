@@ -35,12 +35,16 @@ export interface SlideContent {
     role: string;
     description: string;
     wound?: string;
+    /** Backend-generated portrait (served URL) for this character, if any. */
+    imageUrl?: string;
   }[];
   comps?: { title: string; note: string; posterUrl?: string }[];
   moodBlocks?: { label: string; color: string }[];
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
+  /** Multiple generated image options to choose from in the full-screen gallery. */
+  imageCandidates?: string[];
   /** PPT-style editing: per-element overrides keyed by a stable element key. */
   edits?: Record<string, SlideElementEdit>;
   /** PPT-style editing: free-form text boxes the user added anywhere on the slide. */

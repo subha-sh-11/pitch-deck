@@ -10,7 +10,9 @@ interface SynopsisSlideProps {
 
 export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
   const paragraphs = content.body?.split(/\n\n+/).filter(Boolean) ?? [content.body ?? ""];
-  const columns = layout === "text_columns";
+  // Only fall back to the image-less editorial columns when there's actually no image to
+  // show — otherwise a generated image would silently disappear.
+  const columns = layout === "text_columns" && !content.imageUrl;
 
   if (columns) {
     /* ── Editorial full-width columns — for image-less or very long synopses ── */

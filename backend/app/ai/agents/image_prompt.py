@@ -73,6 +73,53 @@ def _subject(slide_type: str, intake: dict) -> str:
     return _g(intake, "storyWorld") or _g(intake, "visualMood") or _g(intake, "logline")
 
 
+def build_character_prompt(char: dict, intake: dict, design: dict | None) -> str:
+    """A cinematic portrait prompt for ONE character, grounded in the film's world + design.
+
+    Used to give each character card on the character slide its own image. Deliberately a
+    fictional cinematic portrait (no real-person likeness) so it's safe to generate.
+    """
+    design = design or {}
+    region = _g(intake, "storyWorld")
+    genre = _g(intake, "genreBlend")
+    tone = _g(intake, "tone")
+    mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
+    image_style = design.get("imageStyle", "cinematic, realistic lighting")
+    palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:3])
+
+    role = (char.get("role") or "").strip()
+    desc = (char.get("description") or "").strip()
+    who = "; ".join(p for p in (role, desc) if p)[:240]
+
+    parts = [
+        "cinematic character portrait, single person, head-and-shoulders to waist-up framing, "
+        "centered, looking toward camera, dramatic rim lighting, shallow depth of field, "
+        "expressive face that conveys the character's inner life",
+    ]
+    if who:
+        parts.append(f"character: {who}")
+    if region:
+        parts.append(f"authentic casting and wardrobe for: {region}")
+    if genre:
+        parts.append(genre)
+    emotion = "; ".join(b for b in (tone, mood) if b)
+    if emotion:
+        parts.append(f"emotional tone: {emotion}")
+    parts.append(image_style)
+    if palette:
+        parts.append(f"color palette: {palette}")
+    parts.append(
+        "film still, anamorphic portrait, professional cinematography, subtle film grain, "
+        "consistent color grade, no text, no watermark, no logo, fictional character, "
+        "no real-person likeness"
+    )
+    return _clean(", ".join(p for p in parts if p))
+
+
+def character_aspect() -> str:
+    return "3:4"
+
+
 def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
     """Assemble a prompt that captures THIS film's genre, tone, emotion, and regional setting."""
     design = design or {}
