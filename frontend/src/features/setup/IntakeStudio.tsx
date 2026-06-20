@@ -9,7 +9,7 @@ import { DeckCanvas } from "./intake/DeckCanvas";
 import { DesignBrief } from "./intake/DesignBrief";
 import { ReferenceUpload } from "./intake/ReferenceUpload";
 import { SlideWorkshop } from "./intake/SlideWorkshop";
-import { SlidePromptDock, WorkshopProvider } from "./intake/workshop";
+import { WorkshopProvider } from "./intake/workshop";
 import { useInterview } from "./intake/useInterview";
 
 type Tab = "questions" | "slides" | "preview";
@@ -19,6 +19,7 @@ type Tab = "questions" | "slides" | "preview";
 export function IntakeStudio({ projectId }: { projectId: string }) {
   const iv = useInterview(projectId);
   const [tab, setTab] = useState<Tab>("questions");
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
   useEffect(() => {
     getProject(projectId)
@@ -36,31 +37,34 @@ export function IntakeStudio({ projectId }: { projectId: string }) {
 
   return (
     <WorkshopProvider projectId={projectId}>
-    <div className="grid h-screen w-full max-w-[100vw] grid-cols-1 overflow-hidden bg-surface-0 lg:grid-cols-[minmax(300px,27%)_minmax(0,1fr)]">
-      {/* Left — conversation, with the image-prompt dock beneath it in Slides mode */}
-      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border-glass lg:border-b-0 lg:border-r">
-        {/* Slides mode: two separate agent panels — conversation and slide prompt —
-            as distinct cards with breathing room between them. */}
-        <div
-          className={`flex min-h-0 flex-col overflow-hidden ${
-            tab === "slides"
-              ? "m-2 mb-0 h-[52%] shrink-0 rounded-xl border border-border-glass bg-surface-1/25"
-              : "flex-1"
-          }`}
-        >
+    <div
+      className={`grid h-screen w-full max-w-[100vw] grid-cols-1 overflow-hidden bg-surface-0 ${
+        chatCollapsed ? "lg:grid-cols-1" : "lg:grid-cols-[minmax(300px,27%)_minmax(0,1fr)]"
+      }`}
+    >
+      {/* Left rail — the conversation. (In Slides mode each card carries its own prompt.) */}
+      <section
+        className={`${
+          chatCollapsed ? "hidden" : "flex"
+        } min-h-0 min-w-0 flex-col overflow-hidden border-b border-border-glass lg:border-b-0 lg:border-r`}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ChatPanel iv={iv} />
         </div>
-        {tab === "slides" && (
-          <div className="flex min-h-0 flex-1 flex-col p-2">
-            <SlidePromptDock />
-          </div>
-        )}
       </section>
 
       {/* Right — artifact */}
       <section className="hidden min-h-0 min-w-0 flex-col overflow-hidden bg-surface-1/20 lg:flex">
         <header className="flex items-center justify-between gap-3 border-b border-border-glass bg-surface-0/60 px-4 py-2.5 backdrop-blur">
           <nav className="flex items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setChatCollapsed((v) => !v)}
+              title={chatCollapsed ? "Show chat" : "Hide chat"}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-text-dim transition-colors hover:bg-surface-2 hover:text-text-primary"
+            >
+              <PanelIcon collapsed={chatCollapsed} />
+            </button>
             <Link
               href={projectRoutes.dashboard()}
               className="flex items-center gap-1.5 text-text-dim transition-colors hover:text-text-primary"
@@ -99,7 +103,7 @@ export function IntakeStudio({ projectId }: { projectId: string }) {
             <div className="flex h-full min-h-0 flex-col">
               <ReferenceUpload iv={iv} />
               <div className="min-h-0 flex-1 overflow-hidden">
-                <DesignBrief iv={iv} />
+                <DesignBrief iv={iv} projectId={projectId} />
               </div>
             </div>
           ) : tab === "slides" ? (
@@ -125,6 +129,16 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
+  );
+}
+
+function PanelIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      {collapsed && <path d="M13 9l3 3-3 3" />}
+    </svg>
   );
 }
 

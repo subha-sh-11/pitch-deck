@@ -14,6 +14,7 @@ export interface ProjectDetail extends Project {
   intakeForm: IntakeFormData | null;
   scriptSummary: { fileName: string; fields: { label: string; value: string }[] } | null;
   storyAnalysis: Record<string, unknown> | null;
+  referenceDeck: ReferenceDeck | null;
   lastEditedAt: string | null;
   createdAt: string;
 }
@@ -91,3 +92,23 @@ export const extractScript = (projectId: string, file: File) =>
 /** Upload an image to replace a slide's visual; returns the served URL. */
 export const uploadSlideImage = (projectId: string, file: File) =>
   postFile<{ url: string }>(`/projects/${projectId}/assets/upload-image`, file).then((r) => r.url);
+
+/** Parsed reference deck — the generated deck mirrors its structure + visual style. */
+export interface ReferenceDeck {
+  fileName: string;
+  slideCount: number;
+  slides: { title: string; text: string }[];
+  fonts: string[];
+  colors: string[];
+}
+
+/**
+ * Upload a reference deck (.pptx only). Parsed + persisted on the project so generation
+ * follows its slide structure and look.
+ */
+export const uploadReferenceDeck = (projectId: string, file: File) =>
+  postFile<ReferenceDeck>(`/projects/${projectId}/references/pptx`, file);
+
+/** Remove the project's reference deck. */
+export const clearReferenceDeck = (projectId: string) =>
+  apiFetch<void>(`/projects/${projectId}/references/pptx`, { method: "DELETE" });

@@ -114,6 +114,60 @@ async def extract_intake(
     return IntakeExtractResult(file_name=filename, form=form, filled_fields=filled)
 
 
+@router.post("/{project_id}/references/pptx")
+async def parse_reference_pptx(
+    file: UploadFile = File(...),
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parse a reference deck (.pptx) → structure (slide titles/text), colours, fonts,
+    and persist it on the project. When set, generation mirrors its slide sequence and
+    visual style (see generation_service + outline/design agents).
+
+    Only .pptx is accepted — it's the one format we can parse into the slide structure and
+    style the LLM needs. (Legacy binary .ppt and PDFs are not machine-readable here.)
+    """
+    filename = file.filename or "reference.pptx"
+    if not filename.lower().endswith(".pptx"):
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "Please upload a PowerPoint .pptx file (export Google Slides / Keynote / old .ppt as .pptx first).",
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file.")
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 15 MB).")
+    from app.ai import pptx_ref
+
+    try:
+        ref = await run_in_threadpool(pptx_ref.extract_reference, data)
+    except Exception:  # noqa: BLE001 — a corrupt/non-pptx file shouldn't 500
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Couldn't read this file as a .pptx — make sure it's a valid PowerPoint deck.",
+        )
+    if not ref.get("slideCount"):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Couldn't read any slides from this .pptx.",
+        )
+    stored = {"fileName": filename, **ref}
+    project.reference_deck = stored
+    await db.commit()
+    return stored
+
+
+@router.delete("/{project_id}/references/pptx", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_reference_pptx(
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove the reference deck so generation no longer mimics it."""
+    project.reference_deck = None
+    await db.commit()
+
+
 @router.post("/{project_id}/assets/upload-image")
 async def upload_image(
     file: UploadFile = File(...),

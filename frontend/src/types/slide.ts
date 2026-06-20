@@ -37,6 +37,7 @@ export interface SlideContent {
     /** Apparent age / build / defining look — drives the portrait so the face matches. */
     appearance?: string;
     wound?: string;
+    /** Backend-generated portrait (served URL) for this character, if any. */
     imageUrl?: string;
     imagePrompt?: string;
   }[];
@@ -45,6 +46,8 @@ export interface SlideContent {
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
+  /** Multiple generated image options to choose from in the full-screen gallery. */
+  imageCandidates?: string[];
   /** PPT-style editing: per-element overrides keyed by a stable element key. */
   edits?: Record<string, SlideElementEdit>;
   /** PPT-style editing: free-form text boxes the user added anywhere on the slide. */

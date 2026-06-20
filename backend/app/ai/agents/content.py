@@ -80,7 +80,7 @@ def content_fallback(slide_type: str, intake: dict, design: dict | None = None) 
     if slide_type == "show_cross":
         audience = _g(intake, "targetAudience")
         comps = [{"title": c, "note": audience}
-                 for c in _split(_g(intake, "showCross"), r"[,×x]", 3)]
+                 for c in _split(_g(intake, "showCross"), r"[,×x]", 3)][:3]
         return {"heading": "Show Cross", "comps": comps}
     if slide_type == "visual_aesthetic":
         return {"heading": "Visual Aesthetic",
@@ -131,10 +131,14 @@ _SYSTEM = (
     "design; less copy, better chosen, reads as more premium.\n"
     "  • BULLETS/ITEMS: parallel construction, each one a distinct idea, 3-5 max, every word "
     "earning its place.\n"
-    "  • CHARACTERS: name, role, and a one-line description that makes a producer see the casting "
-    "opportunity (want, wound, contradiction) — PLUS a short `appearance`: apparent age or "
+    "  • CHARACTERS: name — role — one line that makes a producer see the casting opportunity: "
+    "their want, their wound, their contradiction — PLUS a short `appearance`: apparent age or "
     "age-range, build, and defining physical look, grounded in the script (infer sensibly from the "
-    "role when unstated), so the deck casts and renders the RIGHT face.\n"
+    "role when unstated), so the deck casts and renders the RIGHT face. For the main characters "
+    "slide, include ONLY the 3-4 PRIMARY leads (the people the story is about), most important "
+    "first — never pad with minor or supporting roles.\n"
+    "  • SHOW CROSS / COMPS: always give exactly 3 comparable films or shows (never 2), each a "
+    "real, recognisable title; the note says who it reached and why this project rhymes with it.\n"
     "  • EMOTIONAL THROUGHLINE: echo the story's central tension in the slide's language so the "
     "deck reads as one voice from cover to contact.\n"
     "  • DIRECTOR'S INSTRUCTIONS: if the prompt contains a DIRECTOR'S INSTRUCTIONS section, it "
@@ -222,11 +226,13 @@ _THROUGHLINE = ["title", "logline", "tone"]
 
 
 def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
-                   design: dict | None, instructions: str | None = None) -> str:
+                   design: dict | None, instructions: str | None = None,
+                   reference_slide: dict | None = None) -> str:
     """The exact user-prompt sent to the LLM for THIS slide — a focused brief that slots only the
     extracted-summary fields this slide is built from (its "placeholders") plus a short throughline,
     rather than dumping the whole intake on every slide. Shown verbatim in the workshop panel, so
-    each slide's prompt reads as a clear, on-theme brief."""
+    each slide's prompt reads as a clear, on-theme brief. ``reference_slide`` optionally supplies a
+    matching slide from an uploaded reference deck to emulate."""
     design = design or {}
     lines: list[str] = [
         f'Write the "{title}" slide of this film pitch deck.',
@@ -259,6 +265,20 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
         lines += ["", "STORY THROUGHLINE (keep one voice; do NOT restate these on this slide):"]
         lines += throughline
 
+    # The matching slide from the director's reference deck — match its ANGLE, section
+    # framing and length, but write entirely from THIS film's story material above.
+    if reference_slide and (reference_slide.get("title") or reference_slide.get("text")):
+        lines += [
+            "",
+            "REFERENCE SLIDE (the director uploaded a deck to emulate — mirror this slide's "
+            "angle, framing and tone, but rewrite it for THIS film using only the story "
+            "material above; never copy the reference's facts, names or numbers):",
+            f"- Reference title: {reference_slide.get('title', '').strip()}",
+        ]
+        ref_text = (reference_slide.get("text") or "").strip()
+        if ref_text:
+            lines.append(f"- Reference content: {ref_text[:600]}")
+
     if instructions and instructions.strip():
         lines += ["", "DIRECTOR'S INSTRUCTIONS (follow faithfully):", instructions.strip()]
 
@@ -266,19 +286,22 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
 
 
 def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None,
-        instructions: str | None = None, raw_prompt: str | None = None) -> dict:
+        instructions: str | None = None, raw_prompt: str | None = None,
+        reference_slide: dict | None = None) -> dict:
     """``raw_prompt``: a director-edited prompt from the workshop — used VERBATIM as
-    the user prompt (the system prompt stays), bypassing composition and cache."""
+    the user prompt (the system prompt stays), bypassing composition and cache.
+    ``reference_slide``: the matching slide of an uploaded reference deck to emulate."""
     fb = content_fallback(slide_type, intake, design)
     edited = bool(raw_prompt and raw_prompt.strip())
     prompt = raw_prompt.strip() if edited else compose_prompt(
-        slide_type, title, purpose, intake, design, instructions
+        slide_type, title, purpose, intake, design, instructions, reference_slide
     )
     result = complete_json(
         system=_SYSTEM,
         prompt=prompt,
         fallback=lambda: fb,
-        cache_prefix=f"content:{slide_type}",
+        # A reference-grounded slide must not collide with the cached generic one.
+        cache_prefix=f"content:ref:{slide_type}" if reference_slide else f"content:{slide_type}",
         # Director-touched prompts must be fresh, never a cache hit of the old copy.
         use_cache=not (edited or (instructions and instructions.strip())),
     )

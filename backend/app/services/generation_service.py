@@ -20,6 +20,7 @@ from app.ai.agents import image_prompt as image_prompt_agent
 from app.ai.agents import layout as layout_agent
 from app.ai.agents import outline as outline_agent
 from app.ai.agents import story_analysis as story_agent
+from app.ai import pptx_ref
 from app.ai.images import generate_image
 from app.ai.templates import recommend_template
 from app.core.config import settings
@@ -302,18 +303,21 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             if project is None:
                 raise ValueError("project not found")
             intake = project.intake_form or {}
+            reference = project.reference_deck or None
             pdict = _project_dict(project)
             references = _load_reference_images(session, project.id)
-            log.info("> Generating deck for %r (genres=%s tone=%s, %d reference image(s))",
-                     project.title, pdict["genres"], pdict["tone"], len(references))
+            log.info("> Generating deck for %r (genres=%s tone=%s, %d ref image(s), deck ref=%s)",
+                     project.title, pdict["genres"], pdict["tone"], len(references),
+                     (reference or {}).get("fileName"))
 
             # 1. Story analysis
             project.story_analysis = story_agent.run(pdict, intake)
             log.info("  -story analysis")
             _set_job(session, job_id, progress=8)
 
-            # 2. Design direction (palette/typography/motifs — driven by references when present)
-            design = design_agent.run(pdict, intake, references)
+            # 2. Design direction — palette/typography/motifs driven by reference images when
+            #    present, and additionally anchored to any uploaded reference deck.
+            design = design_agent.run(pdict, intake, references, reference=reference)
             design_clean = {k: v for k, v in design.items() if k != "_register"}
             palette = [c.get("hex") for c in (design_clean.get("palette") or [])[:4]]
             log.info("  -design direction -register=%s palette=%s",
@@ -323,7 +327,7 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             # 3. Outline — brief-aware: honours deckLength, drops ungrounded slides,
             # adds grounded extras for longer decks (LLM with deterministic fallback).
             tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
-            outline = outline_agent.run(pdict, intake, tpl)
+            outline = outline_agent.run(pdict, intake, tpl, reference=reference)
             log.info("  -outline -template=%s, %d slides (deckLength=%r)",
                      tpl, len(outline), (intake or {}).get("deckLength") or "default")
 
@@ -340,10 +344,13 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             session.add(deck)
             session.flush()
 
-            # 5. Content for every slide -in parallel (LLM, no DB)
+            # 5. Content for every slide -in parallel (LLM, no DB). When a reference deck
+            # is set, ground each slide in its matching reference slide's framing.
             def _content(item):
+                ref_slide = (pptx_ref.match_slide(item["title"], item["purpose"], reference)
+                             if reference else None)
                 return content_agent.run(item["slide_type"], item["title"], item["purpose"],
-                                         intake, design_clean)
+                                         intake, design_clean, reference_slide=ref_slide)
 
             with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
                 contents = list(ex.map(_content, outline))
@@ -441,19 +448,21 @@ def prepare_deck(project_id: str, template_id: str | None = None,
             if project is None:
                 raise ValueError("project not found")
             intake = project.intake_form or {}
+            reference = project.reference_deck or None
             pdict = _project_dict(project)
-            log.info("> Preparing workshop deck for %r", project.title)
+            log.info("> Preparing workshop deck for %r (ref=%s)",
+                     project.title, (reference or {}).get("fileName"))
 
             project.story_analysis = story_agent.run(pdict, intake)
             references = _load_reference_images(session, project.id)
             _set_job(session, job_id, progress=25)
 
-            design = design_agent.run(pdict, intake, references)
+            design = design_agent.run(pdict, intake, references, reference=reference)
             design_clean = {k: v for k, v in design.items() if k != "_register"}
             _set_job(session, job_id, progress=55)
 
             tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
-            outline = outline_agent.run(pdict, intake, tpl)
+            outline = outline_agent.run(pdict, intake, tpl, reference=reference)
             _set_job(session, job_id, progress=80)
 
             existing = session.execute(
@@ -540,6 +549,9 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         intake = project.intake_form or {}
         design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
         references = _load_reference_images(session, project.id)
+        reference = project.reference_deck or None
+        ref_slide = (pptx_ref.match_slide(slide.title or "", slide.purpose or "", reference)
+                     if reference else None)
 
         # Preserve the user's manual editor state across a regenerate: inline text
         # overrides, free-form text boxes, and the existing image (so a failed image
@@ -547,7 +559,7 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         old = dict(slide.content or {})
         new_content = content_agent.run(
             slide.slide_type, slide.title or "", slide.purpose or "", intake, design,
-            instructions=instructions, raw_prompt=content_prompt,
+            instructions=instructions, raw_prompt=content_prompt, reference_slide=ref_slide,
         )
         for key in ("edits", "textBoxes", "imageUrl", "imagePrompt"):
             if old.get(key) is not None:
@@ -581,6 +593,9 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             else:
                 _persist_image(session, project.id, slide, used_image_prompt, img)
             session.flush()
+
+        # Per-element slides (genre tiles, character portraits, mood frames) get a real image PER
+        # element via regenerate_slide_image / the per-element pass — not a single shared background.
 
         # Record what was used so the workshop can show + re-edit it next time.
         meta = dict(slide.meta or {})
@@ -714,3 +729,73 @@ def generate_project_image(project_id: str, slide_type: str) -> dict:
         url = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
         log.info("✓ generated standalone image (%s) for project %s", slide_type, project.id)
         return {"ok": True, "url": url}
+
+
+def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
+                                  prompt: str | None = None, n: int = 3) -> dict:
+    """Generate N image options for a slide so the director can pick one in the gallery.
+
+    Stores all candidates on the slide as ``content.imageCandidates`` (and sets imageUrl to
+    the first when the slide has none). Returns {slide, urls, ok, reason}.
+    """
+    from app.services.deck_service import serialize_slide
+
+    with session_scope() as session:
+        try:
+            _set_job(session, job_id, status="running", progress=10)
+            slide = session.get(Slide, uuid.UUID(slide_id))
+            if slide is None:
+                raise ValueError("slide not found")
+            deck = session.get(Deck, slide.deck_id)
+            project = session.get(Project, deck.project_id)
+            intake = project.intake_form or {}
+            design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
+
+            if not image_prompt_agent.slide_needs_image(slide.slide_type):
+                result = {"slide": serialize_slide(slide), "urls": [], "ok": False,
+                          "reason": "slide_has_no_image"}
+                _set_job(session, job_id, status="succeeded", progress=100, result=result)
+                return result
+
+            use_prompt = (prompt or "").strip() or image_prompt_agent.build_prompt(
+                slide.slide_type, intake, design)
+            kind = image_prompt_agent.image_kind(slide.slide_type)
+            aspect = image_prompt_agent.aspect_for(slide.slide_type)
+
+            urls: list[str] = []
+            for _ in range(max(1, min(n, 6))):
+                img = generate_image(use_prompt, aspect_ratio=aspect, palette=design.get("palette"))
+                if img.meta.get("provider") == "placeholder":
+                    continue
+                ext = _EXT.get(img.mime, "png")
+                key = f"generated/{project.id}/{kind}/{uuid.uuid4().hex}.{ext}"
+                asset = Asset(project_id=project.id, slide_id=str(slide.id), kind=kind,
+                              storage_key=key, mime=img.mime, generation_meta={**img.meta})
+                session.add(asset)
+                session.flush()
+                stored = store_asset(key, img.data, img.mime)
+                asset.generation_meta = {**(asset.generation_meta or {}),
+                                         "stored_in_s3": stored.stored_in_s3}
+                urls.append(f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}")
+
+            if not urls:
+                result = {"slide": serialize_slide(slide), "urls": [], "ok": False,
+                          "reason": "image_provider_unavailable"}
+                _set_job(session, job_id, status="succeeded", progress=100, result=result)
+                return result
+
+            content = dict(slide.content or {})
+            content["imageCandidates"] = urls
+            content["imagePrompt"] = use_prompt
+            if not content.get("imageUrl"):
+                content["imageUrl"] = urls[0]
+            slide.content = content
+            session.flush()
+            log.info("✓ generated %d image options for slide %s", len(urls), slide.id)
+            result = {"slide": serialize_slide(slide), "urls": urls, "ok": True}
+            _set_job(session, job_id, status="succeeded", progress=100, result=result)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[x] Slide image variants failed: %s", exc)
+            _set_job(session, job_id, status="failed", error=str(exc))
+            raise

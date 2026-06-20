@@ -53,6 +53,8 @@ class SlideContent(CamelModel):
     # Extension: generated image bound to this slide (backend-only; prototype ignores it)
     image_url: str | None = None
     image_prompt: str | None = None
+    # Multiple generated options the director can pick from in the full-screen gallery.
+    image_candidates: list[str] | None = None
     # PPT-style editor: per-element overrides + free-form text boxes (opaque pass-through).
     edits: dict | None = None
     text_boxes: list[dict] | None = None

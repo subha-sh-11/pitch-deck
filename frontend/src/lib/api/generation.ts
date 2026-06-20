@@ -66,6 +66,13 @@ export const workshopSlideImage = (slideId: string, prompt?: string) =>
     body: JSON.stringify({ prompt: prompt ?? null }),
   });
 
+/** Generate 3 image options for a slide (full-screen gallery to choose from). */
+export const slideImageVariants = (slideId: string, prompt?: string) =>
+  apiFetch<{ slide: Slide; urls: string[]; ok: boolean; reason?: string }>(
+    `/generate/slides/${slideId}/image-variants`,
+    { method: "POST", body: JSON.stringify({ prompt: prompt ?? null }) },
+  );
+
 /** Workshop final step: all slides approved → deck becomes the presentation. */
 export const assembleDeck = (projectId: string) =>
   apiFetch<import("@/types/deck").Deck>(`/projects/${projectId}/deck/assemble`, {

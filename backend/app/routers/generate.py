@@ -181,6 +181,22 @@ async def regenerate_slide_image(
     return await run_in_threadpool(generation_service.regenerate_slide_image, str(slide_id))
 
 
+@router.post("/slides/{slide_id}/image-variants", dependencies=[Depends(image_generate_limit)])
+async def slide_image_variants(
+    slide_id: uuid.UUID,
+    body: ImageRegenBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate 3 image options for a slide (gallery). Optionally from an edited prompt."""
+    slide = await db.get(Slide, slide_id)
+    if slide is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide not found")
+    return await run_in_threadpool(
+        generation_service.generate_slide_image_variants,
+        str(slide_id), None, (body.prompt if body else None), 3,
+    )
+
+
 @router.post("/{project_id}/slide-image", dependencies=[Depends(image_generate_limit)])
 async def generate_slide_image(
     slide_type: str = Query(...),
