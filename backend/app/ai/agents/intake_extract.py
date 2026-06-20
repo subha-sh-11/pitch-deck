@@ -30,9 +30,18 @@ _FIELDS: dict[str, str] = {
                 "(synthesize from the whole story).",
     "storyWorld": "The setting/world: place, era, social texture, rules of the world, and how the "
                   "world itself creates pressure on the characters (extract + describe).",
-    "mainCharacters": "EVERY significant character as 'Name — role — arc: who they are at the start, "
-                      "what they want vs. need, how they change.', separated by periods. Lead(s) "
-                      "first, then antagonist, then key supporting (extract — real names from the text).",
+    "mainCharacters": "EVERY significant character — leads, antagonist, AND the supporting ensemble / "
+                      "comedic players / sidekicks, never just the protagonist. Format each as 'Name "
+                      "(\"Nickname\" if the script gives one) — role — arc: who they are at the start, "
+                      "what they want vs. need, how they change.', separated by periods. Name the "
+                      "members of any group individually (e.g. a trio of friends — list all three). "
+                      "Lead(s) first, then antagonist, then key supporting (extract — real names "
+                      "from the text).",
+    "supportingCharacters": "The recurring NON-lead characters — sidekicks, mentors, comic relief, "
+                            "family, the ensemble — each as 'Name (\"Nickname\" if any) — role — what "
+                            "they contribute to the story.', separated by periods. List every "
+                            "supporting player who actually matters; do not collapse them into the "
+                            "leads (extract — real names from the text).",
     "characterDynamics": "The relationship MAP: who is bound to whom (love, rivalry, debt, blood, "
                          "duty), which relationships shift across the story, and the central "
                          "relationship the story is really about (extract).",
@@ -53,6 +62,9 @@ _FIELDS: dict[str, str] = {
     "textureStyle": "Texture/grain/film-stock feel that suits the story's era, world and tone (synthesize).",
     "designDirection": "One-line directorial/visual design direction that a cinematographer could "
                        "shoot from (synthesize).",
+    "directorVision": "The director's creative VISION for the film — the experience they're chasing, "
+                      "the why-this-story-now, the emotional and visual ambition, in 2-3 sentences "
+                      "written as a director's vision statement (synthesize from the material).",
     "themes": "The core themes the story ACTUALLY explores through its events — what the story is "
               "about underneath the plot, comma-separated (synthesize).",
     "keyScenes": "3-5 signature scenes FROM THE TEXT that a pitch deck should showcase: the opening "

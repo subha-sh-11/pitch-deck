@@ -16,14 +16,14 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
     /* ── Editorial full-width columns — for image-less or very long synopses ── */
     return (
       <SlideFrame>
-        <div className="absolute inset-0 bg-[#0a0a0c]" />
+        <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,211,238,0.05),transparent_50%)]" />
         <div className="relative flex h-full flex-col justify-center p-[8%]">
           <SlideLabel>
             <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
           </SlideLabel>
           <div
-            className="mt-6 gap-10 text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF] [column-fill:balance]"
+            className="mt-6 gap-10 text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)] [column-fill:balance]"
             style={{ columns: 2 }}
           >
             {paragraphs.map((para) => (
@@ -44,7 +44,7 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
   /* ── Split: text left, imagery right ── */
   return (
     <SlideFrame>
-      <div className="absolute inset-0 bg-[#0a0a0c]" />
+      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
       <div className="relative grid h-full grid-cols-2 gap-0">
         <div className="flex flex-col justify-center p-[8%] pr-[6%]">
           <SlideLabel>
@@ -54,7 +54,7 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
             k="body"
             as="div"
             multiline
-            className="mt-5 whitespace-pre-line text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[#9CA3AF]"
+            className="mt-5 whitespace-pre-line text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
             value={content.body ?? ""}
           />
         </div>

@@ -42,8 +42,16 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
       data-slide-root
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
-      className={`relative h-full w-full overflow-hidden bg-[#0a0a0c] text-[#F5F1E8] ${className}`}
-      style={{ containerType: "size" } as CSSProperties}
+      className={`relative h-full w-full overflow-hidden ${className}`}
+      // Background/text follow the deck palette (via CSS vars) and fall back to the dark
+      // cinematic default — so changing the theme's base/text colour recolours every slide.
+      style={
+        {
+          containerType: "size",
+          background: "var(--slide-bg, #0a0a0c)",
+          color: "var(--slide-text, #F5F1E8)",
+        } as CSSProperties
+      }
     >
       {resolvedImage && (
         // eslint-disable-next-line @next/next/no-img-element

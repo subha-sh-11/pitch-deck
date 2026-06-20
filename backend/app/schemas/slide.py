@@ -8,6 +8,13 @@ class CharacterBlock(CamelModel):
     name: str
     role: str
     description: str
+    # Short physical descriptor (apparent age / age-range, build, defining look) so the generated
+    # portrait matches the character — kept distinct from the narrative `description`.
+    appearance: str | None = None
+    wound: str | None = None
+    # Optional generated portrait for this character (per-element imagery).
+    image_url: str | None = None
+    image_prompt: str | None = None
 
 
 class CompBlock(CamelModel):
@@ -18,11 +25,18 @@ class CompBlock(CamelModel):
 class ItemBlock(CamelModel):
     title: str
     description: str
+    # Optional per-item generated image (e.g. a distinct visual for each genre on the
+    # genre-blend slide). Kept here so editor PATCHes don't strip it on merge.
+    image_url: str | None = None
+    image_prompt: str | None = None
 
 
 class MoodBlock(CamelModel):
     label: str
     color: str
+    # Optional generated moodboard frame for this tile (per-element imagery).
+    image_url: str | None = None
+    image_prompt: str | None = None
 
 
 class SlideContent(CamelModel):

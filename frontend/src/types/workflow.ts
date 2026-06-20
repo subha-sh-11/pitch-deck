@@ -61,6 +61,7 @@ export interface IntakeFormData {
   synopsis: string;
   storyWorld: string;
   mainCharacters: string;
+  supportingCharacters: string;
   characterDynamics: string;
   usp: string;
   showCross: string;
@@ -81,6 +82,7 @@ export interface IntakeFormData {
   pitchingTo: string;
   creativeTeam: string;
   directorStatement: string;
+  directorVision: string;
   budget: string;
   productionStatus: string;
   distribution: string;

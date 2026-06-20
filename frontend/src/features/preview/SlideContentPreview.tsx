@@ -47,13 +47,9 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     }
   }, [draftSlides.length, initDraftSlides]);
 
-  useEffect(() => {
-    if (draftSlides.length > 0 && !selectedId) {
-      setSelectedId(draftSlides[0].id);
-    }
-  }, [draftSlides, selectedId]);
-
-  const selected = getSelectedSlide(draftSlides, selectedId);
+  // Default to the first slide when nothing is explicitly selected — derived, not stored,
+  // so there's no setState-in-effect. User selections still take precedence via selectedId.
+  const selected = getSelectedSlide(draftSlides, selectedId) ?? draftSlides[0];
 
   async function handleRegenerateSlide() {
     if (!selected) return;

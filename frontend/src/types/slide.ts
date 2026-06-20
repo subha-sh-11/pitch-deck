@@ -29,15 +29,19 @@ export interface SlideContent {
   body?: string;
   footer?: string;
   bullets?: string[];
-  items?: { title: string; description: string }[];
+  items?: { title: string; description: string; imageUrl?: string; imagePrompt?: string }[];
   characters?: {
     name: string;
     role: string;
     description: string;
+    /** Apparent age / build / defining look — drives the portrait so the face matches. */
+    appearance?: string;
     wound?: string;
+    imageUrl?: string;
+    imagePrompt?: string;
   }[];
   comps?: { title: string; note: string; posterUrl?: string }[];
-  moodBlocks?: { label: string; color: string }[];
+  moodBlocks?: { label: string; color: string; imageUrl?: string; imagePrompt?: string }[];
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
@@ -92,10 +96,22 @@ export type SlideBackgroundKey =
   | "water"
   | "dark-gradient";
 
+/** How a slide arranges its image vs its text. "full" = image full-bleed with text overlaid
+ *  (default); "split" = image one side, text the other (two-column); "framed" = image inset as a
+ *  bordered block beside the text. */
+export type SlideComposition = "full" | "split" | "framed";
+
 export interface SlideAppearance {
   styleVariant: SlideStyleVariant;
   accentColor: string;
   backgroundKey: SlideBackgroundKey;
+  /** Optional per-slide text colour override (wins over the deck palette text) — used when a
+   *  slide's background (e.g. a dark full-bleed image) needs different text from the deck theme. */
+  textColor?: string;
+  /** Per-slide composition variant (text-centric slides: logline, generic). */
+  composition?: SlideComposition;
+  /** Which side the image sits on for split/framed compositions (default "right"). */
+  imageSide?: "left" | "right";
 }
 
 export interface SlideComment {

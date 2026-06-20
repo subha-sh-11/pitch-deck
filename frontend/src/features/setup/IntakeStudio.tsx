@@ -7,6 +7,7 @@ import { projectRoutes } from "@/lib/routes";
 import { ChatPanel } from "./intake/ChatPanel";
 import { DeckCanvas } from "./intake/DeckCanvas";
 import { DesignBrief } from "./intake/DesignBrief";
+import { ReferenceUpload } from "./intake/ReferenceUpload";
 import { SlideWorkshop } from "./intake/SlideWorkshop";
 import { SlidePromptDock, WorkshopProvider } from "./intake/workshop";
 import { useInterview } from "./intake/useInterview";
@@ -95,7 +96,12 @@ export function IntakeStudio({ projectId }: { projectId: string }) {
         </header>
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === "questions" ? (
-            <DesignBrief iv={iv} />
+            <div className="flex h-full min-h-0 flex-col">
+              <ReferenceUpload iv={iv} />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <DesignBrief iv={iv} />
+              </div>
+            </div>
           ) : tab === "slides" ? (
             <SlideWorkshop onAssembled={() => setTab("preview")} />
           ) : (

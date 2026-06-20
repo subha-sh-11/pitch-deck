@@ -21,7 +21,8 @@ export const projectRoutes = {
   content: (id: string) => `/projects/${id}/templates`,
   design: (id: string) => `/projects/${id}/templates`,
   review: (id: string) => `/projects/${id}/setup/identity`,
-  export: (id: string) => `/projects/${id}/setup/identity`,
+  /** Real export/download page (PDF / PPTX / images / print). */
+  export: (id: string) => `/projects/${id}/export`,
   step: (id: string, stepId: WorkflowStepId) => {
     const map: Record<WorkflowStepId, (projectId: string) => string> = {
       intake: projectRoutes.setupIdentity,

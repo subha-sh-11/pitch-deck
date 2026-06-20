@@ -15,7 +15,7 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
   return (
     <SlideFrame imageUrl={content.imageUrl}>
       <div
-        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : "bg-[#0a0a0c]"}`}
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
@@ -32,7 +32,7 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
                 <EditableText
                   k={`item-${i}-title`}
                   as="h3"
-                  className="font-display text-lg font-semibold text-[#F5F1E8]"
+                  className="font-display text-lg font-semibold text-[var(--slide-text,#F5F1E8)]"
                   value={item.title}
                 />
                 {item.description && (
@@ -40,7 +40,7 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
                     k={`item-${i}-desc`}
                     as="p"
                     multiline
-                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                     value={item.description}
                   />
                 )}
@@ -53,7 +53,7 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
               k="body"
               as="p"
               multiline
-              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[#C9CDD3]"
+              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[var(--slide-text-muted,#C9CDD3)]"
               value={content.body}
             />
           )

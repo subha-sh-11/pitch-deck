@@ -19,12 +19,12 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
         className={`absolute inset-0 ${
           hasImage
             ? "bg-black/25"
-            : "bg-gradient-to-br from-[#0c0c0e] via-[#141418] to-[#080808]"
+            : "bg-[var(--slide-bg,#0a0a0c)]"
         }`}
       />
 
       {/* Spotlight from top-right */}
-      <div className="absolute -right-20 -top-20 h-[70%] w-[60%] rounded-full bg-gradient-to-bl from-[#22d3ee]/12 via-[#A9C6C7]/8 to-transparent blur-3xl" />
+      <div className="absolute -right-20 -top-20 h-[70%] w-[60%] rounded-full bg-gradient-to-bl from-[var(--slide-accent,#22d3ee)]/12 via-[#A9C6C7]/8 to-transparent blur-3xl" />
 
       {/* Scrim so the title stays legible over imagery */}
       <div
@@ -48,7 +48,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
           <EditableText
             k="heading"
             as="h1"
-            className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]"
+            className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
             value={content.heading}
           />
           {content.subheading && (
@@ -65,7 +65,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
               k="body"
               as="p"
               multiline
-              className="mt-5 max-w-xl whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]"
+              className="mt-5 max-w-xl whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
               value={content.body}
             />
           )}
@@ -86,7 +86,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
               <EditableText
                 k="heading"
                 as="h1"
-                className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[#F5F1E8]"
+                className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
                 value={content.heading}
               />
               {content.subheading && (
@@ -103,7 +103,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
                   k="body"
                   as="p"
                   multiline
-                  className="mt-4 max-w-lg whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[#9CA3AF]"
+                  className="mt-4 max-w-lg whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                   value={content.body}
                 />
               )}
@@ -111,7 +111,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
                 <EditableText
                   k="footer"
                   as="p"
-                  className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]"
+                  className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[var(--slide-text-muted,#6b7280)]"
                   value={content.footer}
                 />
               )}

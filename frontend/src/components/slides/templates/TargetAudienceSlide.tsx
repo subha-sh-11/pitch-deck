@@ -14,7 +14,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
     <SlideFrame imageUrl={content.imageUrl}>
       <div
         className={`absolute inset-0 ${
-          content.imageUrl ? "bg-black/65" : "bg-gradient-to-br from-[#0c0c0e] to-[#101010]"
+          content.imageUrl ? "bg-black/65" : "bg-[var(--slide-bg,#0a0a0c)]"
         }`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
@@ -44,7 +44,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
                     k={`item-${i}-desc`}
                     as="p"
                     multiline
-                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                     value={item.description}
                   />
                 )}
@@ -57,7 +57,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
               k="body"
               as="p"
               multiline
-              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[#C9CDD3]"
+              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[var(--slide-text-muted,#C9CDD3)]"
               value={content.body}
             />
           )

@@ -30,6 +30,26 @@ def _mood_blocks(design: dict | None) -> list[dict]:
     ]
 
 
+def attach_film_backdrops(blocks: list) -> list:
+    """For visual-aesthetic mood tiles labelled with a reference FILM title, attach that film's
+    TMDB backdrop (a real still) as the tile image — so the slide shows actual visual references
+    from films whose look matches, not solid colours. Tiles TMDB can't match are left for the
+    image pipeline to fill with an original AI mood frame (never a bare colour swatch)."""
+    from app.ai import tmdb
+
+    out: list = []
+    for b in blocks or []:
+        if isinstance(b, dict):
+            b = dict(b)
+            label = str(b.get("label") or "").strip()
+            if label and not b.get("imageUrl"):
+                back = tmdb.backdrop_for(label)
+                if back:
+                    b["imageUrl"] = back
+        out.append(b)
+    return out
+
+
 def content_fallback(slide_type: str, intake: dict, design: dict | None = None) -> dict:
     """Deterministic SlideContent grounded in the intake form."""
     if slide_type == "cover":
@@ -111,8 +131,10 @@ _SYSTEM = (
     "design; less copy, better chosen, reads as more premium.\n"
     "  • BULLETS/ITEMS: parallel construction, each one a distinct idea, 3-5 max, every word "
     "earning its place.\n"
-    "  • CHARACTERS: name — role — one line that makes a producer see the casting opportunity: "
-    "their want, their wound, their contradiction.\n"
+    "  • CHARACTERS: name, role, and a one-line description that makes a producer see the casting "
+    "opportunity (want, wound, contradiction) — PLUS a short `appearance`: apparent age or "
+    "age-range, build, and defining physical look, grounded in the script (infer sensibly from the "
+    "role when unstated), so the deck casts and renders the RIGHT face.\n"
     "  • EMOTIONAL THROUGHLINE: echo the story's central tension in the slide's language so the "
     "deck reads as one voice from cover to contact.\n"
     "  • DIRECTOR'S INSTRUCTIONS: if the prompt contains a DIRECTOR'S INSTRUCTIONS section, it "
@@ -121,8 +143,12 @@ _SYSTEM = (
     "story material.\n"
     "Return ONLY a JSON object using ONLY the fields relevant to this slide type, from this set: "
     "heading (required), subheading, body, bullets (array of strings), items (array of {title, "
-    "description}), characters (array of {name, role, description}), comps (array of {title, note}), "
-    "moodBlocks (array of {label, color})."
+    "description}), characters (array of {name, role, description, appearance, wound}), comps "
+    "(array of {title, note}) — for SHOW CROSS, each comp.title is a real comparable film/series "
+    "the deck will show a poster for, so use exact, findable titles. moodBlocks (array of {label, "
+    "color}) — for a VISUAL AESTHETIC slide, make these 4-6 REFERENCE FILMS whose cinematography, "
+    "mood and tone match THIS film: set label to the EXACT, findable film title and color to a hex "
+    "sampled from that film's palette; the deck shows each film's still as a visual reference."
 )
 
 
@@ -167,11 +193,40 @@ def _label(camel: str) -> str:
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", camel).replace("_", " ").title()
 
 
+# The extracted-summary fields each slide is BUILT FROM — its "placeholders". Generation slots
+# THESE (and only these) into the per-slide prompt, so every slide stays on its own beat and
+# grounded in the story, instead of drowning in the entire intake dump on every slide.
+_SLIDE_FIELDS: dict[str, list[str]] = {
+    "cover": ["title", "tagline", "logline", "genreBlend"],
+    "logline": ["logline", "tone", "themes"],
+    "genre_blend": ["genreBlend", "tone", "themes"],
+    "synopsis": ["synopsis", "storyWorld", "themes"],
+    "story_world": ["storyWorld", "visualMood", "keyScenes", "themes"],
+    "character": ["mainCharacters", "characterDynamics"],
+    "supporting_characters": ["supportingCharacters", "characterDynamics"],
+    "usp": ["usp", "whyNow", "genreBlend"],
+    "show_cross": ["showCross", "targetAudience"],
+    "visual_aesthetic": ["visualAesthetic", "colorPalette", "textureStyle", "visualMood", "designDirection"],
+    "target_audience": ["targetAudience", "releaseFit", "distribution"],
+    "budget": ["budget", "productionStatus", "format"],
+    "market_potential": ["releaseFit", "distribution", "whyNow", "targetAudience"],
+    "directors_vision": ["directorVision", "directorStatement", "designDirection", "themes"],
+    "team": ["creativeTeam", "productionStatus"],
+    "contact": ["title", "pitchingTo"],
+    "generic": ["logline", "synopsis"],
+}
+
+# A compact throughline carried on every slide (so the deck reads as one voice), unless the field
+# is already this slide's primary material.
+_THROUGHLINE = ["title", "logline", "tone"]
+
+
 def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
                    design: dict | None, instructions: str | None = None) -> str:
-    """The exact user-prompt string sent to the LLM for this slide — plain English,
-    so the workshop's prompt panel reads like a brief, not code. Generation uses
-    this same text verbatim."""
+    """The exact user-prompt sent to the LLM for THIS slide — a focused brief that slots only the
+    extracted-summary fields this slide is built from (its "placeholders") plus a short throughline,
+    rather than dumping the whole intake on every slide. Shown verbatim in the workshop panel, so
+    each slide's prompt reads as a clear, on-theme brief."""
     design = design or {}
     lines: list[str] = [
         f'Write the "{title}" slide of this film pitch deck.',
@@ -181,16 +236,28 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
     ]
     if design.get("cinematicTone"):
         lines.append(f"DECK TONE: {design['cinematicTone']}")
-    if design.get("mood"):
-        lines.append(f"DECK MOOD: {design['mood']}")
     visual_style = design.get("visualStyle")
     if isinstance(visual_style, list) and visual_style:
-        lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style))
+        lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style[:4]))
 
-    lines += ["", "STORY MATERIAL (ground every word strictly in this; never invent):"]
-    for key, value in (intake or {}).items():
-        if isinstance(value, str) and value.strip():
-            lines.append(f"- {_label(key)}: {value.strip()}")
+    relevant = _SLIDE_FIELDS.get(slide_type, ["logline", "synopsis"])
+    lines += ["", "THIS SLIDE IS BUILT FROM (use these exact details; do not pull in other slides' "
+              "material):"]
+    filled = False
+    for key in relevant:
+        val = _g(intake, key)
+        if val:
+            lines.append(f"- {_label(key)}: {val}")
+            filled = True
+    if not filled:
+        lines.append("- (nothing specific captured yet — infer tightly from the throughline below; "
+                     "never invent plot)")
+
+    throughline = [f"- {_label(k)}: {_g(intake, k)}"
+                   for k in _THROUGHLINE if _g(intake, k) and k not in relevant]
+    if throughline:
+        lines += ["", "STORY THROUGHLINE (keep one voice; do NOT restate these on this slide):"]
+        lines += throughline
 
     if instructions and instructions.strip():
         lines += ["", "DIRECTOR'S INSTRUCTIONS (follow faithfully):", instructions.strip()]
@@ -217,9 +284,13 @@ def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | 
     )
     if not isinstance(result, dict):
         result = fb
-    # visual_aesthetic moodBlocks should reflect the real palette even if the LLM omitted them
-    if slide_type == "visual_aesthetic" and not result.get("moodBlocks"):
-        result["moodBlocks"] = _mood_blocks(design)
+    # visual_aesthetic: each mood tile is a REFERENCE FILM — attach its real still (TMDB backdrop)
+    # so the slide shows actual visual references, not solid colours. Tiles TMDB can't match are
+    # filled with an original AI mood frame later in the image pipeline.
+    if slide_type == "visual_aesthetic":
+        if not result.get("moodBlocks"):
+            result["moodBlocks"] = _mood_blocks(design)
+        result["moodBlocks"] = attach_film_backdrops(result["moodBlocks"])
     result = _ensure_renderable(slide_type, result, fb)
 
     # Show Cross: attach real comparable-film posters (TMDB) when available.

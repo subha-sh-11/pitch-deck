@@ -22,6 +22,11 @@ from app.ai.llm import complete_json
 #   add_slide        {afterSlideNumber, slideType}                               → onInsertAfter
 #   delete_slide     {slideId}                                                    → onDeleteSlide
 #   regenerate_slide {slideId}                                                    → onRegenerateSlide
+#   generate_image   {slideId, imagePrompt?}                                      → onGenerateImage
+#   set_appearance   {slideId, styleVariant?, accentColor?, backgroundKey?}       → onSetAppearance
+#   set_accent       {hex}                                                        → onSetAccent (deck-wide)
+#   set_theme        {palette[]}                                                  → onSetTheme  (deck-wide)
+#   set_font         {font}                                                       → onSetFont   (deck-wide)
 _SYSTEM = """\
 You are the deck editor for a cinematic film pitch deck. The director tells you, in plain language,
 how to change the deck; you translate that into precise EDIT ACTIONS on the existing slides and a
@@ -32,16 +37,52 @@ slide(s) the instruction refers to — by name, type, position ("the cover", "sl
 slide", "the protagonist") — and emit ONLY the actions needed. Never invent slide ids; use the ids
 you were given. Ground any new copy in the existing deck — don't invent unrelated plot.
 
+CONVERSATION CONTINUITY — you are mid-conversation, not answering in isolation:
+- You are given the RECENT CONVERSATION. Read it before deciding anything. If YOUR previous message
+  asked the director a question (e.g. "which slide?"), their next message is the ANSWER to it —
+  resolve it in that context and carry out the ORIGINAL request. Example: you asked "which slide
+  should get the images?" and they reply "9th" → that means "add the images to slide 9", NOT "move a
+  slide to position 9".
+- A bare number or ordinal on its own ("6", "9th", "the 4th") is ALWAYS a reference to that slide
+  number — almost always the answer to your previous question. It is NEVER, by itself, a move or
+  reorder command. Only treat something as a move when the director uses explicit move/reorder
+  language ("move … up/down", "put … after …", "make … slide 9").
+- Never re-ask something already answered earlier in the conversation. If the conversation now gives
+  you enough to act, ACT — do not loop back to "which slide?".
+
+IMAGERY — putting pictures on slides (DO IT, don't suggest it):
+- When the director asks for an image ("put an image on this slide", "add character art", "give me a
+  visual", "make a relevant image"), EMIT a generate_image action — never reply "you can add one in
+  the editor". You are an agent; perform the action.
+- generate_image redraws ONE slide's image per action. If no imagePrompt is given, leave it out and
+  the system composes a real prompt from the slide + script + design. Only set imagePrompt when the
+  director described what they want to see; ground it in the actual story.
+- For "images for the 6 characters", you cannot render several separate portraits inside one slide —
+  instead emit a generate_image for the main-character slide AND one for the supporting-characters
+  slide (and say so). Never claim you produced images you didn't.
+- GENRE-BLEND is the exception: a generate_image on the genre_blend slide automatically renders ONE
+  image PER genre tile. So you CAN give each genre (comedy, crime, drama, …) its own image — emit a
+  SINGLE generate_image for the genre_blend slide and truthfully say each genre got its own visual.
+
 ACTIONS (emit only what's needed, in order):
 - edit_slide:       { "op": "edit_slide", "slideId": "<id>", "title": "<opt>", "heading": "<opt>",
                       "subheading": "<opt>", "body": "<opt>", "bullets": ["<opt>", ...] }
 - move_slide:       { "op": "move_slide", "slideId": "<id>", "direction": "up"|"down", "steps": <int default 1> }
 - add_slide:        { "op": "add_slide", "afterSlideNumber": <int>, "slideType": "<type>" }
 - delete_slide:     { "op": "delete_slide", "slideId": "<id>" }
-- regenerate_slide: { "op": "regenerate_slide", "slideId": "<id>" }   # re-draws that slide's imagery
+- regenerate_slide: { "op": "regenerate_slide", "slideId": "<id>" }   # rewrite copy + imagery for the slide
+- generate_image:   { "op": "generate_image", "slideId": "<id>", "imagePrompt": "<optional>" }  # draw/replace just the image
+- set_appearance:   { "op": "set_appearance", "slideId": "<id>", "styleVariant": "cinematic"|"minimal"|"bold",
+                      "accentColor": "#RRGGBB", "textColor": "#RRGGBB",
+                      "backgroundKey": "default"|"warm-portrait"|"concrete"|"water"|"dark-gradient",
+                      "composition": "full"|"split"|"framed", "imageSide": "left"|"right" }
+                      # per-slide layout / look — include only the keys you're changing.
+                      # textColor = the TEXT colour on JUST this slide (wins over the deck theme)
+                      # composition = how the image sits vs the text (see COMPOSITION rule)
 - set_accent:       { "op": "set_accent", "hex": "#RRGGBB" }          # instant accent recolour of the WHOLE deck
 - set_theme:        { "op": "set_theme", "palette": [ {"name": "Base", "hex": "#RRGGBB", "usage": "background"},
                       {"name": "Accent", "hex": "#RRGGBB", "usage": "accent"}, {"name": "Text", "hex": "#RRGGBB", "usage": "text"} ] }
+- set_font:         { "op": "set_font", "font": "cormorant"|"playfair"|"oswald"|"poppins"|"anton" }  # deck-wide display font
 
 slideType is one of: cover, logline, genre_blend, synopsis, story_world, character,
 supporting_characters, usp, show_cross, visual_aesthetic, target_audience, budget, market_potential,
@@ -49,12 +90,47 @@ directors_vision, team, contact, generic.
 
 Rules:
 - Only include fields you are actually changing in edit_slide (omit the rest).
-- For COLOUR / THEME / palette / mood changes ("make it blue", "warmer", "darker palette", "go bold
-  red") use set_accent (a single accent colour) or set_theme (a full base/accent/text palette). These
-  apply to the ENTIRE deck INSTANTLY with no regeneration — strongly prefer them for any colour ask.
-  Always return real 6-digit hex values. Use regenerate_slide ONLY to redraw a slide's actual image.
-- If the instruction is unclear or not about editing the deck, return actions: [] and ask, in the
-  message, for the one clarification you need (keep it short).
+- IMAGE asks → generate_image (image only). COPY/text rewrites → edit_slide. "Regenerate the whole
+  slide" → regenerate_slide (redoes copy AND image).
+- LAYOUT / per-slide look ("make this slide minimal", "bolder layout", "different background here",
+  "change the layout of slide 4") → set_appearance on that slide. For the WHOLE deck's colour
+  ("make it blue", "warmer", "go bold red") use set_accent or set_theme — they apply instantly with
+  no regeneration. Always return real 6-digit hex values.
+- TEXT colour on a SINGLE slide ("the text isn't visible here", "make the text white on this slide",
+  "this slide's text should be darker") → set_appearance on that slide with textColor. This is the
+  fix when text is hard to read over a slide's image/background — it overrides the deck theme for
+  that slide ONLY. Use the currently selected slide if they don't name one. (To recolour text across
+  the WHOLE deck instead, use set_theme with a new "text" palette entry.)
+- BACKGROUND or whole THEME of the deck ("background is black, make it white", "light theme",
+  "light background", "dark theme", "cream/warm theme") → set_theme with a full palette: the new
+  BASE as usage "background", a CONTRASTING text colour as usage "text" (dark text on a light bg,
+  light text on a dark bg), and keep/choose a sensible accent. E.g. light theme → palette
+  [base #F7F5F0 "background", accent <warm/sensible> "accent", text #1A1A1F "text"]. Don't use
+  set_accent for a background/theme ask (accent ≠ background).
+- After a theme change, newly GENERATED images automatically follow it (a light theme yields bright
+  images, dark yields cinematic). Existing images don't change retroactively — so when you switch to
+  a light theme, mention they can regenerate a slide's image (generate_image) to get matching bright
+  artwork.
+- DEFAULT TARGET: if the director doesn't name a slide ("add an image", "make this minimal"), act on
+  the CURRENTLY SELECTED SLIDE shown below. Only ask which slide if there is no selected slide AND the
+  reference is genuinely ambiguous.
+- "Apply to every slide / the whole deck" (layout or look) → emit one action per slide in the deck
+  (for colour, prefer a single set_accent / set_theme).
+- FONT changes ("change the font", "use a serif", "make it Times", "bolder type") → set_font. Only
+  these display fonts are available; map the request to the NEAREST one:
+    serif / classic / elegant / "Times" / "Garamond"  → "cormorant" (or "playfair")
+    bold / poster / impact / heavy / condensed         → "anton" (or "oswald")
+    clean / modern / sans / minimal                    → "poppins"
+  Say which font you applied (and that it's the closest available match if they named a specific one).
+- Be an agent: when the instruction is a clear edit, DO IT (emit the action) and confirm.
+
+NEVER FABRICATE — this is critical:
+- Only claim you changed something if you emitted a matching action for it. Do NOT say "Changed the
+  font / colour / image" unless you actually emitted set_font / set_accent / generate_image, etc.
+- If you genuinely cannot do what's asked (no matching action exists), say so plainly and emit NO
+  action — never report a success you didn't perform.
+- Return actions: [] and ask ONE short clarification only when the instruction is genuinely unclear
+  or not about editing the deck.
 
 OUTPUT — return ONLY this JSON object:
 { "message": "<one short, in-character line describing what you changed or what you need>",
@@ -76,25 +152,75 @@ def _slides_digest(slides: list[dict]) -> str:
     return "\n".join(lines) or "  (no slides yet)"
 
 
-def _build_prompt(instruction: str, slides: list[dict]) -> str:
+def _history_digest(history: list[dict] | None) -> str:
+    """Recent conversation so the agent can resolve follow-ups ("9th", "that slide")."""
+    lines = []
+    for t in (history or [])[-8:]:
+        who = "director" if t.get("role") == "user" else "you"
+        text = (t.get("text") or "").strip()
+        if text:
+            lines.append(f"  {who}: {text}")
+    return "\n".join(lines) or "  (start of conversation)"
+
+
+def _selected_digest(slides: list[dict], selected_slide_id: str | None) -> str:
+    """The slide the director currently has open — the default target for unaddressed edits."""
+    if not selected_slide_id:
+        return "  (none — ask which slide only if the instruction is ambiguous)"
+    for s in slides or []:
+        if s.get("id") == selected_slide_id:
+            return (
+                f'  id={s.get("id")} #{s.get("slideNumber")} type={s.get("slideType")} '
+                f'title="{s.get("title", "")}"'
+            )
+    return "  (none — ask which slide only if the instruction is ambiguous)"
+
+
+def _build_prompt(instruction: str, slides: list[dict], history: list[dict] | None = None,
+                  selected_slide_id: str | None = None, image_names: list[str] | None = None) -> str:
+    images_note = ""
+    if image_names:
+        images_note = (
+            "REFERENCE IMAGES ATTACHED TO THIS TURN: " + ", ".join(image_names) + " — the director "
+            "shared these as visual direction. Analyse the palette, light and mood you actually see, "
+            "and adapt the deck to them: set_theme / set_accent for colour, or generate_image with an "
+            "imagePrompt that echoes what you saw. Acknowledge specifically what you observed.\n\n"
+        )
     return (
+        images_note
+        + "RECENT CONVERSATION (oldest first; the director's LATEST instruction is shown again below):\n"
+        f"{_history_digest(history)}\n\n"
+        "CURRENTLY SELECTED SLIDE (the director is looking at this — default target if they don't name one):\n"
+        f"{_selected_digest(slides, selected_slide_id)}\n\n"
         "CURRENT DECK:\n"
         f"{_slides_digest(slides)}\n\n"
-        f'DIRECTOR\'S INSTRUCTION:\n  "{instruction}"\n\n'
-        "Translate the instruction into edit actions on the slides above and confirm what you did."
-        " Return ONLY the JSON."
+        f'DIRECTOR\'S LATEST INSTRUCTION:\n  "{instruction}"\n\n'
+        "Use the conversation for context — if your previous line asked a question, this instruction"
+        " is the answer to it (a bare number/ordinal means that slide number, never a move). If no"
+        " slide is named, act on the CURRENTLY SELECTED SLIDE. Translate the instruction into edit"
+        " actions on the slides above and confirm what you did. Return ONLY the JSON."
     )
 
 
-def run(instruction: str, slides: list[dict]) -> dict:
-    """Turn a natural-language instruction into {message, actions[]}."""
+def run(instruction: str, slides: list[dict], history: list[dict] | None = None,
+        selected_slide_id: str | None = None, images: list[dict] | None = None) -> dict:
+    """Turn a natural-language instruction into {message, actions[]}.
+
+    ``history``: recent [{"role": "user"|"assistant", "text": str}] turns so the agent can
+    resolve follow-ups like a bare "9th" against its own previous question.
+    ``selected_slide_id``: the slide the director currently has open — default edit target.
+    ``images``: reference images shared this turn ([{"name","mediaType","data"}]) for the
+    vision model to analyse and adapt the deck to.
+    """
+    image_names = [img.get("name", "reference") for img in images] if images else None
     return complete_json(
         system=_SYSTEM,
-        prompt=_build_prompt(instruction, slides),
+        prompt=_build_prompt(instruction, slides, history, selected_slide_id, image_names),
         cache_prefix="slide_edit",
         max_tokens=1200,
         temperature=0.3,
         use_cache=False,
+        images=images,
         fallback=lambda: _fallback(instruction, slides),
     )
 
@@ -114,10 +240,37 @@ def _fallback(instruction: str, slides: list[dict]) -> dict:
 
 _VALID_OPS = {
     "edit_slide", "move_slide", "add_slide", "delete_slide", "regenerate_slide",
-    "set_accent", "set_theme",
+    "generate_image", "set_appearance", "set_accent", "set_theme", "set_font",
 }
 _EDITABLE = {"title", "heading", "subheading", "body", "bullets"}
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_STYLE_VARIANTS = {"cinematic", "minimal", "bold"}
+_BACKGROUND_KEYS = {"default", "warm-portrait", "concrete", "water", "dark-gradient"}
+# Only these five display fonts are actually loaded in the app. The model may name any font
+# ("Times", "a serif", "something bold") — map it to the nearest one we can render.
+_FONTS = {"cormorant", "playfair", "oswald", "poppins", "anton"}
+_FONT_SYNONYMS: list[tuple[tuple[str, ...], str]] = [
+    (("anton", "impact", "poster", "heavy", "ultra", "blockbuster", "massive", "bold display"), "anton"),
+    (("oswald", "condensed", "narrow", "gothic", "tall"), "oswald"),
+    (("poppins", "sans", "modern", "clean", "minimal", "grotesk", "geometric", "helvetica",
+      "arial", "futura", "roboto"), "poppins"),
+    (("playfair", "didot", "didone", "fashion", "high-contrast", "luxury", "vogue"), "playfair"),
+    (("cormorant", "serif", "times", "garamond", "georgia", "roman", "classic", "elegant",
+      "book", "literary", "editorial"), "cormorant"),
+]
+
+
+def _normalize_font(value: Any) -> str | None:
+    """Map any font name the model emits to one of the five loaded display fonts."""
+    v = str(value or "").strip().lower()
+    if not v:
+        return None
+    if v in _FONTS:
+        return v
+    for keys, font in _FONT_SYNONYMS:
+        if any(k in v for k in keys):
+            return font
+    return "cormorant"  # sensible serif default for an unrecognised request
 
 
 def sanitize(result: dict, slides: list[dict]) -> dict:
@@ -131,7 +284,8 @@ def sanitize(result: dict, slides: list[dict]) -> dict:
         op = a.get("op")
         if op not in _VALID_OPS:
             continue
-        if op in {"edit_slide", "move_slide", "delete_slide", "regenerate_slide"}:
+        if op in {"edit_slide", "move_slide", "delete_slide", "regenerate_slide",
+                  "generate_image", "set_appearance"}:
             if a.get("slideId") not in ids:
                 continue
         if op == "edit_slide":
@@ -158,6 +312,35 @@ def sanitize(result: dict, slides: list[dict]) -> dict:
                 "afterSlideNumber": int(a.get("afterSlideNumber") or len(slides or [])),
                 "slideType": a["slideType"],
             })
+        elif op == "generate_image":
+            prompt = a.get("imagePrompt")
+            action: dict[str, Any] = {"op": "generate_image", "slideId": a["slideId"]}
+            if isinstance(prompt, str) and prompt.strip():
+                action["imagePrompt"] = prompt.strip()
+            clean.append(action)
+        elif op == "set_appearance":
+            ap: dict[str, Any] = {"op": "set_appearance", "slideId": a["slideId"]}
+            sv = a.get("styleVariant")
+            if isinstance(sv, str) and sv in _STYLE_VARIANTS:
+                ap["styleVariant"] = sv
+            ac = a.get("accentColor")
+            if isinstance(ac, str) and _HEX.match(ac):
+                ap["accentColor"] = ac
+            tc = a.get("textColor")
+            if isinstance(tc, str) and _HEX.match(tc):
+                ap["textColor"] = tc
+            bg = a.get("backgroundKey")
+            if isinstance(bg, str) and bg in _BACKGROUND_KEYS:
+                ap["backgroundKey"] = bg
+            comp = a.get("composition")
+            if isinstance(comp, str) and comp in {"full", "split", "framed"}:
+                ap["composition"] = comp
+            side = a.get("imageSide")
+            if isinstance(side, str) and side in {"left", "right"}:
+                ap["imageSide"] = side
+            if len(ap) == 2:  # only op + slideId, nothing actually changed
+                continue
+            clean.append(ap)
         elif op == "set_accent":
             hex_ = a.get("hex")
             if not (isinstance(hex_, str) and _HEX.match(hex_)):
@@ -172,6 +355,11 @@ def sanitize(result: dict, slides: list[dict]) -> dict:
             if not palette:
                 continue
             clean.append({"op": "set_theme", "palette": palette})
+        elif op == "set_font":
+            font = _normalize_font(a.get("font"))
+            if not font:
+                continue
+            clean.append({"op": "set_font", "font": font})
         else:  # delete_slide / regenerate_slide
             clean.append({"op": op, "slideId": a["slideId"]})
     return {"message": (result or {}).get("message") or "Done.", "actions": clean}

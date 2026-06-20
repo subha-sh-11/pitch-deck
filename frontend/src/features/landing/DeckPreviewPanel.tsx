@@ -84,11 +84,16 @@ export function DeckPreviewPanel() {
   const activeSlide = PREVIEW_SLIDES[activeIndex];
 
   useEffect(() => {
-    setMounted(true);
+    // Flag mount on the next frame (not synchronously in the effect body) so the entrance
+    // transition runs after first paint.
+    const raf = requestAnimationFrame(() => setMounted(true));
     const interval = setInterval(() => {
       setActiveIndex((i) => (i + 1) % PREVIEW_SLIDES.length);
     }, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(interval);
+    };
   }, []);
 
   return (

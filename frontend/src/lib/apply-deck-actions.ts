@@ -1,6 +1,6 @@
 import type { DeckAction } from "@/lib/api/deck";
 import type { ColorToken } from "@/types/design";
-import type { Slide, SlideContent, SlideType } from "@/types/slide";
+import type { Slide, SlideAppearance, SlideContent, SlideType } from "@/types/slide";
 
 /** The editor mutation surface the agent's actions are applied through. */
 export interface DeckActionHandlers {
@@ -10,9 +10,16 @@ export interface DeckActionHandlers {
   onInsertAfter: (index: number, slideType: SlideType) => void;
   onDeleteSlide: (id: string) => boolean;
   onRegenerateSlide: (id: string) => Promise<void>;
+  /** Generate (or replace) just the image on a slide, optionally from a prompt.
+   *  Falls back to onRegenerateSlide when not provided. */
+  onGenerateImage?: (id: string, imagePrompt?: string) => Promise<void>;
+  /** Per-slide layout / look (style variant, accent, background). */
+  onSetAppearance?: (id: string, patch: Partial<SlideAppearance>) => void;
   /** Instant, regen-free design changes (deck-wide). */
   onSetAccent?: (hex: string) => void;
   onSetTheme?: (palette: ColorToken[]) => void;
+  /** Deck-wide display font (one of the loaded theme fonts). */
+  onSetFont?: (font: string) => void;
 }
 
 /**
@@ -43,6 +50,18 @@ export async function applyDeckActions(
         await h.onRegenerateSlide(a.slideId);
         break;
       }
+      case "generate_image": {
+        // Prefer image-only generation; fall back to a full slide regen if unavailable.
+        if (h.onGenerateImage) await h.onGenerateImage(a.slideId, a.imagePrompt);
+        else await h.onRegenerateSlide(a.slideId);
+        break;
+      }
+      case "set_appearance": {
+        const { op: _op, slideId, ...patch } = a;
+        void _op;
+        h.onSetAppearance?.(slideId, patch);
+        break;
+      }
       case "add_slide": {
         const idx = Math.min(Math.max((a.afterSlideNumber ?? order.length) - 1, 0), Math.max(order.length - 1, 0));
         h.onInsertAfter(idx, a.slideType as SlideType);
@@ -67,6 +86,10 @@ export async function applyDeckActions(
       }
       case "set_theme": {
         h.onSetTheme?.(a.palette as ColorToken[]);
+        break;
+      }
+      case "set_font": {
+        h.onSetFont?.(a.font);
         break;
       }
     }

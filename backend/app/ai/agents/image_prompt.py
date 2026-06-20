@@ -1,7 +1,13 @@
-"""Image Prompt agent → register-anchored prompts for slides that carry generated imagery."""
+"""Image Prompt agent → story-grounded prompts for slides that carry generated imagery.
+
+`build_prompt` asks the LLM to write ONE vivid diffusion prompt grounded STRICTLY in the
+film summary + this specific slide's content + the design direction (with a deterministic,
+register-anchored fallback so a no-key environment still works)."""
 from __future__ import annotations
 
 import re
+
+from app.ai.llm import complete_json
 
 # Every slide gets a genre-themed image (kind, aspect). Character slides use a portrait ratio.
 IMAGE_SLIDES: dict[str, tuple[str, str]] = {
@@ -58,6 +64,36 @@ def _clean(text: str) -> str:
     return re.sub(r"\s{2,}", " ", _STRIP.sub("", text or "")).strip(" ,.-")
 
 
+def _bg_hex(design: dict) -> str:
+    """The deck's base/background colour from the palette, if any."""
+    for c in design.get("palette") or []:
+        usage = (c.get("usage") or "").lower()
+        if "background" in usage or "base" in usage:
+            hex_ = (c.get("hex") or "").strip()
+            if hex_:
+                return hex_
+    return ""
+
+
+def _is_light_theme(design: dict) -> bool:
+    """True when the deck's background colour is light — so images should be bright/high-key
+    instead of the default dark cinematic look."""
+    hex_ = _bg_hex(design).lstrip("#")
+    if len(hex_) != 6:
+        return False
+    try:
+        r, g, b = (int(hex_[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except ValueError:
+        return False
+    # Perceived luminance (Rec. 601). > ~0.6 reads as a light background.
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 0.6
+
+
+_DARK_WORDS = re.compile(
+    r"\b(dark|low-key|moody|desaturat\w*|noir|shadowy|gloom\w*|murky|dim)\b", re.IGNORECASE
+)
+
+
 def _subject(slide_type: str, intake: dict) -> str:
     """The concrete focus of the frame, grounded in the intake."""
     if slide_type == "cover":
@@ -73,8 +109,12 @@ def _subject(slide_type: str, intake: dict) -> str:
     return _g(intake, "storyWorld") or _g(intake, "visualMood") or _g(intake, "logline")
 
 
-def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
-    """Assemble a prompt that captures THIS film's genre, tone, emotion, and regional setting."""
+def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
+                          has_references: bool = False) -> str:
+    """Register-anchored fallback: assemble a prompt from the intake + design (no LLM).
+
+    When ``has_references`` is set, lighting/grade defer to the supplied reference images
+    instead of forcing the register's default dark cinematic look."""
     design = design or {}
     region = _g(intake, "storyWorld")          # where it's set → regional authenticity
     genre = _g(intake, "genreBlend")           # genre cues (allows weapons/tension when fitting)
@@ -83,36 +123,55 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
     mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
     subject = _subject(slide_type, intake)
 
+    light = _is_light_theme(design)
+
     image_style = design.get("imageStyle", "cinematic, realistic lighting")
     visual_style = ", ".join((design.get("visualStyle") or [])[:4])
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+    # On a light deck — or when references drive the look — drop any dark descriptors the
+    # register/design carries so they don't fight the brighter/warmer look that was asked for.
+    if light or has_references:
+        image_style = _DARK_WORDS.sub("", image_style).strip(" ,") or "naturalistic, soft contrast"
+        visual_style = _DARK_WORDS.sub("", visual_style).strip(" ,")
 
-    # Framing per slide — people are allowed so scenes feel lived-in and emotional.
+    # Lighting + grade are LIGHTING-NEUTRAL in the framing below and set here from the theme,
+    # so a light deck yields bright, airy images and a dark deck yields cinematic low-key ones.
+    # With references attached, defer entirely to them rather than forcing a direction.
+    if has_references:
+        lighting = "lighting, colour temperature and mood matching the supplied reference images"
+        grade = "colour grade and grain matching the reference images"
+    elif light:
+        lighting = ("bright high-key natural daylight, soft even illumination, airy and luminous, "
+                    "light clean background, fresh and vibrant")
+        grade = "natural true-to-life color, crisp and clean, minimal grain"
+    else:
+        lighting = ("dramatic low-key cinematic lighting, strong directional light, deep shadows, "
+                    "atmospheric haze")
+        grade = "cinematic color grade, subtle film grain"
+
+    # Framing per slide — COMPOSITION ONLY (no lighting words); lighting comes from the theme.
     framing = {
         "cover": "epic theatrical key art, ultra-wide anamorphic establishing frame of the setting, "
-                 "monumental scale, layered depth from foreground texture to distant horizon, "
-                 "dramatic golden-hour or low-key lighting, no people",
-        "logline": "wide poetic frame of the story's world at a charged moment, strong single light "
-                   "source, generous negative space for overlaid text, no people",
+                 "monumental scale, layered depth from foreground texture to distant horizon, no people",
+        "logline": "wide poetic frame of the story's world at a charged moment, generous negative "
+                   "space for overlaid text, no people",
         "story_world": "rich environmental establishing shot of the setting, lived-in detail and "
-                       "atmosphere, volumetric light, deep perspective leading the eye, no people",
-        "visual_aesthetic": "painterly cinematic mood and texture study, macro surfaces and light "
-                            "play, atmospheric haze, evocative abstract composition, no people",
-        "character": "evocative cinematic character mood study, dramatic rim lighting, expressive "
-                     "silhouette against the story's world, shallow depth of field, "
-                     "no real-person likeness",
-        "supporting_characters": "evocative cinematic ensemble mood study, dramatic chiaroscuro "
-                                 "lighting, layered silhouettes, no real-person likeness",
-        "genre_blend": "moody atmospheric frame that fuses the story's genres in one image, "
-                       "contrast of light and shadow, no people",
-        "directors_vision": "contemplative wide cinematic frame, a single strong visual metaphor "
-                            "from the story's world, painterly light, no people",
-        "contact": "quiet minimal cinematic frame of the story's world at dusk, restrained and "
-                   "elegant, generous negative space, no people",
-    }.get(slide_type, "cinematic atmospheric frame of the story's world, soft directional light, "
-                      "texture and depth, generous negative space for text, no people")
+                       "atmosphere, deep perspective leading the eye, no people",
+        "visual_aesthetic": "painterly mood and texture study, macro surfaces and light play, "
+                            "evocative composition, no people",
+        "character": "evocative character mood study, expressive silhouette against the story's "
+                     "world, shallow depth of field, no real-person likeness",
+        "supporting_characters": "evocative ensemble mood study, layered silhouettes, "
+                                 "no real-person likeness",
+        "genre_blend": "atmospheric frame that fuses the story's genres in one image, no people",
+        "directors_vision": "contemplative wide frame, a single strong visual metaphor from the "
+                            "story's world, no people",
+        "contact": "quiet minimal frame of the story's world, restrained and elegant, generous "
+                   "negative space, no people",
+    }.get(slide_type, "atmospheric frame of the story's world, texture and depth, generous negative "
+                      "space for text, no people")
 
-    parts = [framing]
+    parts = [framing, lighting]
     if subject:
         parts.append(subject)
     if region and region not in (subject or ""):
@@ -122,14 +181,283 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
     emotion = "; ".join(b for b in (tone, themes, mood) if b)
     if emotion:
         parts.append(f"emotional tone: {emotion}")
-    parts.append(image_style)
+    if image_style:
+        parts.append(image_style)
     if visual_style:
         parts.append(visual_style)
     if palette:
         parts.append(f"color palette: {palette}")
     parts.append(
-        "film still, shot on anamorphic lenses, professional cinematography, subtle film grain, "
-        "consistent color grade, authentic regional detail, period-accurate, "
+        f"film still, professional cinematography, {grade}, authentic regional detail, "
         "no text, no watermark, no logo, no real-person likeness"
     )
+    return _clean(", ".join(p for p in parts if p))
+
+
+# ── LLM-driven prompt (grounded in the film summary + this slide) ──────────────
+
+_SYSTEM_IMG = """\
+You are a cinematographer and concept artist writing ONE vivid image-generation prompt for a SINGLE
+slide of a film pitch deck. A text-to-image diffusion model (Imagen / FLUX) will render it.
+
+GROUND EVERYTHING in the FILM SUMMARY and THIS SLIDE the user gives you. Never invent characters,
+places, or plot that the material doesn't support. The image MUST be specific and relevant to THIS
+film and THIS slide — generic stock imagery is a failure.
+
+Match the slide's job (by kind):
+- cover_image / background: evocative KEY ART of the story's world/setting; leave negative space for
+  overlaid title text; usually no people.
+- story_world: an establishing environmental shot of the ACTUAL setting described in the summary.
+- character_art: a cinematic mood study evoking the SPECIFIC character(s) named on this slide — their
+  role, era and world, expressive silhouette/atmosphere. NO real-person likeness.
+- mood_image: a painterly texture/mood study of the film's visual aesthetic.
+
+Honor the THEME brightness EXACTLY (light → bright, high-key, airy; dark → cinematic low-key, deep
+shadows). Capture the authentic region/setting, genre, emotional tone, palette, lens and composition.
+
+HARD RULES: the image must contain NO text, letters, words, captions, watermarks or logos; NO
+real-person likeness; NO minors; film-still quality.
+
+Return ONLY JSON: {"prompt": "<one cohesive prompt, ~40-70 words, comma-separated descriptors>"}
+"""
+
+
+# The extracted fields each slide's IMAGE depicts — its visual "placeholders". Kept parallel to
+# content.py's _SLIDE_FIELDS so a slide's ART and its COPY are driven by the SAME material.
+_SLIDE_IMAGE_FIELDS: dict[str, list[str]] = {
+    "cover": ["storyWorld", "logline", "genreBlend"],
+    "logline": ["storyWorld", "logline"],
+    "genre_blend": ["genreBlend", "storyWorld"],
+    "synopsis": ["storyWorld", "keyScenes"],
+    "story_world": ["storyWorld", "keyScenes"],
+    "character": ["mainCharacters", "characterDynamics", "storyWorld"],
+    "supporting_characters": ["supportingCharacters", "characterDynamics", "storyWorld"],
+    "usp": ["storyWorld", "genreBlend"],
+    "show_cross": ["storyWorld", "genreBlend"],
+    "visual_aesthetic": ["visualAesthetic", "designDirection", "storyWorld"],
+    "target_audience": ["storyWorld"],
+    "budget": ["storyWorld"],
+    "market_potential": ["storyWorld"],
+    "directors_vision": ["designDirection", "storyWorld", "themes"],
+    "team": ["storyWorld"],
+    "contact": ["storyWorld"],
+    "generic": ["storyWorld", "logline"],
+}
+
+# The deck's VISUAL IDENTITY — carried on EVERY slide's image prompt so all art shares one look
+# (this is what keeps the deck consistent slide to slide).
+_VISUAL_IDENTITY_FIELDS = ["visualAesthetic", "colorPalette", "textureStyle", "visualMood",
+                           "visualReferences", "designDirection", "tone", "themes"]
+
+_FIELD_LABELS = {
+    "title": "Title", "logline": "Logline", "synopsis": "Synopsis", "genreBlend": "Genre",
+    "tone": "Tone", "themes": "Themes", "storyWorld": "Setting / world", "keyScenes": "Key scenes",
+    "mainCharacters": "Main characters", "supportingCharacters": "Supporting characters",
+    "characterDynamics": "Character dynamics", "visualMood": "Visual mood",
+    "visualAesthetic": "Visual aesthetic", "colorPalette": "Colour palette",
+    "textureStyle": "Texture / finish", "visualReferences": "Visual references",
+    "designDirection": "Design direction",
+}
+
+
+def _ctx_lines(intake: dict, keys: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for k in keys:
+        if k in seen:
+            continue
+        seen.add(k)
+        v = _g(intake, k)
+        if v:
+            out.append(f"- {_FIELD_LABELS.get(k, k)}: {v}")
+    return out
+
+
+def _story_context(intake: dict, slide_type: str | None = None) -> str:
+    """Per-slide image grounding: WHAT this slide depicts (its own fields) + the deck's constant
+    VISUAL IDENTITY (the same look on every slide). Parallel to content.py so art and copy stay
+    consistent and on-theme across the whole deck."""
+    subject = _ctx_lines(intake, _SLIDE_IMAGE_FIELDS.get(slide_type or "",
+                                                         ["storyWorld", "logline", "synopsis"]))
+    look = _ctx_lines(intake, _VISUAL_IDENTITY_FIELDS)
+    parts: list[str] = []
+    if subject:
+        parts.append("WHAT THIS SLIDE DEPICTS:\n" + "\n".join(subject))
+    if look:
+        parts.append("DECK VISUAL IDENTITY (identical on every slide — match it exactly):\n"
+                     + "\n".join(look))
+    return "\n\n".join(parts) or "- (no summary captured yet)"
+
+
+def _slide_brief(content: dict | None) -> str:
+    """What is actually on this slide — so the image matches the slide's real copy/characters."""
+    content = content or {}
+    bits: list[str] = []
+    for k in ("heading", "subheading", "body"):
+        v = content.get(k)
+        if isinstance(v, str) and v.strip():
+            bits.append(v.strip())
+    chars = content.get("characters")
+    if isinstance(chars, list):
+        for c in chars[:4]:
+            if isinstance(c, dict):
+                line = f"{c.get('name', '')} — {c.get('role', '')}: {c.get('description', '')}"
+                line = line.strip(" —:")
+                if line:
+                    bits.append(line)
+    return " | ".join(bits)
+
+
+def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
+                 content: dict | None = None, use_llm: bool = True,
+                 has_references: bool = False) -> str:
+    """Story-grounded diffusion prompt for one slide.
+
+    Uses the LLM (grounded in the film summary + this slide's content + design); falls back to the
+    deterministic register-anchored prompt offline. ``use_llm=False`` forces the fallback (used for
+    cheap workshop seed prompts that get replaced at generation time).
+
+    ``has_references=True`` means the director's reference images are being attached to the image
+    model directly — so the prompt tells the model to MATCH them and stops forcing the deck's
+    default dark theme (which previously overrode warm/bright references)."""
+    design = design or {}
+    if not use_llm:
+        return _deterministic_prompt(slide_type, intake, design, has_references)
+
+    kind = image_kind(slide_type)
+    if has_references:
+        theme = (
+            "MATCH THE ATTACHED REFERENCE IMAGES above all — reproduce their palette, light, grade, "
+            "grain and graphic treatment. Do NOT impose a dark or low-key look if the references "
+            "are bright or warm."
+        )
+    elif _is_light_theme(design):
+        theme = "LIGHT — bright, high-key, airy, luminous, clean (NOT dark or moody)"
+    else:
+        theme = "DARK — cinematic low-key, dramatic directional light, deep shadows"
+    palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+    prompt = (
+        "FILM SUMMARY (ground every visual in this; never invent unrelated elements):\n"
+        f"{_story_context(intake, slide_type)}\n\n"
+        f"THIS SLIDE: type={slide_type}, image kind={kind}.\n"
+        f"On the slide: {_slide_brief(content) or '(use the summary above)'}\n\n"
+        f"THEME: {theme}\n"
+        f"PALETTE: {palette or '(use a fitting palette)'}\n\n"
+        "Write ONE image-generation prompt for this slide's artwork. Return ONLY the JSON."
+    )
+    result = complete_json(
+        system=_SYSTEM_IMG,
+        prompt=prompt,
+        cache_prefix="image_prompt",
+        max_tokens=400,
+        temperature=0.6,
+        fallback=lambda: {"prompt": _deterministic_prompt(slide_type, intake, design, has_references)},
+    )
+    text = ""
+    if isinstance(result, dict) and isinstance(result.get("prompt"), str):
+        text = result["prompt"].strip()
+    if not text:
+        text = _deterministic_prompt(slide_type, intake, design, has_references)
+    return _clean(text)
+
+
+def build_item_prompt(item: dict, intake: dict, design: dict | None = None,
+                      has_references: bool = False) -> str:
+    """Diffusion prompt for ONE grid item — e.g. a single genre tile on the genre-blend slide:
+    a cinematic frame evoking THIS item inside the film's world. Deterministic (no LLM), so
+    rendering one image per item stays cheap."""
+    design = design or {}
+    title = str((item or {}).get("title") or "").strip()
+    desc = str((item or {}).get("description") or "").strip()
+    region = _g(intake, "storyWorld")
+    tone = _g(intake, "tone")
+    mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
+    palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+
+    if has_references:
+        lighting = "lighting, colour and grade matching the supplied reference images"
+    elif _is_light_theme(design):
+        lighting = "bright high-key natural light, airy and luminous"
+    else:
+        lighting = "dramatic low-key cinematic lighting, deep shadows, atmospheric haze"
+
+    subject = (f"cinematic film still evoking the {title} dimension of the story"
+               if title else "cinematic film still from the story's world")
+    parts = [
+        subject,
+        desc,
+        _g(intake, "logline"),
+        f"authentic setting: {region}" if region else "",
+        lighting,
+        "; ".join(b for b in (tone, mood) if b),
+        f"color palette: {palette}" if palette else "",
+        "single evocative subject, shallow depth of field, professional cinematography, film grain, "
+        "no text, no watermark, no logo, no real-person likeness",
+    ]
+    return _clean(", ".join(p for p in parts if p))
+
+
+def build_character_prompt(char: dict, intake: dict, design: dict | None = None,
+                           has_references: bool = False) -> str:
+    """Cinematic portrait for ONE character card — evocative of their role/description in the
+    film's world. Deliberately uses NO real name (and forbids real-person likeness) so the model
+    renders an original, story-true face rather than a celebrity lookalike."""
+    design = design or {}
+    role = str((char or {}).get("role") or "").strip()
+    desc = str((char or {}).get("description") or "").strip()
+    appearance = str((char or {}).get("appearance") or "").strip()
+    region = _g(intake, "storyWorld")
+    tone = _g(intake, "tone")
+    palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+
+    if has_references:
+        lighting = "lighting and grade matching the supplied reference images"
+    elif _is_light_theme(design):
+        lighting = "bright high-key portrait light, soft and clean"
+    else:
+        lighting = "dramatic low-key portrait light, deep shadows, rim light"
+
+    parts = [
+        "cinematic character portrait, evocative and atmospheric",
+        # Appearance leads so the face matches the character's age, build and defining look.
+        appearance,
+        f"a {role}" if role else "a central character of the story",
+        desc,
+        f"set in {region}" if region else "",
+        lighting,
+        f"emotional tone: {tone}" if tone else "",
+        f"color palette: {palette}" if palette else "",
+        "true to the stated age and physique, shallow depth of field, 85mm portrait lens, film "
+        "grain, fictional original face, no real-person likeness, no celebrity, no text, no "
+        "watermark, no logo",
+    ]
+    return _clean(", ".join(p for p in parts if p))
+
+
+def build_mood_prompt(block: dict, intake: dict, design: dict | None = None,
+                      has_references: bool = False) -> str:
+    """One moodboard frame for the visual-aesthetic grid — texture/light/atmosphere of the film's
+    world (no people, no text), themed by the block's label."""
+    design = design or {}
+    label = str((block or {}).get("label") or "").strip()
+    region = _g(intake, "storyWorld")
+    mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
+    palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+
+    if has_references:
+        lighting = "lighting, colour and grade matching the supplied reference images"
+    elif _is_light_theme(design):
+        lighting = "bright high-key natural light, airy"
+    else:
+        lighting = "moody cinematic light, deep shadows"
+
+    subject = f"moodboard frame evoking '{label}'" if label else "moodboard frame"
+    parts = [
+        f"atmospheric {subject}, texture and light study, evocative macro detail, no people",
+        f"from the world of {region}" if region else "",
+        mood,
+        lighting,
+        f"color palette: {palette}" if palette else "",
+        "cinematic, film grain, no text, no watermark, no logo",
+    ]
     return _clean(", ".join(p for p in parts if p))

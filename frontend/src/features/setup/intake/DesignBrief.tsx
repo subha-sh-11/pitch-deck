@@ -24,6 +24,7 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["themes", "Themes"],
   ["synopsis", "Synopsis"],
   ["mainCharacters", "Main characters"],
+  ["supportingCharacters", "Supporting characters"],
   ["characterDynamics", "Character dynamics"],
   ["storyWorld", "Setting & world"],
   ["whyNow", "Why now"],
@@ -40,6 +41,7 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["releaseFit", "Release fit"],
   ["creativeTeam", "Creative team & talent"],
   ["directorStatement", "Director's statement"],
+  ["directorVision", "Director's vision"],
   ["budget", "Budget & the ask"],
   ["productionStatus", "Production status"],
   ["distribution", "Distribution & marketing"],
@@ -91,9 +93,11 @@ export function DesignBrief({ iv }: { iv: Interview }) {
     return null;
   };
 
-  useEffect(() => {
+  // Default selection for a set of sections, from the current form values or the agent's
+  // pre-selected options.
+  const buildSel = (secs: InterviewSection[]): Record<string, string[]> => {
     const init: Record<string, string[]> = {};
-    for (const s of sections) {
+    for (const s of secs) {
       if (s.kind === "chips" || s.kind === "multi" || s.kind === "swatches") {
         const fromForm =
           s.field && s.field in form
@@ -105,9 +109,23 @@ export function DesignBrief({ iv }: { iv: Interview }) {
         init[s.id] = [String(s.value ?? Math.round(((s.min ?? 8) + (s.max ?? 20)) / 2))];
       }
     }
-    setSel(init);
-    // Auto-commit the agent's pre-selected suggestion for any field that's still
-    // empty, so accepted defaults count as answered and never get re-asked.
+    return init;
+  };
+
+  // Re-seed local selection whenever the agent sends a new set of sections — applied during
+  // render (the documented "adjust state when input changes" pattern), not in an effect.
+  const sectionsSig = sections.map((s) => s.id).join("|");
+  const [seenSig, setSeenSig] = useState<string | null>(null);
+  if (sectionsSig !== seenSig) {
+    setSeenSig(sectionsSig);
+    setSel(buildSel(sections));
+  }
+
+  // Auto-commit the agent's pre-selected suggestion for any still-empty field, so accepted
+  // defaults count as answered and never get re-asked. This writes to the shared brief (an
+  // external store), which is exactly what effects are for.
+  useEffect(() => {
+    const init = buildSel(sections);
     for (const s of sections) {
       if (!s.field || (form[s.field] ?? "").trim()) continue;
       const def =
@@ -129,12 +147,18 @@ export function DesignBrief({ iv }: { iv: Interview }) {
 
   const isSel = (s: InterviewSection, val: string) => (sel[s.id] ?? []).includes(val);
 
-  // Everything captured so far (non-empty brief fields), for the running summary.
-  const captured = CAPTURED_FIELDS.filter(([f]) => (form[f] ?? "").trim().length > 0).map(
-    ([field, label]) => ({ field, label, value: form[field] }),
-  );
   // Open questions minus anything the user chose to skip.
   const visibleSections = sections.filter((s) => !s.field || !skipped.has(s.field));
+  // Fields with an open follow-up question right now — kept OUT of the summary so a
+  // field is never shown twice (settled fields → summary, still-being-asked → questions).
+  const openFields = new Set(
+    visibleSections.map((s) => s.field).filter((f): f is string => !!f),
+  );
+  // Everything captured so far (non-empty brief fields that aren't an open question),
+  // for the running summary.
+  const captured = CAPTURED_FIELDS.filter(
+    ([f]) => (form[f] ?? "").trim().length > 0 && !openFields.has(f),
+  ).map(([field, label]) => ({ field, label, value: form[field] }));
   // Empty + not skipped → "still to add"; skipped → its own group.
   const pending = CAPTURED_FIELDS.filter(
     ([f]) => !(form[f] ?? "").trim().length && !skipped.has(f),
@@ -169,17 +193,21 @@ export function DesignBrief({ iv }: { iv: Interview }) {
           Let&apos;s shape the {iv.projectName} deck
         </h1>
         <p className="mt-1.5 text-sm text-text-dim">
-          {visibleSections.length
-            ? "A few questions at a time — tap an answer, type your own, then Continue."
-            : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
+          {captured.length > 0 && visibleSections.length
+            ? "Here’s everything I pulled from your story — review and edit it, then answer a few follow-ups below to sharpen the deck."
+            : visibleSections.length
+              ? "A few questions at a time — tap an answer, type your own, then Continue."
+              : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
         </p>
 
-        {/* Final summary — shown ONLY at the end (no open questions left), editable */}
-        {captured.length > 0 && !visibleSections.length && (
+        {/* Extracted summary — shown as soon as we've captured anything (e.g. right
+            after a script upload), and kept visible while follow-up questions are open
+            below it. Editable. */}
+        {captured.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
-                Your pitch brief — review &amp; edit
+                {visibleSections.length ? "Story summary — review & edit" : "Your pitch brief — review & edit"}
               </h2>
               <button
                 type="button"
@@ -209,7 +237,7 @@ export function DesignBrief({ iv }: { iv: Interview }) {
         )}
 
         {/* Assumptions the system made (distinct from confirmed answers) */}
-        {!visibleSections.length && iv.assumptions.length > 0 && (
+        {iv.assumptions.length > 0 && (
           <div className="mt-7">
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-400/80">
               Assumptions I made
@@ -273,9 +301,17 @@ export function DesignBrief({ iv }: { iv: Interview }) {
         )}
 
         {visibleSections.length > 0 && (
-          <h2 className="mt-9 text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
-            Open questions
-          </h2>
+          <div className="mt-9">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+              {captured.length > 0 ? "Follow-up questions" : "A few questions"}
+            </h2>
+            {captured.length > 0 && (
+              <p className="mt-1 text-xs text-text-dim">
+                Pulled from the analysis to sharpen the deck — tap an answer or type your own. All optional;
+                build whenever you’re ready.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="mt-3 space-y-8">

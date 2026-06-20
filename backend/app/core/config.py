@@ -68,22 +68,34 @@ class Settings(BaseSettings):
     openai_default_model: str = "gpt-4o"
 
     # ─── Image generation (provider-agnostic) ───
-    # auto | fal | replicate | google | vertex | none ("none" => palette-driven SVG placeholder)
+    # vertex | fal | replicate | google | auto | none ("none" => palette-driven SVG placeholder).
+    # Default "auto" selects the first configured backend (fal → replicate → google → vertex);
+    # pin one explicitly in .env (e.g. IMAGE_PROVIDER=fal).
     image_provider: str = "auto"
     fal_key: str = ""
     fal_image_model: str = "fal-ai/flux/schnell"
+    # When reference images are supplied, fal switches to an image-to-image model so the
+    # references actually condition the output. ``fal_image_strength`` is how far the result moves
+    # FROM the reference TOWARD the text prompt: higher (≈0.85) → new content carrying the
+    # reference's palette/grade; lower → output hews closely to the reference.
+    fal_image_to_image_model: str = "fal-ai/flux/dev/image-to-image"
+    fal_image_strength: float = 0.85
     replicate_api_token: str = ""
     replicate_image_model: str = "black-forest-labs/flux-schnell"
     google_api_key: str = ""
-    # imagen-4.0-fast-generate-001 (fast) | imagen-4.0-generate-001 | imagen-4.0-ultra-generate-001
-    google_image_model: str = "imagen-4.0-fast-generate-001"
-    # ─── Vertex AI (Google Cloud) Imagen — uses a SERVICE ACCOUNT, not an API key ───
+    # API-key (generativelanguage) path. Gemini image models use :generateContent; Imagen uses
+    # :predict — the code routes by name. gemini-2.5-flash-image is the GA "Nano Banana" model.
+    google_image_model: str = "gemini-2.5-flash-image"
+    # ─── Vertex AI (Google Cloud) — uses a SERVICE ACCOUNT, not an API key ───
     # Set IMAGE_PROVIDER=vertex. Auth via service-account JSON: either VERTEX_CREDENTIALS_PATH
     # or the standard GOOGLE_APPLICATION_CREDENTIALS env var (leave path blank to use that).
+    # Image model routes by name: gemini-* ("Nano Banana") → :generateContent; imagen-* → :predict.
+    #   Best / recommended: gemini-2.5-flash-image (GA).  Newer preview: gemini-3.1-flash-image.
+    #   (Imagen — imagen-4.0-*-generate-001 — is deprecated and shuts down June 2026.)
     vertex_project: str = ""              # GCP project id
     vertex_location: str = "us-central1"  # region the model is served from
     vertex_credentials_path: str = ""     # path to the service-account .json (optional if GOOGLE_APPLICATION_CREDENTIALS set)
-    vertex_image_model: str = "imagen-3.0-generate-002"
+    vertex_image_model: str = "gemini-2.5-flash-image"
 
     # TMDB — real comparable-film posters for the Show Cross slide (free API key)
     tmdb_api_key: str = ""

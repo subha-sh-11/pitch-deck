@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { projectRoutes } from "@/lib/routes";
 import type { ChatMessage, Interview } from "./useInterview";
+import { useWorkshopOptional } from "./workshop";
 
 // The left conversation rail (narrow). All state lives in the shared interview
 // hook. The producer asks here; tappable options appear inline; the deck builds
@@ -15,6 +16,10 @@ export function ChatPanel({ iv }: { iv: Interview }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // The slide the director currently has open in the workshop — passed to the deck
+  // agent as the default target so "this slide" / "add an image" resolve correctly.
+  const workshop = useWorkshopOptional();
+  const selectedSlideId = workshop?.slide?.id;
 
   // Open the file picker filtered to a specific type (set per option / the + button).
   const openPicker = (accept: string) => {
@@ -32,7 +37,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
     const value = draft.trim();
     if (!value || iv.thinking) return;
     setDraft("");
-    iv.sendText(value);
+    iv.sendText(value, selectedSlideId);
   };
 
   const pending = [...iv.questions].reverse().find((q) => q.answer === undefined);
@@ -122,7 +127,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
-            files.forEach((f) => void iv.uploadFile(f));
+            files.forEach((f) => void iv.uploadFile(f, selectedSlideId));
             e.currentTarget.value = "";
           }}
         />

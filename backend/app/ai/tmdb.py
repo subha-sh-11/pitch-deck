@@ -11,10 +11,14 @@ from app.core.logging import get_logger
 
 _log = get_logger("tmdb")
 _IMG_BASE = "https://image.tmdb.org/t/p/w500"
+_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 
-def poster_for(title: str) -> str | None:
-    """Return a poster image URL for a film title, or None if unavailable."""
+def _search_image(title: str, path_key: str, base: str, cache_prefix: str) -> str | None:
+    """Shared TMDB title search → an image URL for the given path field (poster or backdrop).
+
+    Uses TMDB's official API (the licensed source for film poster/still imagery); returns None
+    when no key is configured or no match is found."""
     if not settings.tmdb_api_key or not title.strip():
         return None
 
@@ -29,11 +33,22 @@ def poster_for(title: str) -> str | None:
             )
             resp.raise_for_status()
             for result in resp.json().get("results", []):
-                if result.get("poster_path"):
-                    return _IMG_BASE + result["poster_path"]
+                if result.get(path_key):
+                    return base + result[path_key]
         except Exception as exc:  # noqa: BLE001
-            _log.warning("tmdb lookup failed for %r: %s", title, exc)
+            _log.warning("tmdb %s lookup failed for %r: %s", path_key, title, exc)
         return ""  # cache the miss too (empty string)
 
-    url = cached_call("tmdb:poster", {"t": title.lower().strip()}, _lookup, ttl=604800)
+    url = cached_call(cache_prefix, {"t": title.lower().strip()}, _lookup, ttl=604800)
     return url or None
+
+
+def poster_for(title: str) -> str | None:
+    """A poster image URL for a film title (Show Cross comparables), or None if unavailable."""
+    return _search_image(title, "poster_path", _IMG_BASE, "tmdb:poster")
+
+
+def backdrop_for(title: str) -> str | None:
+    """A wide backdrop/still URL for a film title — used as a real visual reference on the Visual
+    Aesthetic moodboard. Returns None when no key/match (the pipeline then renders an AI mood frame)."""
+    return _search_image(title, "backdrop_path", _BACKDROP_BASE, "tmdb:backdrop")

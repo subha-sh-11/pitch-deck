@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Slide, SlideContent } from "@/types/slide";
@@ -38,16 +38,19 @@ export function SlideContentDetailPanel({
     [slide],
   );
 
-  useEffect(() => {
+  // Reset edit mode when the selected slide changes — done during render (the documented
+  // "adjust state when a prop changes" pattern) rather than in an effect.
+  const [trackedSlideId, setTrackedSlideId] = useState(slide.id);
+  if (slide.id !== trackedSlideId) {
+    setTrackedSlideId(slide.id);
     setEditing(false);
-    setEditText(formattedText);
-  }, [slide.id]);
+  }
 
-  useEffect(() => {
-    if (!editing) {
-      setEditText(formattedText);
-    }
-  }, [formattedText, editing]);
+  function startEditing() {
+    // Seed the editor with the current formatted copy at the moment editing begins.
+    setEditText(formattedText);
+    setEditing(true);
+  }
 
   function handleSaveEdit() {
     onSave(applyEditableTextToSlide(slide, editText));
@@ -69,7 +72,7 @@ export function SlideContentDetailPanel({
           </div>
           {!editing && (
             <div className="flex shrink-0 items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+              <Button size="sm" variant="ghost" onClick={startEditing}>
                 Edit
               </Button>
               <Button
