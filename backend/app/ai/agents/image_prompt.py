@@ -63,6 +63,11 @@ def _subject(slide_type: str, intake: dict) -> str:
     if slide_type == "cover":
         return (_g(intake, "storyWorld") or _g(intake, "visualAesthetic")
                 or _g(intake, "logline") or _g(intake, "tagline"))
+    if slide_type == "synopsis":
+        # Narrative-driven, NOT the same environment shot as story_world — lean on the
+        # logline/themes so the synopsis image reads as a story moment, not a location.
+        return (_g(intake, "logline") or _g(intake, "visualMood")
+                or _g(intake, "themes") or _g(intake, "storyWorld"))
     if slide_type == "story_world":
         return _g(intake, "storyWorld") or _g(intake, "visualMood")
     if slide_type == "visual_aesthetic":
@@ -141,8 +146,12 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None) -> str:
                  "dramatic golden-hour or low-key lighting, no people",
         "logline": "wide poetic frame of the story's world at a charged moment, strong single light "
                    "source, generous negative space for overlaid text, no people",
-        "story_world": "rich environmental establishing shot of the setting, lived-in detail and "
-                       "atmosphere, volumetric light, deep perspective leading the eye, no people",
+        "synopsis": "a single charged, cinematic story moment — the lone protagonist caught at a "
+                    "turning point within the world, intimate dramatic staging, expressive body "
+                    "language, shallow depth of field, the plot's tension made visible",
+        "story_world": "rich environmental establishing shot of the setting, EMPTY of people, "
+                       "lived-in detail and atmosphere, volumetric light, deep perspective "
+                       "leading the eye, architecture and texture as the subject",
         "visual_aesthetic": "painterly cinematic mood and texture study, macro surfaces and light "
                             "play, atmospheric haze, evocative abstract composition, no people",
         "character": "evocative cinematic character mood study, dramatic rim lighting, expressive "

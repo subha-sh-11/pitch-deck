@@ -30,7 +30,7 @@ class ProjectType(str, Enum):
 
 class PitchPurpose(str, Enum):
     investor = "investor"
-    ott = "ott"
+    ott = "ott"        
     studio = "studio"
     producer = "producer"
     festival = "festival"

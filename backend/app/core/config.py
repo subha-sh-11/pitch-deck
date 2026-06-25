@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Public base URL the browser uses to reach this backend (for building asset URLs)
     public_base_url: str = "http://localhost:8000"
     # Local directory for generated assets when object storage is unavailable

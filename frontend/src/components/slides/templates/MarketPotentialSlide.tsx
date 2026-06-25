@@ -6,46 +6,80 @@ interface MarketPotentialSlideProps {
   content: SlideContent;
 }
 
+/**
+ * Editorial "market case" layout — glass tiles with oversized ghost numerals and an accent
+ * spine, arranged in a staggered rhythm over a directional cinematic scrim so the copy reads
+ * cleanly on any backdrop.
+ */
 export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
   const items =
     content.items ??
     content.bullets?.map((b) => ({ title: b, description: "" })) ??
     [];
 
+  // Split a "Lead-in: detail" title into a punchy lead + supporting line when the copy
+  // arrives as one string (keeps older content rendering nicely in the new layout).
+  const split = (item: { title: string; description: string }) => {
+    if (item.description) return { lead: item.title, body: item.description };
+    const m = item.title.match(/^([^:.]{2,40})[:.—-]\s*(.+)$/);
+    return m ? { lead: m[1].trim(), body: m[2].trim() } : { lead: item.title, body: "" };
+  };
+
   return (
     <SlideFrame imageUrl={content.imageUrl}>
-      <div
-        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : "bg-[#0a0a0c]"}`}
-      />
-      <div className="relative flex h-full flex-col p-[7%]">
+      {/* Directional scrim: anchored dark behind the heading, opening toward the image. */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/65 to-black/35" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+      <div className="relative flex h-full min-h-0 flex-col p-[6.5%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Market Potential"} />
         </SlideLabel>
+
         {items.length > 0 ? (
-          <div className="mt-6 grid flex-1 grid-cols-2 gap-4">
-            {items.map((item, i) => (
-              <div
-                key={i}
-                className="flex flex-col justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] p-5"
-              >
-                <div className="mb-3 h-1 w-8" style={{ background: "var(--slide-accent)" }} />
-                <EditableText
-                  k={`item-${i}-title`}
-                  as="h3"
-                  className="font-display text-lg font-semibold text-[#F5F1E8]"
-                  value={item.title}
-                />
-                {item.description && (
-                  <EditableText
-                    k={`item-${i}-desc`}
-                    as="p"
-                    multiline
-                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
-                    value={item.description}
+          <div className="mt-6 grid min-h-0 flex-1 grid-cols-2 gap-x-5 gap-y-4 content-center">
+            {items.map((item, i) => {
+              const { lead, body } = split(item);
+              return (
+                <div
+                  key={i}
+                  // Stagger the right column down for an editorial, non-grid rhythm.
+                  className={`group relative flex min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-md transition-colors hover:border-[color:var(--slide-accent)]/50 ${
+                    i % 2 === 1 ? "lg:translate-y-5" : ""
+                  }`}
+                >
+                  {/* Oversized ghost index numeral */}
+                  <span
+                    className="pointer-events-none absolute -right-1 -top-3 select-none font-display text-[5.5rem] font-bold leading-none text-white/[0.06]"
+                    aria-hidden
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {/* Accent spine */}
+                  <div
+                    className="mr-4 mt-1 w-[3px] shrink-0 rounded-full"
+                    style={{ background: "var(--slide-accent)" }}
                   />
-                )}
-              </div>
-            ))}
+                  <div className="relative flex min-w-0 flex-col">
+                    <EditableText
+                      k={`item-${i}-title`}
+                      as="h3"
+                      className="font-display text-[clamp(1rem,1.5vw,1.35rem)] font-semibold leading-tight text-[#F5F1E8]"
+                      value={lead}
+                    />
+                    {body && (
+                      <EditableText
+                        k={`item-${i}-desc`}
+                        as="p"
+                        multiline
+                        className="mt-2 whitespace-pre-line text-[clamp(0.68rem,0.95vw,0.85rem)] leading-relaxed text-[#C2C7CE]"
+                        value={body}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           content.body && (

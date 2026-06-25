@@ -9,6 +9,7 @@ import {
   updateSlide as apiUpdateSlide,
   uploadSlideImage,
 } from "@/lib/api";
+import { exportDeck, type ExportFormat } from "@/lib/export-deck";
 import { useSetupWizard } from "../SetupWizardContext";
 import { useWorkshop } from "./workshop";
 import { SLIDE_TYPE_LABELS, type Slide, type SlideContent } from "@/types/slide";
@@ -58,29 +59,48 @@ function ScaledSlide({ slide, designDirection }: { slide: Slide; designDirection
  * director can regenerate, tweak the prompt, edit text, and swap the image in place.
  */
 export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
-  const { generationStatus, generationProgress, generationError, replaceDraftSlide } =
+  const { generationStatus, generationProgress, generationError, replaceDraftSlide, designDirection } =
     useSetupWizard();
-  const { slides, approvedCount, allApproved, assembling, assemble } = useWorkshop();
+  const { slides, approvedCount } = useWorkshop();
+  const [exporting, setExporting] = useState<{ fmt: ExportFormat; done: number; total: number } | null>(
+    null,
+  );
   const [genAll, setGenAll] = useState<{ running: boolean; done: number; total: number }>({
     running: false,
     done: 0,
     total: 0,
   });
-  const [approvingAll, setApprovingAll] = useState(false);
-
   const generatedCount = slides.filter((s) => s.generated).length;
   const allGenerated = slides.length > 0 && generatedCount === slides.length;
-  const anyToApprove = slides.some((s) => s.generated && s.status !== "approved");
 
-  // Generate every not-yet-built slide in sequence (quota-safe), with live progress.
-  const generateAll = async () => {
+  // Download the deck as a pixel-faithful PDF or an image-per-slide PPTX (text in notes).
+  const downloadDeck = async (fmt: ExportFormat) => {
+    if (exporting) return;
+    setExporting({ fmt, done: 0, total: slides.length });
+    try {
+      await exportDeck(fmt, slides, designDirection ?? undefined, (done, total) =>
+        setExporting((e) => (e ? { ...e, done, total } : e)),
+      );
+    } catch {
+      /* swallow — a failed capture shouldn't crash the workshop */
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  // Generate slides in sequence (quota-safe), with live progress.
+  // `force` → regenerate EVERY slide (incl. images) so the latest prompt/template/style
+  // changes are reflected; otherwise only build the slides not generated yet.
+  const generateAll = async (force = false) => {
     if (genAll.running) return;
-    const targets = slides.filter((s) => !s.generated);
+    const targets = force ? [...slides] : slides.filter((s) => !s.generated);
     if (!targets.length) return;
     setGenAll({ running: true, done: 0, total: targets.length });
     for (const s of targets) {
       try {
-        const job = await apiRegenerateSlide(s.id, { withImage: !s.content.imageUrl });
+        const job = await apiRegenerateSlide(s.id, {
+          withImage: force ? true : !s.content.imageUrl,
+        });
         const final = await pollJob(job);
         if (final.status !== "failed") {
           const updated = final.result as Slide;
@@ -92,21 +112,6 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
       setGenAll((g) => ({ ...g, done: g.done + 1 }));
     }
     setGenAll((g) => ({ ...g, running: false }));
-  };
-
-  const approveAll = async () => {
-    setApprovingAll(true);
-    for (const s of slides) {
-      if (s.generated && s.status !== "approved") {
-        replaceDraftSlide({ ...s, status: "approved" });
-        try {
-          await apiUpdateSlide(s.id, { status: "approved" });
-        } catch {
-          /* keep going */
-        }
-      }
-    }
-    setApprovingAll(false);
   };
 
   if (generationStatus === "generating") {
@@ -140,31 +145,37 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void generateAll()}
-              disabled={genAll.running || allGenerated}
+              onClick={() => void generateAll(allGenerated)}
+              disabled={genAll.running}
               className="rounded-full bg-accent-neon px-4 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60"
             >
               {genAll.running
                 ? `Generating ${genAll.done}/${genAll.total}…`
                 : allGenerated
-                  ? "✓ All generated"
+                  ? "↻ Regenerate all slides"
                   : "✦ Generate all slides"}
             </button>
             <button
               type="button"
-              onClick={() => void approveAll()}
-              disabled={!anyToApprove || approvingAll}
-              className="rounded-full border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => void downloadDeck("pdf")}
+              disabled={!allGenerated || !!exporting}
+              title="Download the deck as a PDF"
+              className="rounded-full border border-border-glass px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {approvingAll ? "Approving…" : "Approve all"}
+              {exporting?.fmt === "pdf"
+                ? `PDF ${exporting.done}/${exporting.total}…`
+                : "↓ PDF"}
             </button>
             <button
               type="button"
-              disabled={!allApproved || assembling}
-              onClick={() => void assemble().then((ok) => ok && onAssembled())}
-              className="rounded-full bg-accent-neon px-4 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60"
+              onClick={() => void downloadDeck("pptx")}
+              disabled={!allGenerated || !!exporting}
+              title="Download the deck as an editable PPTX"
+              className="rounded-full border border-border-glass px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {assembling ? "Assembling…" : "Assemble deck →"}
+              {exporting?.fmt === "pptx"
+                ? `PPTX ${exporting.done}/${exporting.total}…`
+                : "↓ PPTX"}
             </button>
           </div>
         </div>
