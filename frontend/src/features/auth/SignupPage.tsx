@@ -11,6 +11,7 @@ export function SignupPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("signup");
   const [transitioning, setTransitioning] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,15 +45,18 @@ export function SignupPage() {
 
   return (
     <div className="landing-page relative h-screen overflow-hidden bg-black">
-      {/* Cinematic background video */}
+      {/* Cinematic background video — fades in once ready (no poster flash) */}
       <video
-        className="absolute inset-0 h-full w-full object-cover"
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-out ${
+          videoReady ? "opacity-100" : "opacity-0"
+        }`}
         src="/auth-bg.mp4"
-        poster="/auth-cinema.jpg"
         autoPlay
         muted
         loop
         playsInline
+        preload="auto"
+        onCanPlay={() => setVideoReady(true)}
         aria-hidden
       />
       {/* Readability scrim — darkest behind the centered form, lighter at the edges */}
