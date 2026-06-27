@@ -21,6 +21,57 @@ body {
   font-family: var(--slide-font-display, var(--font-cormorant)), Georgia, serif;
 }
 
+/* Canela (Commercial Type) — drop licensed .woff2 files in /public/fonts.
+   Falls back to the existing serif until they're present. */
+@font-face {
+  font-family: "Canela";
+  src: url("/fonts/Canela-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Canela";
+  src: url("/fonts/Canela-Medium.woff2") format("woff2");
+  font-weight: 500 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Canela";
+  src: url("/fonts/Canela-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-canela {
+  font-family: "Canela", var(--font-cormorant), Georgia, serif;
+}
+
+/* Auth page entrance — glides in from the right on load */
+@keyframes auth-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(min(38vw, 520px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.auth-enter {
+  animation: auth-slide-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-enter {
+    animation: none;
+  }
+}
+
 /* PPT-style inline editing affordances (canvas edit mode only) */
 .pde-editable {
   outline: 1px dashed transparent;

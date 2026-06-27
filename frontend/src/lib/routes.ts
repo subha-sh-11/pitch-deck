@@ -3,6 +3,7 @@ import type { WorkflowStepId } from "@/types/workflow";
 export const projectRoutes = {
   dashboard: () => "/dashboard",
   newProject: () => "/projects/new",
+  signup: () => "/signup",
   projectRoot: (id: string) => `/projects/${id}`,
   setupIdentity: (id: string) => `/projects/${id}/setup/identity`,
   setupBody: (id: string) => `/projects/${id}/setup/body`,
