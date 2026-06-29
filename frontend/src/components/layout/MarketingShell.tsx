@@ -35,6 +35,12 @@ export function MarketingShell({ children }: MarketingShellProps) {
             >
               New Project
             </Link>
+            <Link
+              href={projectRoutes.signup()}
+              className="landing-btn-primary rounded-xl px-5 py-2.5 text-sm font-semibold text-zinc-950"
+            >
+              Get Started
+            </Link>
           </nav>
         </div>
       </header>

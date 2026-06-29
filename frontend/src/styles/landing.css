@@ -226,6 +226,7 @@
 }
 
 .landing-btn-primary {
+  cursor: pointer;
   background: linear-gradient(135deg, #f8c9a4 0%, #eaae83 100%);
   box-shadow:
     0 4px 24px rgba(248, 201, 164, 0.4),
@@ -244,6 +245,7 @@
 }
 
 .landing-btn-glass {
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(12px);
