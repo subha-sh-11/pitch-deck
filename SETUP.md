@@ -27,7 +27,7 @@ python --version
 
 ---
 
-## 1. Clone & configure
+## 1. Clone & configure        
 
 ```bash
 git clone <REPO_URL> PD
@@ -51,9 +51,19 @@ Open `backend/.env` and set what you need:
 
 ## 2. Start infrastructure (Docker)
 
+You have two choices for the **database**:
+
+- **A — Local per-person DB** (default): each teammate runs their own Postgres in Docker.
+  Simple, isolated, no shared state.
+- **B — Shared cloud DB** (team): everyone points at one cloud Postgres, so all of you see
+  the same projects/decks. See [Shared cloud database](#-shared-cloud-database-team) below.
+
 ```bash
-# Postgres (:5432), Redis (:6379), Floci S3 emulator (:4566)
+# Option A — local Postgres (:5432), Redis (:6379), Floci S3 emulator (:4566)
 docker compose up -d postgres redis floci
+
+# Option B — using a cloud DB? skip postgres, just bring up the rest:
+docker compose up -d redis floci
 
 # Check they're healthy
 docker compose ps
@@ -64,6 +74,37 @@ docker compose ps
 
 ---
 
+## 🌐 Shared cloud database (team)
+
+Want the whole team on the **same data**? Point every machine at one cloud Postgres instead
+of the local Docker one.
+
+1. **Provision Postgres with the `pgvector` extension** — the app needs it. Managed options
+   that support it: **Neon**, **Supabase**, **Railway**, **AWS RDS**. After creating the DB,
+   enable the extension once: `CREATE EXTENSION IF NOT EXISTS vector;`
+2. **Everyone sets the SAME connection URLs** in their `backend/.env` (share the string
+   privately — a password manager, **never** the repo):
+   ```env
+   DATABASE_URL=postgresql+asyncpg://USER:PASS@HOST:5432/DBNAME
+   DATABASE_URL_SYNC=postgresql+psycopg2://USER:PASS@HOST:5432/DBNAME?sslmode=require
+   ```
+   Most cloud Postgres **requires SSL** — keep `?sslmode=require` on the sync URL. If asyncpg
+   complains about SSL, add `?ssl=require` to `DATABASE_URL` too.
+3. **One person runs the migrations once** (the schema is shared — the rest skip this):
+   ```bash
+   cd backend && alembic upgrade head
+   ```
+4. **Skip the local Postgres container** — use `docker compose up -d redis floci` (Option B above).
+
+> ⚠️ **Images are still per-machine.** The DB is shared, but generated images are stored in
+> each person's **local** Floci/MinIO and served from *their* `localhost:8000`. So you'll all
+> see each other's projects and text, but an image generated on one laptop **won't load on
+> another**. For fully shared decks, also use a **shared object store** (real AWS S3, or one
+> shared MinIO) — set the same `S3_ENDPOINT` / `S3_KEY` / `S3_SECRET` / `S3_BUCKET` for
+> everyone, and a `PUBLIC_BASE_URL` all machines can reach.
+
+---
+
 ## 3. Backend (FastAPI)
 
 ```bash
@@ -71,7 +112,7 @@ cd backend
 python -m venv .venv
 
 # Activate the venv:
-#   macOS/Linux:  source .venv/bin/activate
+#   macOS/Linux:  source .venv/bin/activate 
 #   Windows PS:   .venv\Scripts\Activate.ps1
 #   Windows bash: source .venv/Scripts/activate
 

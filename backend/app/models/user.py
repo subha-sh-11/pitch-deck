@@ -21,6 +21,8 @@ class User(Base, TimestampMixin):
     name: Mapped[str | None] = mapped_column(String(255))
     # director | collaborator | producer
     role: Mapped[str] = mapped_column(String(32), default="director", nullable=False)
+    # bcrypt hash; null for legacy/dev users created before auth
+    password_hash: Mapped[str | None] = mapped_column(String(255))
 
     projects: Mapped[list["Project"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { LandingBackground } from "@/features/landing/LandingBackground";
 import { projectRoutes } from "@/lib/routes";
+import { AuthNav } from "./AuthNav";
 
 interface MarketingShellProps {
   children: ReactNode;
@@ -35,12 +36,7 @@ export function MarketingShell({ children }: MarketingShellProps) {
             >
               New Project
             </Link>
-            <Link
-              href={projectRoutes.signup()}
-              className="landing-btn-primary rounded-xl px-5 py-2.5 text-sm font-semibold text-zinc-950"
-            >
-              Get Started
-            </Link>
+            <AuthNav />
           </nav>
         </div>
       </header>

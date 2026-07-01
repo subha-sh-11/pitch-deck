@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { projectRoutes } from "@/lib/routes";
+import { login as apiLogin, signup as apiSignup } from "@/lib/api";
 
 type AuthMode = "signup" | "login";
 
@@ -17,6 +17,8 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const timers = useRef<number[]>([]);
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export function SignupPage() {
   // symmetric ~0.5s frosted morph.
   function switchMode(next: AuthMode) {
     if (transitioning || next === mode) return;
+    setError(null);
     setTransitioning(true);
     timers.current.push(
       window.setTimeout(() => {
@@ -37,10 +40,22 @@ export function SignupPage() {
     );
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // No auth backend yet — treat submit as success.
-    router.push(projectRoutes.dashboard());
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        await apiSignup({ email: email.trim(), password, firstName, lastName });
+      } else {
+        await apiLogin(email.trim(), password);
+      }
+      router.push("/"); // land on the home page after auth
+    } catch (err) {
+      setError((err as Error).message || "Something went wrong — try again.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -89,7 +104,7 @@ export function SignupPage() {
 
                   <button
                     type="button"
-                    onClick={() => router.push(projectRoutes.dashboard())}
+                    onClick={() => router.push("/")}
                     className="landing-btn-glass mt-8 flex w-full items-center justify-center gap-3 rounded-xl px-5 py-3.5 text-sm font-medium text-text-primary"
                   >
                     <GoogleIcon />
@@ -141,11 +156,17 @@ export function SignupPage() {
                       autoComplete="new-password"
                       required
                     />
+                    {error && (
+                      <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                        {error}
+                      </p>
+                    )}
                     <button
                       type="submit"
-                      className="w-full cursor-pointer rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_4px_24px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-white/90"
+                      disabled={busy}
+                      className="w-full cursor-pointer rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_4px_24px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Sign Up
+                      {busy ? "Creating account…" : "Sign Up"}
                     </button>
                   </form>
 
@@ -228,15 +249,21 @@ export function SignupPage() {
                       </Link>
                     </div>
 
+                    {error && (
+                      <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                        {error}
+                      </p>
+                    )}
                     <button
                       type="submit"
-                      className="mt-2 w-full cursor-pointer rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_4px_24px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-white/90"
+                      disabled={busy}
+                      className="mt-2 w-full cursor-pointer rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_4px_24px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Sign In
+                      {busy ? "Signing in…" : "Sign In"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => router.push(projectRoutes.dashboard())}
+                      onClick={() => router.push("/")}
                       className="landing-btn-glass flex w-full items-center justify-center gap-3 rounded-xl px-5 py-3.5 text-sm font-medium text-text-primary"
                     >
                       <GoogleIcon />

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
+from app.auth import router as auth_router
 from app.routers import (
     assets,
     decks,
@@ -61,6 +62,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
+app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
 app.include_router(interview.router, prefix=settings.api_v1_prefix)
 app.include_router(decks.router, prefix=settings.api_v1_prefix)
