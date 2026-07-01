@@ -18,9 +18,13 @@ interface SlideFrameProps {
 }
 
 export function SlideFrame({ children, className = "", imageUrl }: SlideFrameProps) {
-  const { editing, imageUrl: editedImageUrl, addTextBox, selectTextBox } = useSlideEdit();
+  const { editing, imageUrl: editedImageUrl, imageEffects, addTextBox, selectTextBox } = useSlideEdit();
   // The provider holds the live (possibly user-replaced) image URL.
   const resolvedImage = editedImageUrl ?? imageUrl;
+  // Non-destructive background adjustments set via chat ("blur the image", "darken it", "zoom").
+  const blur = imageEffects?.blur ?? 0;
+  const dim = imageEffects?.dim ?? 0;
+  const scale = imageEffects?.scale ?? 1;
 
   function onDoubleClick(e: ReactMouseEvent<HTMLDivElement>) {
     if (!editing) return;
@@ -59,7 +63,14 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
           src={resolvedImage}
           alt=""
           className="absolute inset-0 z-0 h-full w-full object-cover"
+          style={{
+            filter: blur ? `blur(${blur}px)` : undefined,
+            transform: scale && scale !== 1 ? `scale(${scale})` : undefined,
+          }}
         />
+      )}
+      {resolvedImage && dim > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-0 bg-black" style={{ opacity: dim }} />
       )}
       <div
         className="pointer-events-none absolute inset-0 z-0 opacity-[0.035]"

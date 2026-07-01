@@ -4,14 +4,12 @@ docs/
 # Secrets — never commit
 .env
 .env.*
-# ...but keep committed example templates
-!.env*.example
+# ...but DO commit the example templates so teammates can bootstrap config
+!.env.example
+!**/.env.example
 
 # AI-generated build artifacts
 /backend/_assets/generated/
 
 # Reference PDFs (binary)
 *.pdf
-
-# FUSE mount bookkeeping (transient; created when a file is replaced while held open)
-.fuse_hidden*

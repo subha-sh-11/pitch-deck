@@ -51,6 +51,10 @@ export interface SlideContent {
   imagePrompt?: string;
   /** Multiple generated image options to choose from in the full-screen gallery. */
   imageCandidates?: string[];
+  /** Background-image adjustments (no regeneration): blur px, dim 0-1 overlay, zoom scale. */
+  imageBlur?: number;
+  imageDim?: number;
+  imageScale?: number;
   /** PPT-style editing: per-element overrides keyed by a stable element key. */
   edits?: Record<string, SlideElementEdit>;
   /** PPT-style editing: free-form text boxes the user added anywhere on the slide. */

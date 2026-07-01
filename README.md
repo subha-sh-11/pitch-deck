@@ -6,8 +6,42 @@ The platform conducts an **adaptive AI intake conversation**, extracts & generat
 
 ---
 
+## 🚀 New here? Read [SETUP.md](./SETUP.md)
+
+Team onboarding — Docker infra, backend, frontend, admin login, and every command in one
+place. Start there to get running locally.
+
+---
+
+## 🔭 Architecture Flow (start here)
+
+For the full set of **end-to-end flow diagrams** — system context, the build pipeline, the
+AI agent chain, chat intake, slide-workshop generation, the image pipeline, the async job
+model, request/middleware flow, and the data model — see
+**[ARCHITECTURE_FLOW.md](./ARCHITECTURE_FLOW.md)** (Mermaid; renders on GitHub and pastes
+into Confluence).
+
+```mermaid
+flowchart LR
+    User([Director]) --> FE["Frontend<br/>Next.js 16 / React 19"]
+    FE -- "HTTP (camelCase JSON)" --> API["FastAPI /api/v1"]
+    API --> AGENTS["AI Agent Pipeline<br/>intake → design → outline → content → image"]
+    AGENTS --> LLM["LLM<br/>OpenAI / Anthropic"]
+    AGENTS --> IMG["Vertex AI Imagen"]
+    AGENTS --> TMDB["TMDB posters"]
+    API --> PG[("PostgreSQL<br/>decks/slides JSONB")]
+    API --> S3[("S3 / MinIO + local")]
+    API --> REDIS[("Redis — optional")]
+```
+
+**Build flow:** `intake (chat / script / reference deck)` → `story analysis` → `design
+direction` → `outline` → `per-slide content + image` → `assemble` → `editor` → `export`.
+
+---
+
 ## 📑 Table of Contents
 
+0. **[Architecture Flow](#-architecture-flow-start-here)** ⭐ — start here (flow diagrams + Confluence-ready)
 1. [Tech Stack](#-tech-stack)
 2. [High-Level Architecture Diagram](#-high-level-architecture-diagram)
 3. [System Components Overview](#-system-components-overview)
