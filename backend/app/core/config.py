@@ -46,11 +46,13 @@ class Settings(BaseSettings):
     def result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
 
-    # Object storage
-    s3_endpoint: str = "http://localhost:9000"
+    # Object storage. Defaults target the local "floci" S3 emulator (docker compose,
+    # port 4566, creds test/test). MinIO (port 9000, minioadmin) is an alternative —
+    # override S3_ENDPOINT/S3_KEY/S3_SECRET in .env to use it. Any S3/R2 works too.
+    s3_endpoint: str = "http://localhost:4566"
     s3_bucket: str = "pitchdeck"
-    s3_key: str = "minioadmin"
-    s3_secret: str = "minioadmin"
+    s3_key: str = "test"
+    s3_secret: str = "test"
     s3_region: str = "us-east-1"
 
     # ─── LLM (provider-agnostic) ───
@@ -73,13 +75,19 @@ class Settings(BaseSettings):
     # pin one explicitly in .env (e.g. IMAGE_PROVIDER=fal).
     image_provider: str = "auto"
     fal_key: str = ""
-    fal_image_model: str = "fal-ai/flux/schnell"
+    # flux/dev is far higher fidelity than the speed-optimised flux/schnell (schnell is 4-step and
+    # looks visibly "AI"). For the most premium, photoreal results set in .env:
+    #   FAL_IMAGE_MODEL=fal-ai/flux-pro/v1.1        (or fal-ai/flux-pro/v1.1-ultra)
+    fal_image_model: str = "fal-ai/flux/dev"
     # When reference images are supplied, fal switches to an image-to-image model so the
     # references actually condition the output. ``fal_image_strength`` is how far the result moves
     # FROM the reference TOWARD the text prompt: higher (≈0.85) → new content carrying the
     # reference's palette/grade; lower → output hews closely to the reference.
     fal_image_to_image_model: str = "fal-ai/flux/dev/image-to-image"
     fal_image_strength: float = 0.85
+    # Hard ceiling on diffusion calls per deck (background + per-element passes combined) so a long
+    # deck can't explode image cost / rate-limits. Generous default; lower it to cap spend.
+    max_deck_images: int = 48
     replicate_api_token: str = ""
     replicate_image_model: str = "black-forest-labs/flux-schnell"
     google_api_key: str = ""

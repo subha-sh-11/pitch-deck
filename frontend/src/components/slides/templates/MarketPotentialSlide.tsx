@@ -1,6 +1,7 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
 interface MarketPotentialSlideProps {
   content: SlideContent;
@@ -28,7 +29,11 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
                 key={i}
                 className="flex flex-col justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] p-5"
               >
-                <div className="mb-3 h-1 w-8" style={{ background: "var(--slide-accent)" }} />
+                <SlideIcon
+                  name={iconForLabel(item.title, "market")}
+                  size={20}
+                  className="mb-3 text-[var(--slide-accent,#22d3ee)]"
+                />
                 <EditableText
                   k={`item-${i}-title`}
                   as="h3"

@@ -401,6 +401,11 @@ def _has(brief: dict | None, field: str) -> bool:
 
 def _fallback(pillars: dict, brief: dict | None) -> dict:
     """Offline degradation: one small round of 3 questions, then ready. (No reasoning offline.)"""
+    from app.ai import llm
+
+    _r = llm.last_error()
+    _note = (f" (Note: the AI producer is offline — {_r}; I'm using quick defaults until it's back.)"
+             if _r else "")
     title = (pillars.get("title") or "").strip()
     base = {}
     if title:
@@ -413,7 +418,7 @@ def _fallback(pillars: dict, brief: dict | None) -> dict:
     if _has(merged, "genreBlend") and _has(merged, "targetAudience"):
         return {
             "brief": merged, "sections": [], "assumptions": [],
-            "message": "I have enough to start — build your deck whenever you're ready.",
+            "message": "I have enough to start — build your deck whenever you're ready." + _note,
             "ask": {"field": None, "inputType": "none", "options": [], "allowFreeText": False},
             "ready": True, "missingRequired": [],
         }
@@ -430,7 +435,7 @@ def _fallback(pillars: dict, brief: dict | None) -> dict:
     ]
     return {
         "brief": merged, "sections": sections, "assumptions": [],
-        "message": "Good start — a few quick choices to shape it:",
+        "message": "Good start — a few quick choices to shape it:" + _note,
         "ask": {"field": None, "inputType": "none", "options": [], "allowFreeText": False},
         "ready": False, "missingRequired": [],
     }

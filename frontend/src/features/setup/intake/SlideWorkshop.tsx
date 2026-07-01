@@ -9,6 +9,7 @@ import {
   updateSlide as apiUpdateSlide,
   uploadSlideImage,
 } from "@/lib/api";
+import { useSmoothProgress } from "@/lib/use-smooth-progress";
 import { useSetupWizard } from "../SetupWizardContext";
 import { useWorkshop } from "./workshop";
 import { SLIDE_TYPE_LABELS, type Slide, type SlideContent } from "@/types/slide";
@@ -60,6 +61,7 @@ function ScaledSlide({ slide, designDirection }: { slide: Slide; designDirection
 export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
   const { generationStatus, generationProgress, generationError, replaceDraftSlide } =
     useSetupWizard();
+  const displayProgress = useSmoothProgress(generationProgress, generationStatus === "generating");
   const { slides, approvedCount, allApproved, assembling, assemble } = useWorkshop();
   const [genAll, setGenAll] = useState<{ running: boolean; done: number; total: number }>({
     running: false,
@@ -113,7 +115,7 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-text-muted">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-neon border-t-transparent" />
-        <p className="text-sm">Architecting your deck — {generationProgress}%</p>
+        <p className="text-sm">Architecting your deck — {displayProgress}%</p>
         <p className="text-xs text-text-dim">Story analysis · design language · slide outline</p>
       </div>
     );
@@ -427,14 +429,7 @@ function SlideCard({ slide }: { slide: Slide }) {
               {slide.purpose && (
                 <p className="max-w-[70%] text-xs leading-relaxed text-text-muted">{slide.purpose}</p>
               )}
-              <button
-                type="button"
-                onClick={() => void generate()}
-                disabled={!!busy}
-                className="mt-2 rounded-full bg-accent-neon px-5 py-2 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:opacity-40"
-              >
-                ✦ Generate this slide
-              </button>
+              {/* Generate control lives in the left panel — no duplicate button here. */}
             </div>
           )}
           {busy && (

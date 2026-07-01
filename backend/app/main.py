@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
@@ -22,6 +23,7 @@ from app.routers import (
 
 setup_logging()
 _req_log = get_logger("request")
+_err_log = get_logger("error")
 
 
 @asynccontextmanager
@@ -51,6 +53,23 @@ async def log_requests(request: Request, call_next):
         dur_ms,
     )
     return response
+
+
+@app.exception_handler(Exception)
+async def log_unhandled_errors(request: Request, exc: Exception):
+    """Any error a route did NOT handle lands here. Log WHY it failed — the exception type, its
+    message, and a full traceback — next to the access logs, so a failure shows its cause instead
+    of a bare 500. Then return a clean JSON error to the caller (never a blank crash).
+
+    Note: expected 4xx responses (HTTPException like 404/403, validation errors) are handled by
+    FastAPI's own handlers and never reach here, so this only fires for real, unforeseen errors.
+    """
+    _err_log.exception(
+        "%s %s -> 500 %s: %s",
+        request.method, request.url.path, type(exc).__name__, exc,
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.add_middleware(
     CORSMiddleware,

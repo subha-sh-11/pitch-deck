@@ -13,6 +13,7 @@ from app.ai.registers import (
     FONT_BY_REGISTER,
     REGISTERS,
     design_direction_fallback,
+    infer_brightness,
     select_register,
 )
 
@@ -34,14 +35,24 @@ _SYSTEM = (
     "fonts in typography, so the result clearly resembles their reference, then refine for "
     "cinematic quality and contrast.\n"
     "Craft rules:\n"
-    "  • PALETTE (6 colors, real hex): build it like a colorist grading the film — a dominant base "
-    "for slide grounds (DARK by default, BUT when reference images are attached take the base FROM "
-    "THEM: if the references are warm/amber/light, the slide grounds must be warm/amber/light too — "
-    "never force a dark base over warm references), one signature accent that carries the story's "
-    "emotional temperature, supporting mid-tones, and a text tone that CONTRASTS the base (light "
-    "text on a dark base, dark text on a light/warm base). Name colors evocatively for THIS "
-    "story ('Monsoon Slate', not 'Dark Gray') and give each a concrete `usage` (backgrounds / "
-    "headlines / accents / captions) so every slide applies them identically — consistency across "
+    "  • GENRE REGISTER — tune the WHOLE system to the genre; do NOT default every deck to the "
+    "same dark look. Crime/thriller/horror → dark, gritty, high-contrast, cold. Romance → warm, "
+    "soft, airy. Comedy → bright, playful, saturated. Sports → energetic, punchy, motion. "
+    "Mythology/fantasy → grand, rich, ornamental. Family/feel-good → warm and luminous. Match the "
+    "story's emotional temperature, not a house style. The payload's targetBrightness "
+    "(light | dark | neutral) is BINDING: light -> light/warm slide grounds, dark -> deep dark "
+    "grounds, neutral -> tasteful mid-tones; never force near-black on a light or neutral brief.\n"
+    "  • PALETTE (6 colors, real hex), covering these 5 ROLES at minimum: a base for slide grounds, "
+    "primary text, secondary text, one signature accent that carries the story's emotional "
+    "temperature, and a highlight/CTA. Build it like a colorist grading the film. The base is "
+    "GENRE-TUNED, not dark-by-default: gritty crime/thriller/horror → deep dark grounds; "
+    "romance/comedy/sports/feel-good → warm, bright or light grounds. When reference images are "
+    "attached, take the base FROM THEM (warm/amber/light references → warm/amber/light grounds — "
+    "never force a dark base over warm references). The text tone must CONTRAST the base (light "
+    "text on a dark base, dark text on a light/warm base). NEVER make everything black — even a "
+    "dark deck needs breathing space and tonal range. Name colors evocatively for THIS story "
+    "('Monsoon Slate', not 'Dark Gray') and give each a concrete `usage` (backgrounds / headlines / "
+    "captions / accents / highlight) so every slide applies them identically — consistency across "
     "the deck is the difference between curated and assembled.\n"
     "  • cinematicTone: the deck's emotional register in one line, as a DP would describe the "
     "film's look.\n"
@@ -62,9 +73,11 @@ _SYSTEM = (
     "BACKGROUND match the references' dominant ground (a warm amber reference → warm amber slide "
     "grounds, NOT near-black). Match the typography CHARACTER you see (bold condensed display vs "
     "elegant serif), the mood, and the graphic treatment. Prioritise what you SEE over the register.\n"
-    "  • displayFont: the ONE display font that best matches the look — exactly one of: cormorant, "
-    "playfair, oswald, poppins, anton (oswald/anton = bold condensed; cormorant/playfair = elegant "
-    "serif; poppins = clean modern).\n"
+    "  • displayFont: the ONE display font that best matches the GENRE and look — exactly one of: "
+    "cormorant, playfair, oswald, poppins, anton (oswald/anton = bold condensed, for crime / "
+    "thriller / sports / action; cormorant/playfair = elegant serif, for romance / drama / period / "
+    "mythology; poppins = clean modern, for comedy / contemporary / feel-good). Paired with a "
+    "clean readable body face — never more than two faces total.\n"
     "  • motifs: recurring GRAPHIC motifs the deck should carry, each exactly one of: film_strip, "
     "grain, vignette, frame. Include a motif ONLY when the story/references genuinely call for it "
     "(a film-strip border for a filmmaking story, grain for a gritty look); use [] when none fit — "
@@ -84,13 +97,17 @@ def run(project: dict, intake: dict, reference_images: list[dict] | None = None,
     typography are additionally anchored to."""
     genres = project.get("genres") or []
     tone = project.get("tone") or []
-    register_id = select_register(genres, tone, (intake or {}).get("genreBlend", ""))
+    genre_blend = (intake or {}).get("genreBlend", "")
+    register_id = select_register(genres, tone, genre_blend)
     fallback = lambda: design_direction_fallback(genres, tone, intake, register_id)
 
     reg = REGISTERS[register_id]
     payload = {
         "genres": genres,
         "tone": tone,
+        # light | dark | neutral — the slide grounds MUST follow this. Pairs with the system
+        # rule (genre-tuned, never dark-by-default) so instruction and grounding agree.
+        "targetBrightness": infer_brightness(genres, tone, genre_blend),
         "intake": {k: (intake or {}).get(k) for k in
                    ("visualAesthetic", "colorPalette", "textureStyle", "visualMood",
                     "designDirection", "genreBlend")},

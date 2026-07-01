@@ -6,6 +6,7 @@ export type SlideType =
   | "story_world"
   | "character"
   | "supporting_characters"
+  | "relationship_map"
   | "usp"
   | "show_cross"
   | "visual_aesthetic"
@@ -43,6 +44,8 @@ export interface SlideContent {
   }[];
   comps?: { title: string; note: string; posterUrl?: string }[];
   moodBlocks?: { label: string; color: string; imageUrl?: string; imagePrompt?: string }[];
+  /** Relationship-map slide: labelled edges between characters (nodes come from `characters`). */
+  relationships?: { source: string; target: string; label?: string }[];
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
@@ -168,6 +171,7 @@ export const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
   story_world: "Story World",
   character: "Character",
   supporting_characters: "Supporting Characters",
+  relationship_map: "Relationship Map",
   usp: "USP",
   show_cross: "Show Cross",
   visual_aesthetic: "Visual Aesthetic",

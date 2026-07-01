@@ -345,10 +345,32 @@ def _fetch_bytes(url: str) -> tuple[bytes, str]:
     return resp.content, resp.headers.get("content-type", "image/png")
 
 
-def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
-                  reference_images: list[dict] | None = None) -> ImageResult:
+def _fal_run(model: str, args: dict, attempts: int = 3):
+    """Call fal with a short exponential backoff. A full deck fires ~20 image calls in two bursts
+    (backgrounds, then per-element portraits/genres); the later burst is the one that gets
+    rate-limited, and a single 429/timeout used to degrade straight to a placeholder. Retrying a
+    couple of times with jittered backoff turns those transient failures back into real images."""
+    import random
+    import time
+
     import fal_client  # lazy
 
+    last: Exception | None = None
+    for i in range(max(1, attempts)):
+        try:
+            return fal_client.run(model, arguments=args)
+        except Exception as exc:  # noqa: BLE001 — retry ANY error; non-transient ones just exhaust
+            last = exc
+            if i == attempts - 1:
+                raise
+            _log.warning("fal attempt %d/%d failed (%s); retrying…",
+                         i + 1, attempts, str(exc)[:140])
+            time.sleep(min(8.0, 1.5 * (2 ** i)) + random.uniform(0, 0.6))
+    raise last  # pragma: no cover — loop always returns or raises
+
+
+def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
+                  reference_images: list[dict] | None = None) -> ImageResult:
     import os
 
     os.environ.setdefault("FAL_KEY", settings.fal_key)
@@ -369,7 +391,7 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
         args = {"prompt": prompt, "image_size": {"width": w, "height": h}}
     if seed is not None:
         args["seed"] = seed
-    result = fal_client.run(model, arguments=args)
+    result = _fal_run(model, args)
     url = result["images"][0]["url"]
     data, mime = _fetch_bytes(url)
     return ImageResult(data, mime, {"provider": "fal", "model": model, "prompt": prompt,

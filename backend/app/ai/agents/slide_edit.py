@@ -226,11 +226,16 @@ def run(instruction: str, slides: list[dict], history: list[dict] | None = None,
 
 
 def _fallback(instruction: str, slides: list[dict]) -> dict:
-    """Offline degradation: no model, so we can't parse intent — ask the user to use the editor."""
+    """Offline degradation: no model reachable, so we can't parse intent. Surface the REAL reason
+    (e.g. OpenAI quota / missing key) so the director can fix it, not just a generic apology."""
+    from app.ai import llm
+
+    reason = llm.last_error()
+    detail = f" — {reason}" if reason else ""
     return {
         "message": (
-            "I can't reach the editing model right now — you can still tweak slides directly in the "
-            "editor, and I'll pick up where we left off once it's back."
+            "I can't reach the editing model right now" + detail + ". You can still tweak slides "
+            "directly in the editor, and I'll pick up where we left off once it's back."
         ),
         "actions": [],
     }

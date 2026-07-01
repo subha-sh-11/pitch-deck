@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { projectRoutes } from "@/lib/routes";
 import type { ChatMessage, Interview } from "./useInterview";
@@ -82,7 +82,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
         ))}
         {/* Start state: labelled context options (only before the conversation gets going). */}
         {iv.messages.length <= 1 && options.length === 0 && !iv.thinking && (
-          <ContextOptions onPick={openPicker} onDescribe={() => textareaRef.current?.focus()} />
+          <ContextOptions onDescribe={() => textareaRef.current?.focus()} />
         )}
         {iv.thinking && <Thinking />}
       </div>
@@ -117,6 +117,9 @@ export function ChatPanel({ iv }: { iv: Interview }) {
         </div>
       )}
 
+      {/* Brief strength — tells the director how close they are to a strong deck. */}
+      {iv.draftSlides.length === 0 && <BriefStrength iv={iv} />}
+
       {/* Composer */}
       <div className="px-3 pb-3 pt-1">
         <input
@@ -131,7 +134,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
             e.currentTarget.value = "";
           }}
         />
-        <div className="rounded-2xl border border-border-glass bg-surface-2/50 p-2.5">
+        <div className="rounded-2xl border border-white/15 bg-surface-2/80 p-3 shadow-lg shadow-black/20 transition-colors focus-within:border-accent-neon/50">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -142,11 +145,11 @@ export function ChatPanel({ iv }: { iv: Interview }) {
                 send();
               }
             }}
-            rows={2}
-            placeholder={options.length ? "…or type your own answer" : "Describe your film, or answer the producer…"}
-            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-dim focus:outline-none"
+            rows={3}
+            placeholder={options.length ? "…or type your own answer" : "Paste a logline, story idea, or script summary…"}
+            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:outline-none"
           />
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center justify-between pt-1.5">
             <IconButton
               title="Attach files — scripts, reference images, mood boards, themes"
               onClick={() => openPicker(ALL_ACCEPT)}
@@ -157,7 +160,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
               onClick={send}
               disabled={!draft.trim() || iv.thinking}
               title="Send"
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-neon text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:bg-accent-neon/30"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-neon text-zinc-950 shadow-[0_0_16px_rgba(248,201,164,0.35)] transition-all hover:bg-accent-neon-dim active:scale-95 disabled:cursor-not-allowed disabled:bg-accent-neon/30 disabled:shadow-none"
             >
               <SendIcon />
             </button>
@@ -168,96 +171,94 @@ export function ChatPanel({ iv }: { iv: Interview }) {
   );
 }
 
-function ContextOptions({
-  onPick,
-  onDescribe,
-}: {
-  onPick: (accept: string) => void;
-  onDescribe: () => void;
-}) {
-  const items: { label: string; desc: string; tint: string; icon: ReactNode; onClick: () => void }[] = [
-    {
-      label: "Upload script",
-      desc: "PDF · DOCX · FDX · TXT — I'll pull the story",
-      tint: "bg-amber-500/15 text-amber-300",
-      icon: <DocIcon />,
-      onClick: () => onPick(".pdf,.docx,.fdx,.txt,.md,.rtf"),
-    },
-    {
-      label: "Reference images",
-      desc: "Stills, key art, locations",
-      tint: "bg-emerald-500/15 text-emerald-300",
-      icon: <ImgIcon />,
-      onClick: () => onPick("image/*"),
-    },
-    {
-      label: "Mood board / themes",
-      desc: "Looks & palettes to echo",
-      tint: "bg-fuchsia-500/15 text-fuchsia-300",
-      icon: <SwatchIcon />,
-      onClick: () => onPick("image/*"),
-    },
-    {
-      label: "Describe your film",
-      desc: "Type a logline or a paragraph",
-      tint: "bg-sky-500/15 text-sky-300",
-      icon: <PencilIcon />,
-      onClick: onDescribe,
-    },
-  ];
+function ContextOptions({ onDescribe }: { onDescribe: () => void }) {
   return (
-    <div className="space-y-2 pt-2">
-      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-dim">
-        Start with context
-      </p>
-      {items.map((it) => (
-        <button
-          key={it.label}
-          type="button"
-          onClick={it.onClick}
-          className="flex w-full items-center gap-3 rounded-xl border border-border-glass bg-surface-2/50 px-3 py-2.5 text-left transition-colors hover:border-accent-neon/40 hover:bg-surface-2"
-        >
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${it.tint}`}>
-            {it.icon}
+    <div className="animate-intake-fade-in pt-3">
+      {/* Primary action — the single, obvious place to start. */}
+      <button
+        type="button"
+        onClick={onDescribe}
+        className="group flex w-full items-center justify-between gap-3 rounded-xl border border-accent-neon/50 bg-accent-neon/10 px-4 py-3.5 text-left transition-all hover:border-accent-neon hover:bg-accent-neon/15 active:scale-[0.99]"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-neon text-zinc-950">
+            <PencilIcon />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-text-primary">{it.label}</span>
-            <span className="block truncate text-[11px] text-text-dim">{it.desc}</span>
+            <span className="block text-sm font-semibold text-text-primary">Describe your film idea</span>
+            <span className="block text-xs text-text-muted">Type a logline or a paragraph to begin</span>
           </span>
-        </button>
-      ))}
+        </span>
+        <ArrowIcon className="shrink-0 text-accent-neon transition-transform group-hover:translate-x-0.5" />
+      </button>
     </div>
   );
 }
 
-function DocIcon() {
+// How fully the brief is specified — drives the "Brief strength" guidance so the
+// director knows what to add next before generating questions.
+function BriefStrength({ iv }: { iv: Interview }) {
+  const f = iv.form;
+  const signals = [
+    (f.title ?? "").trim(),
+    ((f.logline ?? "").trim() || (f.synopsis ?? "").trim()),
+    (f.genreBlend ?? "").trim(),
+    (f.targetAudience ?? "").trim(),
+    (f.visualAesthetic ?? "").trim(),
+  ].filter(Boolean).length + (iv.referenceImages.length > 0 ? 1 : 0);
+
+  const level = signals >= 4 ? "Strong" : signals >= 2 ? "Medium" : "Low";
+  const hint =
+    level === "Strong"
+      ? "Ready to generate questions."
+      : level === "Medium"
+        ? "Getting there — add genre, audience, or visual references to sharpen it."
+        : "Add a story idea, genre, and visual references to improve it.";
+  const tone =
+    level === "Strong"
+      ? "text-accent-neon"
+      : level === "Medium"
+        ? "text-amber-300"
+        : "text-text-muted";
+  const filled = Math.min(6, signals);
+
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6M8 13h8M8 17h6" />
+    <div className="mx-3 mb-1 rounded-xl border border-border-glass bg-surface-2/40 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          Brief strength
+        </span>
+        <span className={`text-xs font-semibold ${tone}`}>{level}</span>
+      </div>
+      <div className="mt-2 flex gap-1" aria-hidden>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors ${
+              i < filled
+                ? level === "Strong"
+                  ? "bg-accent-neon"
+                  : level === "Medium"
+                    ? "bg-amber-400/70"
+                    : "bg-text-dim"
+                : "bg-surface-3"
+            }`}
+          />
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-text-dim">{hint}</p>
+    </div>
+  );
+}
+
+function ArrowIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   );
 }
-function ImgIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="M21 15l-5-5L5 21" />
-    </svg>
-  );
-}
-function SwatchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <circle cx="13.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="10.5" r="2.5" />
-      <circle cx="8.5" cy="7.5" r="2.5" />
-      <circle cx="6.5" cy="12.5" r="2.5" />
-      <path d="M12 22a10 10 0 1 1 0-20" />
-    </svg>
-  );
-}
+
 function PencilIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">

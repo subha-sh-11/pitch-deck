@@ -369,8 +369,8 @@ export function useInterview(projectId: string): Interview {
         id: nextId(),
         role: "assistant",
         text:
-          "Hi — I'm your pitch producer. Tell me about your film — a sentence, a paragraph, or " +
-          "drop a script — and I'll generate a tailored design brief on the right.",
+          "Start by describing your film idea, uploading a script, or adding visual references. " +
+          "I'll turn it into a structured pitch-deck brief.",
       },
     ]);
   }, [storageKey]);

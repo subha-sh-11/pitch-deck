@@ -1,4 +1,5 @@
 import type { Slide } from "@/types/slide";
+import type { StoryAnalysis } from "@/types/workflow";
 import { apiFetch } from "./client";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
@@ -26,6 +27,11 @@ export const generateDeck = (projectId: string, templateId?: string, withImages 
 
 export const generateDesign = (projectId: string) =>
   apiFetch<GenerationJob>(`/generate/${projectId}/design`, { method: "POST" });
+
+/** Story Blueprint: compute + persist the AI's StoryAnalysis from the current intake, without
+ *  generating any slides — for the editable "AI understanding" read-back before building. */
+export const analyzeStory = (projectId: string) =>
+  apiFetch<StoryAnalysis>(`/generate/${projectId}/analyze`, { method: "POST" });
 
 /** Workshop step 1: analysis + design + outline → empty slide shells (no batch generation). */
 export const prepareDeck = (projectId: string, templateId?: string) => {

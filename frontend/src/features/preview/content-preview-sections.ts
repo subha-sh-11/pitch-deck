@@ -45,7 +45,7 @@ export const CONTENT_PREVIEW_SECTIONS: ContentPreviewSection[] = [
         key: "keyScenes",
         label: "Key Locations",
         multiline: true,
-        placeholder: "Rooftop, apartment community, water tank…",
+        placeholder: "The key locations and the world your story lives in…",
       },
     ],
   },

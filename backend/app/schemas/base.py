@@ -80,6 +80,7 @@ class SlideType(str, Enum):
     story_world = "story_world"
     character = "character"
     supporting_characters = "supporting_characters"
+    relationship_map = "relationship_map"
     usp = "usp"
     show_cross = "show_cross"
     visual_aesthetic = "visual_aesthetic"

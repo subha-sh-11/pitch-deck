@@ -1,6 +1,7 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon } from "../shared/SlideIcon";
 
 interface USPGridSlideProps {
   content: SlideContent;
@@ -26,6 +27,12 @@ export function USPGridSlide({ content }: USPGridSlideProps) {
             >
               {/* accent rail makes each point read as a highlighted callout, not a flat row */}
               <div className="absolute left-0 top-0 h-full w-1 bg-[var(--slide-accent,#22d3ee)]" />
+              {/* small thin-line marker — icons stay subtle on USP, per the design bible */}
+              <SlideIcon
+                name="spark"
+                size={15}
+                className="absolute right-3 top-3 text-[var(--slide-accent,#22d3ee)] opacity-50"
+              />
               <span className="font-display text-3xl font-bold leading-none text-[var(--slide-accent,#22d3ee)]">
                 {String(i + 1).padStart(2, "0")}
               </span>

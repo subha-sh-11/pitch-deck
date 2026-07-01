@@ -1,6 +1,7 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
 interface TargetAudienceSlideProps {
   content: SlideContent;
@@ -32,13 +33,15 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
                   background: "color-mix(in srgb, var(--slide-accent) 6%, transparent)",
                 }}
               >
-                <EditableText
-                  k={`item-${i}-title`}
-                  as="h3"
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--slide-accent)" }}
-                  value={item.title}
-                />
+                <div className="flex items-center gap-2" style={{ color: "var(--slide-accent)" }}>
+                  <SlideIcon name={iconForLabel(item.title, "audience")} size={18} />
+                  <EditableText
+                    k={`item-${i}-title`}
+                    as="h3"
+                    className="text-sm font-semibold"
+                    value={item.title}
+                  />
+                </div>
                 {item.description && (
                   <EditableText
                     k={`item-${i}-desc`}

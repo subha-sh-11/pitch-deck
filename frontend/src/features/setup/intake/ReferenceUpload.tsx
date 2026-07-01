@@ -58,13 +58,13 @@ export function ReferenceUpload({ iv }: { iv: Interview }) {
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-neon">
             Choose Your Visual Direction
           </h3>
-          <p className="text-[11px] text-text-dim">
+          <p className="text-[11px] text-text-muted">
             Drop a collection of references — stills, posters, palettes — and I’ll use them for
             inspiration.
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-border-glass px-2.5 py-1 text-[11px] text-text-muted">
-          {count}/{MAX_REFERENCES}
+          {count}/{MAX_REFERENCES} references
         </span>
       </header>
 
@@ -86,7 +86,7 @@ export function ReferenceUpload({ iv }: { iv: Interview }) {
             <button
               type="button"
               onClick={openPicker}
-              className="flex w-full items-center justify-center gap-2 rounded-lg text-sm text-text-dim transition-colors hover:text-text-primary"
+              className="flex w-full items-center justify-center gap-2 rounded-lg text-sm text-text-muted transition-colors hover:text-text-primary"
             >
               <FolderIcon active={dragging} />
               Drop references here, or click to add
@@ -126,10 +126,10 @@ export function ReferenceUpload({ iv }: { iv: Interview }) {
             onClick={openPicker}
             disabled={full}
             title={full ? "Reference folder full" : "Add references"}
-            className={`flex aspect-square h-full shrink-0 flex-col items-center justify-center gap-1 rounded-lg border text-[11px] transition-colors ${
+            className={`flex aspect-square h-full shrink-0 flex-col items-center justify-center gap-1 rounded-lg border text-[11px] transition-all active:scale-95 ${
               full
-                ? "cursor-not-allowed border-border-glass text-text-dim opacity-50"
-                : "border-border-glass bg-surface-2/40 text-text-muted hover:border-accent-neon/50 hover:text-text-primary"
+                ? "cursor-not-allowed border-border-glass text-text-dim opacity-50 active:scale-100"
+                : "cursor-pointer border-border-glass bg-surface-2/40 text-text-muted hover:border-accent-neon/50 hover:bg-surface-2/70 hover:text-text-primary"
             }`}
           >
             <PlusIcon />

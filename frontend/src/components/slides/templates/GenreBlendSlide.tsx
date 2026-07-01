@@ -1,6 +1,7 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
 interface GenreBlendSlideProps {
   content: SlideContent;
@@ -47,9 +48,10 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
                   }}
                 />
               )}
-              <span className="relative mb-2 text-[10px] font-bold text-[var(--slide-accent,#22d3ee)]">
-                0{i + 1}
-              </span>
+              <div className="relative mb-2 flex items-center gap-2 text-[var(--slide-accent,#22d3ee)]">
+                <SlideIcon name={iconForLabel(item.title)} size={18} />
+                <span className="text-[10px] font-bold">0{i + 1}</span>
+              </div>
               <EditableText
                 k={`item-${i}-title`}
                 as="h3"

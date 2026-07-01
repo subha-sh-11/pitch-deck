@@ -8,6 +8,7 @@ import { DeckExportButtons } from "@/features/export/DeckExportButtons";
 import { buildSlideFromOutline } from "@/lib/build-slides";
 import { FALLBACK_DESIGN } from "@/lib/deck-themes";
 import { projectRoutes } from "@/lib/routes";
+import { useSmoothProgress } from "@/lib/use-smooth-progress";
 import type { SlideType } from "@/types/slide";
 import type { Interview } from "./useInterview";
 
@@ -34,6 +35,7 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
   const form = iv.form;
   const real = iv.draftSlides;
   const generating = iv.generationStatus === "generating";
+  const buildProgress = useSmoothProgress(iv.generationProgress, generating);
 
   // The deck's live design — driven by the agent (e.g. "make it blue") and applied to every
   // slide instantly via CSS vars. useInterview folds any agent override into iv.designDirection.
@@ -54,12 +56,20 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
         <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-glass bg-black/50 px-6 py-2.5 backdrop-blur">
           <span className="text-xs text-text-dim">
             {generating
-              ? `Building your deck… ${Math.round(iv.generationProgress)}%`
+              ? `Building your deck… ${buildProgress}%`
               : `Deck ready · ${real.length} slides · ask the producer to restyle`}
           </span>
           {!generating && (
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <DeckExportButtons slides={real} design={effectiveDesign} />
+              {projectId && (
+                <Link
+                  href={projectRoutes.review(projectId)}
+                  className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-text-primary transition hover:bg-white/10"
+                >
+                  Review
+                </Link>
+              )}
               {projectId && (
                 <Link
                   href={projectRoutes.export(projectId)}
@@ -98,13 +108,13 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
       <div className="flex h-full flex-col items-center justify-center gap-5 px-8 text-center" style={DOT_BG}>
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-neon/30 border-t-accent-neon" />
         <div>
-          <p className="font-display text-2xl text-text-muted">Building your deck…</p>
-          <p className="mt-1 text-sm text-text-dim">Drafting story, copy, and cinematic art. This can take up to a minute.</p>
+          <p className="font-display text-2xl text-text-primary">Building your deck…</p>
+          <p className="mt-1 text-sm text-text-muted">Drafting story, copy, and cinematic art. This can take up to a minute.</p>
         </div>
         <div className="h-1.5 w-64 overflow-hidden rounded-full bg-surface-3">
           <div
             className="h-full rounded-full bg-accent-neon transition-[width] duration-500"
-            style={{ width: `${Math.max(6, Math.round(iv.generationProgress))}%` }}
+            style={{ width: `${buildProgress}%` }}
           />
         </div>
       </div>
@@ -115,13 +125,16 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
   return (
     <div className="relative h-full overflow-y-auto" style={DOT_BG}>
       {!hasContent ? (
-        <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-          <SketchIcon />
-          <p className="font-display text-2xl text-text-muted">Your deck will appear here</p>
-          <p className="max-w-sm text-sm text-text-dim">
-            Describe your film on the left or fill the brief. When you hit{" "}
-            <span className="text-text-primary">Build deck</span>, the real slides generate right here.
-          </p>
+        <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-8 text-center">
+          <div className="intake-halo pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
+          <div className="animate-intake-fade-in relative flex max-w-sm flex-col items-center gap-3">
+            <SketchIcon />
+            <p className="font-display text-3xl text-text-primary">Your deck will appear here</p>
+            <p className="text-sm leading-relaxed text-text-muted">
+              Describe your film on the left or fill the brief. When you hit{" "}
+              <span className="text-text-primary">Build deck</span>, the real slides generate right here.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">

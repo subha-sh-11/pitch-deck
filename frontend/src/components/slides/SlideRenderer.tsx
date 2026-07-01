@@ -12,6 +12,7 @@ import {
   GenreBlendSlide,
   LoglineSlide,
   MarketPotentialSlide,
+  RelationshipMapSlide,
   ShowCrossSlide,
   StoryWorldSlide,
   SynopsisSlide,
@@ -33,6 +34,17 @@ function paletteAccent(dd?: DesignDirection): string | undefined {
     dd.palette[Math.min(2, dd.palette.length - 1)]?.hex
   );
 }
+
+// "Loud" motifs (film-strip frame, inner border) only render on a few HERO slides, so the deck
+// doesn't read the same on every slide. Subtle grain/vignette stay deck-wide for texture.
+const HERO_MOTIF_SLIDES = new Set([
+  "cover",
+  "visual_aesthetic",
+  "directors_vision",
+  "story_world",
+  "contact",
+]);
+const LOUD_MOTIFS = new Set(["film_strip", "frame"]);
 
 // Theme display fonts → the CSS vars loaded in layout.tsx.
 const FONT_VARS: Record<string, string> = {
@@ -111,6 +123,8 @@ export function SlideRenderer({
       case "character":
       case "supporting_characters":
         return <CharacterSlide content={content} />;
+      case "relationship_map":
+        return <RelationshipMapSlide content={content} />;
       case "usp":
         return <USPGridSlide content={content} />;
       case "show_cross":
@@ -164,9 +178,28 @@ export function SlideRenderer({
           {template}
         </SlideEditProvider>
       </div>
-      {/* Deck-wide graphic motifs (film-strip edges, grain, …) from the design direction —
-          a non-interactive overlay above the content, kept to the edges so it never covers copy. */}
-      <SlideMotifs motifs={designDirection?.motifs} />
+      {/* Graphic motifs from the design direction. Loud ones (film-strip, frame) are limited to
+          HERO slides so the deck varies; subtle grain/vignette stay deck-wide for texture. */}
+      <SlideMotifs
+        motifs={
+          HERO_MOTIF_SLIDES.has(slideType)
+            ? designDirection?.motifs
+            : designDirection?.motifs?.filter((m) => !LOUD_MOTIFS.has(m))
+        }
+      />
+      {/* Consistent slide nav per the deck spec: section label bottom-left, slide number
+          bottom-right. Subtle, non-interactive, kept in the bottom margin so it never covers copy.
+          Omitted on the cover and closing/contact slides. */}
+      {slideType !== "cover" && slideType !== "contact" && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between px-[4.5%] pb-[2.2%] text-[10px] uppercase tracking-[0.22em]"
+          style={{ color: "var(--slide-text-muted, #9CA3AF)", opacity: 0.72 }}
+          aria-hidden
+        >
+          <span>{slideType.replace(/_/g, " ")}</span>
+          {slide.slideNumber ? <span>{String(slide.slideNumber).padStart(2, "0")}</span> : null}
+        </div>
+      )}
     </div>
   );
 }

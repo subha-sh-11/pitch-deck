@@ -359,12 +359,63 @@
   color: var(--text-primary);
 }
 
+/* ── Intake studio micro-interactions ──────────────────────────────────── */
+/* Subtle, fast, calm — entrances for the empty state and context actions. */
+@keyframes intake-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-intake-fade-in {
+  animation: intake-fade-in 0.32s ease-out both;
+}
+
+/* Soft staggered rise for lists of cards / chips. */
+.animate-intake-rise {
+  animation: intake-fade-in 0.36s ease-out both;
+}
+
+/* The signature "sarvam" cinematic halo behind empty states — one warm,
+   slowly breathing glow that gives the canvas a branded sense of depth. */
+@keyframes intake-halo {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+
+.intake-halo {
+  background: radial-gradient(
+    circle at center,
+    rgba(248, 201, 164, 0.18) 0%,
+    rgba(248, 201, 164, 0.06) 38%,
+    transparent 70%
+  );
+  animation: intake-halo 7s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .deck-card,
   .deck-card:hover {
     transition: none;
   }
   .deck-dot {
+    animation: none;
+  }
+  .animate-intake-fade-in,
+  .animate-intake-rise,
+  .intake-halo {
     animation: none;
   }
 }

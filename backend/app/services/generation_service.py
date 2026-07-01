@@ -19,6 +19,7 @@ from app.ai.agents import design as design_agent
 from app.ai.agents import image_prompt as image_prompt_agent
 from app.ai.agents import layout as layout_agent
 from app.ai.agents import outline as outline_agent
+from app.ai.agents import quality_review as quality_review_agent
 from app.ai.agents import story_analysis as story_agent
 from app.ai import pptx_ref
 from app.ai.images import generate_image
@@ -214,31 +215,33 @@ def _regenerate_item_images(session, slide: Slide, project, intake: dict, design
     if gen_idx:
         with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
             for i, prompt, img in ex.map(_one, gen_idx):
-                if img.meta.get("provider") == "placeholder":
-                    continue
+                # Bind even a placeholder so the tile is never blank; count only REAL art in `made`.
                 asset = _store_item_asset(session, project.id, slide, img)
                 el = dict(elements[i])
                 el["imageUrl"] = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
                 el["imagePrompt"] = prompt
                 elements[i] = el
-                made += 1
+                if img.meta.get("provider") != "placeholder":
+                    made += 1
 
     content = dict(slide.content or {})
     content[coll_key] = elements
     slide.content = content
     session.flush()
     have = sum(1 for el in elements if isinstance(el, dict) and el.get("imageUrl"))
-    log.info("✓ %s images for %s slide %s — %d/%d have images (%d new)",
+    log.info("✓ %s images for %s slide %s — %d/%d have images (%d real)",
              coll_key, slide.slide_type, slide.id, have, len(elements), made)
-    result = {"slide": serialize_slide(slide), "ok": have > 0}
-    if not have:
+    # `ok` reflects whether REAL art was produced — placeholders are bound so the slide isn't blank,
+    # but the editor should still know the provider didn't deliver real images this time.
+    result = {"slide": serialize_slide(slide), "ok": made > 0}
+    if made == 0:
         result["reason"] = "image_provider_unavailable"
     _set_job(session, job_id, status="succeeded", progress=100, result=result)
     return result
 
 
 def _generate_all_item_images(session, project_id, slides, intake: dict, design: dict,
-                              references) -> int:
+                              references, limit: int | None = None) -> int:
     """One parallel pass over the whole deck: render an image for EVERY element of every
     per-element slide (character portraits, mood frames, genre stills) and bind them. Returns the
     count produced. Resilient — callers wrap it so a failure here never aborts the deck."""
@@ -255,6 +258,8 @@ def _generate_all_item_images(session, project_id, slides, intake: dict, design:
                 # real TMDB film backdrop) so the AI pass only fills genuine gaps, never overwrites.
                 if isinstance(el, dict) and not el.get("imageUrl"):
                     tasks.append((slide, key, aspect, idx, el))
+    if limit is not None and limit >= 0:
+        tasks = tasks[:limit]
     if not tasks:
         return 0
 
@@ -267,12 +272,19 @@ def _generate_all_item_images(session, project_id, slides, intake: dict, design:
     with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
         results = list(ex.map(_one, tasks))
 
-    # Apply per-slide so each slide.content (JSONB) is reassigned once.
+    # Apply per-slide so each slide.content (JSONB) is reassigned once. EVERY element gets bound —
+    # a real image when generation succeeded, else the deterministic palette placeholder — so a
+    # character / genre tile is NEVER left blank. `made` counts only REAL images (for logging).
     by_slide: dict = {}
     made = 0
+    placeholders = 0
+    ph_reason = ""
     for (slide, key, aspect, idx, el), prompt, img in results:
         if img.meta.get("provider") == "placeholder":
-            continue
+            placeholders += 1
+            ph_reason = ph_reason or img.meta.get("reason") or "image provider returned a placeholder"
+        else:
+            made += 1
         asset = _store_item_asset(session, project_id, slide, img)
         url = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
         slot = by_slide.setdefault(
@@ -283,13 +295,15 @@ def _generate_all_item_images(session, project_id, slides, intake: dict, design:
         if idx < len(slot["elements"]) and isinstance(slot["elements"][idx], dict):
             slot["elements"][idx]["imageUrl"] = url
             slot["elements"][idx]["imagePrompt"] = prompt
-            made += 1
     for slot in by_slide.values():
         slide = slot["slide"]
         content = dict(slide.content or {})
         content[slot["key"]] = slot["elements"]
         slide.content = content
     session.flush()
+    if placeholders:
+        log.warning("per-element images: %d real, %d placeholder (provider issue: %s) — bound to "
+                    "palette placeholders so tiles are not blank", made, placeholders, ph_reason)
     return made
 
 
@@ -365,6 +379,7 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                 targets = [(i, item) for i, item in enumerate(outline)
                            if image_prompt_agent.slide_needs_image(item["slide_type"])
                            and item["slide_type"] not in _ITEM_IMAGE_COLLECTIONS]
+                targets = targets[: settings.max_deck_images]  # cap diffusion cost per deck
 
                 def _img(pair):
                     i, item = pair
@@ -412,11 +427,29 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                     persisted = session.execute(
                         select(Slide).where(Slide.deck_id == deck.id)
                     ).scalars().all()
-                    n = _generate_all_item_images(session, project.id, persisted, intake,
-                                                  design_clean, references)
+                    n = _generate_all_item_images(
+                        session, project.id, persisted, intake, design_clean, references,
+                        limit=max(0, settings.max_deck_images - len(img_map)))
                     log.info("  -per-element images -%d generated", n)
                 except Exception as exc:  # noqa: BLE001
                     log.warning("per-element image pass failed (non-fatal): %s", exc)
+
+            # 7c. Quality review — structural QA over the finished deck (non-fatal). Stored on the
+            # deck so the editor/review screen can show the producer what to fix.
+            try:
+                review_slides = session.execute(
+                    select(Slide).where(Slide.deck_id == deck.id)
+                ).scalars().all()
+                deck.quality_review = quality_review_agent.run(
+                    [{"slideNumber": s.slide_number, "slideType": s.slide_type,
+                      "title": s.title, "content": s.content or {}} for s in review_slides],
+                    intake, design_clean,
+                )
+                log.info("  -quality review -score=%s, %d issue(s)",
+                         deck.quality_review.get("score"),
+                         len(deck.quality_review.get("issues") or []))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("quality review failed (non-fatal): %s", exc)
 
             deck.status = "ready"
             project.status = "editor"
@@ -513,6 +546,22 @@ def prepare_deck(project_id: str, template_id: str | None = None,
             raise
 
 
+def run_story_analysis(project_id: str) -> dict:
+    """Compute the Story Blueprint (StoryAnalysis) from the current intake and persist it on the
+    project WITHOUT generating a deck — so the director can review the AI's understanding of the
+    film (theme, genre DNA, world, commercial angle) before building (Design Bible step 3)."""
+    with session_scope() as session:
+        project = session.get(Project, uuid.UUID(project_id))
+        if project is None:
+            raise ValueError("project not found")
+        analysis = story_agent.run(_project_dict(project), project.intake_form or {})
+        project.story_analysis = analysis
+        project.last_edited_at = datetime.datetime.now(datetime.timezone.utc)
+        session.flush()
+        log.info("✓ story blueprint computed for %r", project.title)
+        return analysis
+
+
 def run_design(project_id: str, job_id: str | None = None) -> dict:
     with session_scope() as session:
         project = session.get(Project, uuid.UUID(project_id))
@@ -572,7 +621,23 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         session.flush()
 
         used_image_prompt = ""
-        if with_image and image_prompt_agent.slide_needs_image(slide.slide_type):
+        coll = _ITEM_IMAGE_COLLECTIONS.get(slide.slide_type)
+        has_elements = bool(
+            coll and isinstance((slide.content or {}).get(coll[0]), list)
+            and (slide.content or {}).get(coll[0])
+        )
+        if with_image and has_elements:
+            # Per-element slides (character portraits, genre tiles, mood frames) get a real image
+            # PER element — one portrait per character, one still per genre — NOT a single shared
+            # background. The workshop path only ran the single-background branch before, which is
+            # why these slides came out blank; mirror run_full_deck's per-element pass here.
+            try:
+                n = _generate_all_item_images(session, project.id, [slide], intake, design, references)
+                log.info("  -%d per-element image(s) for %s slide %s", n, slide.slide_type, slide.id)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("per-element image gen failed for slide %s (non-fatal): %s", slide.id, exc)
+            session.flush()
+        elif with_image and image_prompt_agent.slide_needs_image(slide.slide_type):
             # An edited prompt from the workshop wins over the auto-built one.
             used_image_prompt = (image_prompt or "").strip() or image_prompt_agent.build_prompt(
                 slide.slide_type, intake, design, slide.content, has_references=bool(references)
@@ -593,9 +658,6 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             else:
                 _persist_image(session, project.id, slide, used_image_prompt, img)
             session.flush()
-
-        # Per-element slides (genre tiles, character portraits, mood frames) get a real image PER
-        # element via regenerate_slide_image / the per-element pass — not a single shared background.
 
         # Record what was used so the workshop can show + re-edit it next time.
         meta = dict(slide.meta or {})

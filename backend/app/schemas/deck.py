@@ -16,6 +16,9 @@ class DeckRead(CamelModel):
     status: DeckStatus
     slides: list[Slide]
     design_direction: DesignDirection | None = None
+    # QualityReview agent output: {score, summary, issues[], checkedAt}. Free-form dict (inner
+    # keys are already camelCase) so the editor/review screen can render the QA notes.
+    quality_review: dict | None = None
 
 
 class TemplateSelect(CamelModel):

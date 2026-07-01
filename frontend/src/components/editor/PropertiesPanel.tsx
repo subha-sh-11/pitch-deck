@@ -57,9 +57,7 @@ export function PropertiesPanel({
 }: PropertiesPanelProps) {
   const [expandedPrompt, setExpandedPrompt] = useState(false);
 
-  const imagePrompt =
-    slide.imagePrompt ??
-    "A dark cinematic rooftop water tank, concrete texture, moss green stains, rust edges, water reflection, thin beam of light, survival thriller mood.";
+  const imagePrompt = slide.imagePrompt ?? "";
 
   return (
     <aside className="flex w-[300px] shrink-0 flex-col border-l border-white/[0.08] bg-[#101010]">

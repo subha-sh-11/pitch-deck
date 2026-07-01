@@ -22,6 +22,13 @@ class CompBlock(CamelModel):
     note: str
 
 
+class RelationshipEdge(CamelModel):
+    """One labelled connection on the relationship-map slide (source/target are character names)."""
+    source: str
+    target: str
+    label: str | None = None
+
+
 class ItemBlock(CamelModel):
     title: str
     description: str
@@ -50,6 +57,8 @@ class SlideContent(CamelModel):
     characters: list[CharacterBlock] | None = None
     comps: list[CompBlock] | None = None
     mood_blocks: list[MoodBlock] | None = None
+    # Relationship-map slide: labelled edges between characters (nodes come from `characters`).
+    relationships: list[RelationshipEdge] | None = None
     # Extension: generated image bound to this slide (backend-only; prototype ignores it)
     image_url: str | None = None
     image_prompt: str | None = None

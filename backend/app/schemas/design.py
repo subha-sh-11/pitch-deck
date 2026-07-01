@@ -44,16 +44,18 @@ class StoryAnalysis(CamelModel):
     pitch_positioning: str
 
 
-class QualityReviewFinding(CamelModel):
-    slide_title: str
-    status: str  # strong | needs_work | needs_detail
-    suggestion: str
+class QualityReviewIssue(CamelModel):
+    """One problem the quality-review agent found (mirrors ai/agents/quality_review.run())."""
+    severity: str  # high | medium | low
+    category: str  # repeated_images | missing_producer_slide | readability | generic_copy | …
+    message: str
+    slide_number: int | None = None
+    slide_type: str | None = None
 
 
 class QualityReview(CamelModel):
-    overall_readiness: int = Field(ge=0, le=100)
-    content_clarity: int = Field(ge=0, le=100)
-    visual_consistency: int = Field(ge=0, le=100)
-    investor_readiness: int = Field(ge=0, le=100)
-    export_readiness: int = Field(ge=0, le=100)
-    findings: list[QualityReviewFinding]
+    """Structural QA over the finished deck (stored on Deck.quality_review)."""
+    score: int = Field(ge=0, le=100)
+    summary: str
+    issues: list[QualityReviewIssue]
+    checked_at: str | None = None

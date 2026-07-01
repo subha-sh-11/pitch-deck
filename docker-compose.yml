@@ -27,6 +27,28 @@ services:
       timeout: 3s
       retries: 10
 
+  # Default S3 endpoint (see backend/.env → S3_ENDPOINT=http://localhost:4566).
+  # Serves S3 only; no Docker socket is mounted, so it can't touch the host daemon.
+  floci:
+    image: localstack/localstack:3
+    container_name: pd_floci
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+      # Creds are fixed to test/test for local dev (matches backend/.env).
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"   # S3 API (AWS-compatible)
+    volumes:
+      - flocidata:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Alternative S3 (not needed if you use floci — don't run both). Enable with:
+  #   docker compose up -d minio
   minio:
     image: minio/minio:latest
     container_name: pd_minio
@@ -47,4 +69,5 @@ services:
 
 volumes:
   pgdata:
+  flocidata:
   miniodata:
