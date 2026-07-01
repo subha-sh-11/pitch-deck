@@ -6,6 +6,13 @@ The platform conducts an **adaptive AI intake conversation**, extracts & generat
 
 ---
 
+## 🚀 New here? Read [SETUP.md](./SETUP.md)
+
+Team onboarding — Docker infra, backend, frontend, admin login, and every command in one
+place. Start there to get running locally.
+
+---
+
 ## 🔭 Architecture Flow (start here)
 
 For the full set of **end-to-end flow diagrams** — system context, the build pipeline, the

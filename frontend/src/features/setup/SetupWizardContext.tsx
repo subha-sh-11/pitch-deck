@@ -96,7 +96,7 @@ interface SetupWizardContextValue extends SetupWizardState {
   insertDraftSlideAfter: (index: number, slideType: SlideType) => void;
   duplicateDraftSlide: (index: number) => void;
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
-  regenerateDraftSlide: (id: string) => Promise<void>;
+  regenerateDraftSlide: (id: string, instruction?: string, referenceImage?: { mediaType: string; data: string }) => Promise<void>;
   regenerateAllDraftSlides: () => Promise<void>;
   setGenerationStatus: (status: GenerationStatus) => void;
   approveContent: () => void;
@@ -540,10 +540,25 @@ export function SetupWizardProvider({
     [queueReorder],
   );
 
-  const regenerateDraftSlide = useCallback(async (id: string) => {
+  const regenerateDraftSlide = useCallback(async (
+    id: string,
+    instruction?: string,
+    referenceImage?: { mediaType: string; data: string },
+  ) => {
     if (!isBackendSlide(id)) return;
     try {
-      const job = await apiRegenerateSlide(id);
+      // A chat instruction ("add guns and roses, realistic") drives both the writer and the
+      // image prompt; a referenceImage triggers true image-to-image style transfer.
+      const job = await apiRegenerateSlide(
+        id,
+        instruction || referenceImage
+          ? {
+              withImage: true,
+              ...(instruction ? { instructions: instruction, imageInstruction: instruction } : {}),
+              ...(referenceImage ? { referenceImage } : {}),
+            }
+          : undefined,
+      );
       const final = await pollJob(job);
       const updated = final.result as Slide | undefined;
       if (updated?.id) {

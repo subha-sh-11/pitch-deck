@@ -1,13 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { InterviewSection } from "@/lib/api";
 import {
   clearReferenceDeck,
   getProject,
+  saveIntake,
   uploadReferenceDeck,
   type ReferenceDeck,
 } from "@/lib/api/projects";
+import type { IntakeFormData } from "@/types/workflow";
 import type { Interview } from "./useInterview";
 
 type FieldStatus = "confirmed" | "suggested" | "skipped";
@@ -54,7 +57,21 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["deliveryFormat", "Delivery format"],
 ];
 
+// Visual style presets. Selecting one steers the whole deck's look — the generated
+// imagery especially (cinematic film key art by default; anime / cartoon / 3D otherwise).
+// The keyword is folded into `genreBlend`, which drives both the palette register and the
+// image medium on the backend.
+const STYLE_OPTIONS: { label: string; kw: string }[] = [
+  { label: "Cinematic", kw: "" }, // default — no style keyword
+  { label: "Anime", kw: "anime" },
+  { label: "Cartoon", kw: "cartoon" },
+  { label: "3D Animation", kw: "3d animation" },
+  { label: "Comic book", kw: "comic book" },
+];
+const STYLE_KWS = STYLE_OPTIONS.map((o) => o.kw).filter(Boolean);
+
 export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: string }) {
+  const router = useRouter();
   const form = iv.form as unknown as FormShape;
   const sections = iv.sections;
   const [sel, setSel] = useState<Record<string, string[]>>({});
@@ -168,6 +185,25 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections]);
 
+  // Which style keyword (if any) is currently active in the genre blend.
+  const genreLower = (form.genreBlend ?? "").toLowerCase();
+  const activeStyle = STYLE_KWS.find((kw) => genreLower.includes(kw)) ?? "";
+
+  const setStyle = (kw: string) => {
+    // Strip any existing style keyword, then add the chosen one (Cinematic = none).
+    let base = form.genreBlend ?? "";
+    for (const k of STYLE_KWS) {
+      base = base.replace(new RegExp(`\\s*[+,]?\\s*${k}`, "ig"), "");
+    }
+    base = base.replace(/\s*[+,]\s*$/, "").trim();
+    const next = kw ? (base ? `${base} + ${kw}` : kw) : base;
+    iv.editField("genreBlend", next);
+    markTouched("genreBlend");
+    // Persist immediately so "Rebuild deck" (which reads the backend intake) picks up the
+    // style even if the user never re-runs the full Build flow.
+    void saveIntake(projectId, { ...(iv.form as IntakeFormData), genreBlend: next }).catch(() => {});
+  };
+
   const choose = (s: InterviewSection, val: string, multi: boolean) => {
     const cur = sel[s.id] ?? [];
     const next = multi ? (cur.includes(val) ? cur.filter((x) => x !== val) : [...cur, val]) : [val];
@@ -216,6 +252,16 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-8 py-10 lg:px-10">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="mb-5 inline-flex items-center gap-1.5 rounded-lg border border-border-glass px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
         <h1 className="font-display text-3xl font-medium tracking-tight text-text-primary">
           Let&apos;s shape the {iv.projectName} deck
         </h1>
@@ -224,6 +270,29 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
             ? "A few questions at a time — tap an answer, type your own, then Continue."
             : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
         </p>
+
+        {/* Visual style — steers the whole deck's look (esp. generated imagery). */}
+        {!visibleSections.length && (
+          <div className="mt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+              Visual style
+            </h2>
+            <p className="mt-1 text-xs text-text-dim">
+              Cinematic by default. Pick an animated style and the whole deck — especially the
+              generated art — is rendered that way.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {STYLE_OPTIONS.map((o) => (
+                <Chip
+                  key={o.label}
+                  label={o.label}
+                  selected={o.kw === activeStyle}
+                  onClick={() => setStyle(o.kw)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Final summary — shown ONLY at the end (no open questions left), editable */}
         {captured.length > 0 && !visibleSections.length && (

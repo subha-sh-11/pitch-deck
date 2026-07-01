@@ -15,6 +15,8 @@ interface SlideEditValue {
   edits: Record<string, SlideElementEdit>;
   textBoxes: SlideTextBox[];
   imageUrl?: string;
+  /** Background-image adjustments applied by SlideFrame (blur px / dim 0-1 / zoom scale). */
+  imageEffects?: { blur?: number; dim?: number; scale?: number };
   imageActions?: ImageActions;
   selectedId: string | null;
   selectTextBox: (id: string | null) => void;
@@ -77,6 +79,7 @@ export function SlideEditProvider({
       edits,
       textBoxes,
       imageUrl: content.imageUrl,
+      imageEffects: { blur: content.imageBlur, dim: content.imageDim, scale: content.imageScale },
       imageActions,
       selectedId,
       selectTextBox: setSelectedId,
@@ -113,7 +116,7 @@ export function SlideEditProvider({
     };
     // edits/textBoxes are derived from content; depend on the raw content fields.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, content.edits, content.textBoxes, content.imageUrl, imageActions, onContentChange, selectedId]);
+  }, [editing, content.edits, content.textBoxes, content.imageUrl, content.imageBlur, content.imageDim, content.imageScale, imageActions, onContentChange, selectedId]);
 
   return <SlideEditContext.Provider value={value}>{children}</SlideEditContext.Provider>;
 }

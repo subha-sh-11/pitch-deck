@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     image_provider: str = "auto"
     fal_key: str = ""
     fal_image_model: str = "fal-ai/flux/schnell"
+    # Image-to-image model (style/structure transfer from a reference image).
+    fal_i2i_model: str = "fal-ai/flux/dev/image-to-image"
     replicate_api_token: str = ""
     replicate_image_model: str = "black-forest-labs/flux-schnell"
     google_api_key: str = ""

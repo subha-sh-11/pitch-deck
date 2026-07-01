@@ -44,6 +44,10 @@ export interface WorkshopGenerateInput {
   imagePrompt?: string;
   /** The FULL writer prompt as edited in the workshop — used verbatim. */
   contentPrompt?: string;
+  /** A change folded into the built image prompt ("add guns and roses, photoreal"). */
+  imageInstruction?: string;
+  /** Reference image for true image-to-image style transfer ({mediaType, data: base64}). */
+  referenceImage?: { mediaType: string; data: string };
   withImage?: boolean;
 }
 

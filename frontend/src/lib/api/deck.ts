@@ -58,11 +58,12 @@ export const reorderSlides = (projectId: string, slideIds: string[]) =>
 // ── Agent action layer: natural-language deck edits ──
 
 export type DeckAction =
-  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[] }
+  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[] }
+  | { op: "style_image"; slideId: string; imageBlur?: number; imageDim?: number; imageScale?: number }
   | { op: "move_slide"; slideId: string; direction: "up" | "down"; steps?: number }
   | { op: "add_slide"; afterSlideNumber: number; slideType: string }
   | { op: "delete_slide"; slideId: string }
-  | { op: "regenerate_slide"; slideId: string }
+  | { op: "regenerate_slide"; slideId: string; instruction?: string; useReference?: boolean }
   | { op: "set_accent"; hex: string }
   | { op: "set_theme"; palette: { name: string; hex: string; usage: string }[] };
 
@@ -76,8 +77,9 @@ export const deckCommand = (
   projectId: string,
   instruction: string,
   slides: Pick<Slide, "id" | "slideNumber" | "slideType" | "title" | "content">[],
+  images?: { name: string; mediaType: string; data: string }[],
 ) =>
   apiFetch<DeckCommandResult>(`/projects/${projectId}/deck/command`, {
     method: "POST",
-    body: JSON.stringify({ instruction, slides }),
+    body: JSON.stringify({ instruction, slides, images: images ?? [] }),
   });

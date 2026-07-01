@@ -79,11 +79,20 @@ def generate_image(
     negative_prompt: str = "text, watermark, logo, signature, deformed",
     seed: int | None = None,
     label: str = "",
+    init_image: bytes | None = None,
+    init_mime: str = "image/png",
+    init_strength: float = 0.78,
 ) -> ImageResult:
+    """Generate an image. When ``init_image`` is given AND the provider supports it (fal),
+    runs IMAGE-TO-IMAGE so the result adopts the reference's style/composition (driven by
+    ``init_strength``: lower = closer to the reference, higher = more freedom from the prompt).
+    """
     provider = _resolve_image_provider()
     w, h = ASPECT_DIMENSIONS.get(aspect_ratio, ASPECT_DIMENSIONS["16:9"])
     try:
         if provider == "fal":
+            if init_image:
+                return _fal_i2i(prompt, init_image, init_mime, w, h, negative_prompt, seed, init_strength)
             return _fal_generate(prompt, w, h, negative_prompt, seed)
         if provider == "replicate":
             return _replicate_generate(prompt, w, h, negative_prompt, seed)
@@ -272,6 +281,33 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> Im
     data, mime = _fetch_bytes(url)
     return ImageResult(data, mime, {"provider": "fal", "model": settings.fal_image_model,
                                     "prompt": prompt, "seed": seed})
+
+
+def _fal_i2i(prompt: str, init_image: bytes, init_mime: str, w: int, h: int,
+             neg: str, seed: int | None, strength: float) -> ImageResult:
+    """Image-to-image on fal: the reference image is the starting point, transformed by the
+    prompt. Used for "make this slide look like this image" so the result adopts its style."""
+    import base64
+    import os
+
+    import fal_client  # lazy
+
+    os.environ.setdefault("FAL_KEY", settings.fal_key)
+    data_uri = f"data:{init_mime};base64,{base64.b64encode(init_image).decode()}"
+    result = fal_client.run(
+        settings.fal_i2i_model,
+        arguments={
+            "prompt": prompt,
+            "image_url": data_uri,
+            "strength": max(0.1, min(0.95, strength)),
+            "image_size": {"width": w, "height": h},
+            **({"seed": seed} if seed is not None else {}),
+        },
+    )
+    url = result["images"][0]["url"]
+    data, mime = _fetch_bytes(url)
+    return ImageResult(data, mime, {"provider": "fal", "model": settings.fal_i2i_model,
+                                    "prompt": prompt, "seed": seed, "mode": "i2i"})
 
 
 def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> ImageResult:

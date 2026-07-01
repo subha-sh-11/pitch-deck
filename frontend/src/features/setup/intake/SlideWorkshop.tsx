@@ -65,10 +65,11 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
   const [exporting, setExporting] = useState<{ fmt: ExportFormat; done: number; total: number } | null>(
     null,
   );
-  const [genAll, setGenAll] = useState<{ running: boolean; done: number; total: number }>({
+  const [genAll, setGenAll] = useState<{ running: boolean; done: number; total: number; current: string | null }>({
     running: false,
     done: 0,
     total: 0,
+    current: null,
   });
   const generatedCount = slides.filter((s) => s.generated).length;
   const allGenerated = slides.length > 0 && generatedCount === slides.length;
@@ -95,8 +96,9 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
     if (genAll.running) return;
     const targets = force ? [...slides] : slides.filter((s) => !s.generated);
     if (!targets.length) return;
-    setGenAll({ running: true, done: 0, total: targets.length });
+    setGenAll({ running: true, done: 0, total: targets.length, current: null });
     for (const s of targets) {
+      setGenAll((g) => ({ ...g, current: s.id })); // mark THIS slide as regenerating
       try {
         const job = await apiRegenerateSlide(s.id, {
           withImage: force ? true : !s.content.imageUrl,
@@ -111,7 +113,7 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
       }
       setGenAll((g) => ({ ...g, done: g.done + 1 }));
     }
-    setGenAll((g) => ({ ...g, running: false }));
+    setGenAll((g) => ({ ...g, running: false, current: null }));
   };
 
   if (generationStatus === "generating") {
@@ -145,15 +147,15 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void generateAll(allGenerated)}
+              onClick={() => void generateAll(true)}
               disabled={genAll.running}
               className="rounded-full bg-accent-neon px-4 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60"
             >
               {genAll.running
-                ? `Generating ${genAll.done}/${genAll.total}…`
-                : allGenerated
-                  ? "↻ Regenerate all slides"
-                  : "✦ Generate all slides"}
+                ? `Building ${genAll.done}/${genAll.total}…`
+                : generatedCount === 0
+                  ? "✦ Build deck"
+                  : "↻ Rebuild deck"}
             </button>
             <button
               type="button"
@@ -193,14 +195,14 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
       {/* Vertical card list */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 [scrollbar-width:thin]">
         {slides.map((s) => (
-          <SlideCard key={s.id} slide={s} />
+          <SlideCard key={s.id} slide={s} regenerating={genAll.current === s.id} />
         ))}
       </div>
     </div>
   );
 }
 
-function SlideCard({ slide }: { slide: Slide }) {
+function SlideCard({ slide, regenerating = false }: { slide: Slide; regenerating?: boolean }) {
   const { projectId, designDirection, replaceDraftSlide } = useSetupWizard();
   const [imagePrompt, setImagePrompt] = useState(
     slide.prompts?.imagePrompt ?? slide.content.imagePrompt ?? "",
@@ -208,6 +210,7 @@ function SlideCard({ slide }: { slide: Slide }) {
   const [busy, setBusy] = useState<null | "slide" | "image">(null);
   const [err, setErr] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState(false);
+  const [zoom, setZoom] = useState<string | null>(null); // full-size preview of one option
   const [uploading, setUploading] = useState(false);
   const [tweakOpen, setTweakOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -221,28 +224,6 @@ function SlideCard({ slide }: { slide: Slide }) {
     },
     [slide, replaceDraftSlide],
   );
-
-  const generate = async () => {
-    if (busy) return;
-    setBusy("slide");
-    setErr(null);
-    try {
-      const job = await apiRegenerateSlide(slide.id, {
-        // No per-slide content prompt — the deck is generated as one coherent whole,
-        // so the writer composes from the shared brief/design automatically.
-        imagePrompt: imagePrompt.trim() || undefined,
-        withImage: !slide.content.imageUrl,
-      });
-      const final = await pollJob(job);
-      if (final.status === "failed") throw new Error(final.error ?? "Generation failed");
-      const updated = final.result as Slide;
-      if (updated?.id) replaceDraftSlide(updated);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const toggleApprove = async () => {
     const next = slide.status === "approved" ? "draft" : "approved";
@@ -291,13 +272,34 @@ function SlideCard({ slide }: { slide: Slide }) {
     }
   };
 
+  // Download an option. Fetch → blob so it saves even cross-origin (the asset server is on
+  // a different port); falls back to opening the image if the fetch is blocked.
+  const downloadImage = async (url: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `slide-${slide.slideNumber}-${SLIDE_TYPE_LABELS[slide.slideType] ?? "image"}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch {
+      window.open(url, "_blank", "noopener");
+    }
+  };
+
   const approved = slide.status === "approved";
   const imageUrl = slide.content.imageUrl;
-  const candidates = slide.content.imageCandidates?.length
-    ? slide.content.imageCandidates
-    : imageUrl
-      ? [imageUrl]
-      : [];
+  // Always keep the currently-selected image in the options so it never vanishes when a fresh
+  // batch of variants arrives — the new ones are added alongside it, not in place of it.
+  const candidates = (() => {
+    const fromBackend = slide.content.imageCandidates ?? [];
+    if (!fromBackend.length) return imageUrl ? [imageUrl] : [];
+    return imageUrl && !fromBackend.includes(imageUrl) ? [imageUrl, ...fromBackend] : fromBackend;
+  })();
 
   // Open the full-screen gallery; if we don't yet have a few options, generate them
   // so the gallery shows multiple choices instead of a single oversized image.
@@ -307,7 +309,9 @@ function SlideCard({ slide }: { slide: Slide }) {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border-glass bg-surface-1/30 p-4 lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden">
+    <div className={`grid grid-cols-1 gap-4 rounded-2xl border bg-surface-1/30 p-4 transition-colors lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden ${
+      regenerating ? "border-accent-neon/60 ring-1 ring-accent-neon/40" : "border-border-glass"
+    }`}>
       {/* LEFT — a clean control rail (no per-slide prompt; the deck writes as one whole) */}
       <div className="flex min-w-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
         <input
@@ -337,26 +341,13 @@ function SlideCard({ slide }: { slide: Slide }) {
           </span>
         </div>
 
-        {/* Primary actions — write/rewrite the slide and generate image options, side by side */}
+        {/* Image options — the whole deck is built from the toolbar's "Rebuild deck". */}
         <div className="flex items-stretch gap-2">
-          <button
-            type="button"
-            onClick={() => void generate()}
-            disabled={!!busy}
-            className="flex-1 rounded-xl bg-accent-neon px-3 py-2.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy === "slide"
-              ? "Writing the slide…"
-              : slide.generated
-                ? "↻ Regenerate slide"
-                : "✦ Generate slide"}
-          </button>
-
           <button
             type="button"
             onClick={() => void genVariants()}
             disabled={!!busy}
-            className="flex-1 rounded-xl border border-accent-neon/40 bg-accent-neon/5 px-3 py-2 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex-1 rounded-xl border border-accent-neon/40 bg-accent-neon/5 px-3 py-2.5 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy === "image" ? "Generating images…" : "✨ Generate 3 image options"}
           </button>
@@ -438,26 +429,56 @@ function SlideCard({ slide }: { slide: Slide }) {
               {slide.purpose && (
                 <p className="max-w-[70%] text-xs leading-relaxed text-text-muted">{slide.purpose}</p>
               )}
-              <button
-                type="button"
-                onClick={() => void generate()}
-                disabled={!!busy}
-                className="mt-2 rounded-full bg-accent-neon px-5 py-2 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:opacity-40"
-              >
-                ✦ Generate this slide
-              </button>
+              <p className="mt-2 text-[11px] text-text-dim">
+                Hit <span className="text-text-muted">Build deck</span> above to generate every slide.
+              </p>
             </div>
           )}
-          {busy && (
-            <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-black/30">
+          {(busy || regenerating) && (
+            <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
               <div className="flex items-center gap-2 rounded-full bg-surface-1/95 px-4 py-2 text-xs font-medium text-text-primary shadow-lg">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-neon border-t-transparent" />
-                {busy === "image" ? "Generating image…" : "Writing the slide…"}
+                {regenerating ? "Regenerating…" : busy === "image" ? "Generating image…" : "Writing the slide…"}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Full-size preview of a single option (sits above the gallery) */}
+      {zoom && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 p-8"
+          onClick={() => setZoom(null)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={zoom} alt="" className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" />
+            {/* Controls anchored to the image's top-right corner */}
+            <div className="absolute right-2 top-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void downloadImage(zoom)}
+                title="Download image"
+                aria-label="Download"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(null)}
+                aria-label="Close"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-lg text-white backdrop-blur transition-colors hover:bg-black/80"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-screen image gallery — browse the options and pick one */}
       {lightbox && (
@@ -475,11 +496,19 @@ function SlideCard({ slide }: { slide: Slide }) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+              >
+                {uploading ? "Uploading…" : "⬆ Upload image"}
+              </button>
+              <button
+                type="button"
                 disabled={!!busy}
                 onClick={() => void genVariants()}
                 className="rounded-lg bg-accent-neon px-3 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:opacity-50"
               >
-                {busy === "image" ? "Generating…" : "✨ Generate 3 options"}
+                {busy === "image" ? "Generating…" : "✨ Generate 3 more"}
               </button>
               <button
                 type="button"
@@ -501,26 +530,40 @@ function SlideCard({ slide }: { slide: Slide }) {
             {candidates.map((u, i) => {
               const selected = u === imageUrl;
               return (
-                <button
+                <div
                   key={i}
-                  type="button"
-                  onClick={() => onContentChange({ imageUrl: u })}
                   className={`group relative h-fit overflow-hidden rounded-xl border-2 transition-colors ${
                     selected ? "border-accent-neon" : "border-transparent hover:border-white/40"
                   }`}
                 >
+                  {/* Click the image to PLACE it in the deck (select it) */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={u} alt="" className="aspect-video w-full object-cover" />
-                  <span
-                    className={`absolute right-2 top-2 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                      selected
-                        ? "bg-accent-neon text-zinc-950"
-                        : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
-                    }`}
+                  <img
+                    src={u}
+                    alt=""
+                    onClick={() => onContentChange({ imageUrl: u })}
+                    className="aspect-video w-full cursor-pointer object-cover"
+                    title="Click to use this image in the slide"
+                  />
+                  {/* Small button to enlarge/preview without selecting */}
+                  <button
+                    type="button"
+                    onClick={() => setZoom(u)}
+                    aria-label="Enlarge"
+                    title="Enlarge"
+                    className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
                   >
-                    {selected ? "✓ Selected" : "Use this"}
-                  </span>
-                </button>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  </button>
+                  {/* Selected indicator */}
+                  {selected && (
+                    <span className="absolute right-2 top-2 rounded bg-accent-neon px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
+                      ✓ In deck
+                    </span>
+                  )}
+                </div>
               );
             })}
             {busy === "image" &&

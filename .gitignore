@@ -4,6 +4,9 @@ docs/
 # Secrets — never commit
 .env
 .env.*
+# ...but DO commit the example templates so teammates can bootstrap config
+!.env.example
+!**/.env.example
 
 # AI-generated build artifacts
 /backend/_assets/generated/

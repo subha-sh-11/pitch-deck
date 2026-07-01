@@ -45,6 +45,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Floci — local AWS emulator (LocalStack-style). We use it as the S3 endpoint for
+  # generated assets/exports so local dev mirrors prod object storage. Scoped to S3:
+  # SQS/Lambda/etc. are available if we grow into them. NOTE: we deliberately do NOT mount
+  # /var/run/docker.sock — that's only needed for Lambda *execution* and hands the container
+  # root-level control of the host Docker daemon. Add it only when you actually run Lambdas.
+  floci:
+    image: floci/floci:latest
+    container_name: pd_floci
+    ports:
+      - "4566:4566"   # unified AWS endpoint (S3, etc.)
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+    volumes:
+      - flocidata:/app/data
+
 volumes:
   pgdata:
   miniodata:
+  flocidata:

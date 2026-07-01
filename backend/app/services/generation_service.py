@@ -7,6 +7,7 @@ its own sync session) so it can be driven by a Celery worker or an inline call i
 """
 from __future__ import annotations
 
+import base64
 import datetime
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -367,11 +368,14 @@ def run_design(project_id: str, job_id: str | None = None) -> dict:
 
 def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool = True,
                      instructions: str | None = None, image_prompt: str | None = None,
-                     content_prompt: str | None = None) -> dict:
+                     content_prompt: str | None = None, image_instruction: str | None = None,
+                     reference_image: dict | None = None) -> dict:
     """(Re)generate one slide. Workshop parameters (all editable in the UI):
     ``instructions`` — director's notes the content agent must follow for this slide;
     ``image_prompt`` — an edited diffusion prompt, used verbatim instead of the built one;
-    ``content_prompt`` — the FULL writer prompt, edited in the workshop, used verbatim.
+    ``content_prompt`` — the FULL writer prompt, edited in the workshop, used verbatim;
+    ``image_instruction`` — a change to fold into the built image prompt ("add guns and
+    roses, photoreal"), so chat edits actually alter the generated art.
     """
     with session_scope() as session:
         slide = session.get(Slide, uuid.UUID(slide_id))
@@ -407,12 +411,23 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         if with_image and image_prompt_agent.slide_needs_image(slide.slide_type):
             # An edited prompt from the workshop wins over the auto-built one.
             used_image_prompt = (image_prompt or "").strip() or image_prompt_agent.build_prompt(
-                slide.slide_type, intake, design
+                slide.slide_type, intake, design, extra=image_instruction or ""
             )
+            # "Make this slide look like the attached image" → image-to-image off the reference
+            # so the result actually adopts its style (not just a text description of it).
+            init_bytes, init_mime = None, "image/png"
+            if reference_image and reference_image.get("data"):
+                try:
+                    init_bytes = base64.b64decode(reference_image["data"])
+                    init_mime = reference_image.get("mediaType") or "image/png"
+                except Exception:  # noqa: BLE001 — bad payload → fall back to text-only
+                    init_bytes = None
             img = generate_image(
                 used_image_prompt,
                 aspect_ratio=image_prompt_agent.aspect_for(slide.slide_type),
                 palette=design.get("palette"),
+                init_image=init_bytes,
+                init_mime=init_mime,
             )
             had_image = bool((slide.content or {}).get("imageUrl"))
             if img.meta.get("provider") == "placeholder" and had_image:
@@ -581,9 +596,18 @@ def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
             kind = image_prompt_agent.image_kind(slide.slide_type)
             aspect = image_prompt_agent.aspect_for(slide.slide_type)
 
+            # Generate the candidates IN PARALLEL (the slow network part), then persist on the
+            # main thread (the SQLAlchemy session isn't thread-safe). Sequential generation +
+            # 429 backoff on the free tier made the gallery hang; this lands all options ~Nx faster.
+            count = max(1, min(n, 6))
+            with ThreadPoolExecutor(max_workers=min(count, _IMG_WORKERS)) as ex:
+                imgs = list(ex.map(
+                    lambda _i: generate_image(use_prompt, aspect_ratio=aspect, palette=design.get("palette")),
+                    range(count),
+                ))
+
             urls: list[str] = []
-            for _ in range(max(1, min(n, 6))):
-                img = generate_image(use_prompt, aspect_ratio=aspect, palette=design.get("palette"))
+            for img in imgs:
                 if img.meta.get("provider") == "placeholder":
                     continue
                 ext = _EXT.get(img.mime, "png")
@@ -604,13 +628,17 @@ def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
                 return result
 
             content = dict(slide.content or {})
-            content["imageCandidates"] = urls
+            # ACCUMULATE: keep previously-generated options so the gallery doesn't lose them —
+            # new options are appended (deduped), capped to the most recent 12.
+            existing = [u for u in (content.get("imageCandidates") or []) if isinstance(u, str)]
+            merged = existing + [u for u in urls if u not in existing]
+            content["imageCandidates"] = merged[-12:]
             content["imagePrompt"] = use_prompt
             if not content.get("imageUrl"):
                 content["imageUrl"] = urls[0]
             slide.content = content
             session.flush()
-            log.info("✓ generated %d image options for slide %s", len(urls), slide.id)
+            log.info("✓ generated %d new options (%d total) for slide %s", len(urls), len(content["imageCandidates"]), slide.id)
             result = {"slide": serialize_slide(slide), "urls": urls, "ok": True}
             _set_job(session, job_id, status="succeeded", progress=100, result=result)
             return result

@@ -180,6 +180,7 @@ export interface Interview {
   projectName: string;
   setProjectName: (name: string) => void;
   sendText: (text: string) => void;
+  sendMessage: (text: string, files: File[]) => Promise<void>;
   chooseOption: (opt: InterviewOption) => void;
   uploadFile: (file: File) => void;
   editAssumption: (field: string, value: string) => void;
@@ -377,9 +378,16 @@ export function useInterview(projectId: string): Interview {
           title: s.title,
           content: s.content,
         }));
-        const res = await deckCommand(projectId, value, slim);
+        // Send any staged reference images so the editor can SEE a slide screenshot (to
+        // target the right slide) or a style reference. Consumed once, then cleared.
+        const imgs = pendingImages.current.length ? [...pendingImages.current] : undefined;
+        const res = await deckCommand(projectId, value, slim, imgs);
+        if (imgs) pendingImages.current = [];
         const handlers: DeckActionHandlers = {
           slides: draftSlides,
+          referenceImage: imgs?.[0]
+            ? { mediaType: imgs[0].mediaType, data: imgs[0].data }
+            : undefined,
           onUpdateSlide: updateDraftSlide,
           onMoveSlide: moveDraftSlide,
           onInsertAfter: insertDraftSlideAfter,
@@ -443,6 +451,42 @@ export function useInterview(projectId: string): Interview {
 
   const chooseOption = useCallback((opt: InterviewOption) => submitAnswer(opt.label), [submitAnswer]);
 
+  // Send a chat message WITH staged reference images in a single turn: the images are
+  // encoded and attached to this turn (the agent SEES them), then the text is sent so the
+  // model reads "make the deck in this style / use this font" alongside the actual image.
+  const sendMessage = useCallback(
+    async (text: string, files: File[]) => {
+      if (thinking) return;
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) continue;
+        const previewUrl = URL.createObjectURL(file);
+        setMessages((m) => [
+          ...m,
+          { id: nextId(), role: "attachment", name: file.name || "image", previewUrl, note: "Reference image" },
+        ]);
+        const cur = (formRef.current.visualReferences || "").trim();
+        updateForm({ visualReferences: cur ? `${cur}, ${file.name || "pasted image"}` : (file.name || "pasted image") });
+        try {
+          const encoded = await encodeReferenceImage(file);
+          pendingImages.current = [...pendingImages.current, encoded].slice(-4);
+        } catch {
+          /* unreadable image — skip, keep the rest of the turn */
+        }
+      }
+      const value = text.trim();
+      if (value) {
+        // submitAnswer advances the turn and picks up the staged pendingImages.
+        submitAnswer(value);
+      } else if (pendingImages.current.length) {
+        // Image(s) with no text — still send so the agent reacts to them.
+        const baseHistory = [...history.current, { role: "user" as const, text: "(shared a reference image)" }];
+        history.current = baseHistory;
+        void advance(baseHistory, pillarsNow());
+      }
+    },
+    [thinking, updateForm, submitAnswer, advance, pillarsNow],
+  );
+
   const uploadFile = useCallback(
     async (file: File) => {
       if (thinking) return;
@@ -495,15 +539,21 @@ export function useInterview(projectId: string): Interview {
             ),
           );
           updateForm(f);
-          const pillars: InterviewPillars = {
-            title: f.title || formRef.current.title,
-            logline: f.logline || formRef.current.logline,
-            synopsis: f.synopsis || formRef.current.synopsis,
-          };
+          // A script already fills most of the brief. Do NOT auto-launch a fresh question
+          // round here — that repopulates `sections`, which flips the review view out from
+          // under the user (the "it jumps to another page while I'm reading" bug). Instead,
+          // land on the review and let them refine via "Re-analyze" or go to "Build deck".
           const baseHistory = [...history.current, { role: "user" as const, text: `(uploaded script: ${res.fileName ?? file.name})` }];
           history.current = baseHistory;
           setThinking(false);
-          await advance(baseHistory, pillars);
+          setMessages((m) => [
+            ...m,
+            {
+              id: nextId(),
+              role: "assistant",
+              text: "I've pulled your pitch brief from the script — review it on the right and edit anything. When you're ready, hit Build deck, or ask me to refine.",
+            },
+          ]);
         } catch {
           setThinking(false);
           setMessages((m) =>
@@ -593,6 +643,7 @@ export function useInterview(projectId: string): Interview {
     projectName,
     setProjectName,
     sendText: submitAnswer,
+    sendMessage,
     chooseOption,
     uploadFile,
     editAssumption,

@@ -24,6 +24,9 @@ class DeckCommand(BaseModel):
 
     instruction: str
     slides: list[dict] = Field(default_factory=list)
+    # Reference images shared this turn: [{"name", "mediaType", "data": <base64>}]. Lets the
+    # editor SEE a screenshot of a slide (to target it) or a style reference.
+    images: list[dict] = Field(default_factory=list)
 
 
 @router.post("/projects/{project_id}/deck/command")
@@ -36,7 +39,7 @@ async def deck_command(
     This is the agent action layer: the chat drives real changes to the deck. The LLM call is
     blocking, so it runs off the event loop; results are sanitized to safe, well-formed actions.
     """
-    result = await run_in_threadpool(slide_edit.run, body.instruction, body.slides)
+    result = await run_in_threadpool(slide_edit.run, body.instruction, body.slides, body.images)
     return slide_edit.sanitize(result if isinstance(result, dict) else {}, body.slides)
 
 

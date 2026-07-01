@@ -12,6 +12,11 @@ const ALL_ACCEPT = ".pdf,.docx,.fdx,.txt,.md,.rtf,image/*";
 
 export function ChatPanel({ iv }: { iv: Interview }) {
   const [draft, setDraft] = useState("");
+  // Images pasted / dropped / picked but NOT yet sent — they sit in the composer as
+  // thumbnails so the director can add a prompt and send both together.
+  const [staged, setStaged] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [preview, setPreview] = useState<string | null>(null); // full-size lightbox
+  const stagedSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -24,15 +29,39 @@ export function ChatPanel({ iv }: { iv: Interview }) {
     el.click();
   };
 
+  const stageImages = (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    setStaged((prev) => [
+      ...prev,
+      ...imgs.map((file) => ({ id: `s${stagedSeq.current++}`, file, url: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const removeStaged = (id: string) => {
+    setStaged((prev) => {
+      const hit = prev.find((s) => s.id === id);
+      if (hit) URL.revokeObjectURL(hit.url);
+      return prev.filter((s) => s.id !== id);
+    });
+  };
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [iv.messages, iv.thinking]);
 
   const send = () => {
     const value = draft.trim();
-    if (!value || iv.thinking) return;
+    if ((!value && staged.length === 0) || iv.thinking) return;
+    const files = staged.map((s) => s.file);
+    staged.forEach((s) => URL.revokeObjectURL(s.url));
+    setStaged([]);
     setDraft("");
-    iv.sendText(value);
+    if (files.length) {
+      void iv.sendMessage(value, files);
+    } else {
+      iv.sendText(value);
+    }
   };
 
   const pending = [...iv.questions].reverse().find((q) => q.answer === undefined);
@@ -41,6 +70,29 @@ export function ChatPanel({ iv }: { iv: Interview }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-1/40">
+      {/* Full-size preview of a staged reference image */}
+      {preview && (
+        <div
+          onClick={() => setPreview(null)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-8 backdrop-blur-sm"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview}
+            alt="reference preview"
+            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            onClick={() => setPreview(null)}
+            title="Close"
+            className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white transition-colors hover:bg-white/20"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border-glass px-3 py-3">
         <Link
@@ -73,7 +125,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
       {/* Message log */}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-5">
         {iv.messages.map((m) => (
-          <MessageView key={m.id} message={m} />
+          <MessageView key={m.id} message={m} onOpenImage={setPreview} />
         ))}
         {/* Start state: labelled context options (only before the conversation gets going). */}
         {iv.messages.length <= 1 && options.length === 0 && !iv.thinking && (
@@ -122,15 +174,70 @@ export function ChatPanel({ iv }: { iv: Interview }) {
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
-            files.forEach((f) => void iv.uploadFile(f));
+            // Images stage in the composer (send with a prompt); docs/scripts upload as before.
+            stageImages(files.filter((f) => f.type.startsWith("image/")));
+            files.filter((f) => !f.type.startsWith("image/")).forEach((f) => void iv.uploadFile(f));
             e.currentTarget.value = "";
           }}
         />
-        <div className="rounded-2xl border border-border-glass bg-surface-2/50 p-2.5">
+        <div
+          className="rounded-2xl border border-border-glass bg-surface-2/50 p-2.5"
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === "file")) {
+              e.preventDefault();
+            }
+          }}
+          onDrop={(e) => {
+            const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
+              f.type.startsWith("image/"),
+            );
+            if (files.length) {
+              e.preventDefault();
+              stageImages(files);
+            }
+          }}
+        >
+          {/* Staged image thumbnails — pasted/dropped, not yet sent */}
+          {staged.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {staged.map((s) => (
+                <div key={s.id} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-border-glass">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={s.url}
+                    alt="reference"
+                    onClick={() => setPreview(s.url)}
+                    className="h-full w-full cursor-zoom-in object-cover"
+                    title="Click to preview"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeStaged(s.id)}
+                    title="Remove"
+                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            // Paste a screenshot / image straight into the chat — the agent SEES it and
+            // folds its palette, mood, type and style into the brief. Text paste is untouched.
+            onPaste={(e) => {
+              const imgs = Array.from(e.clipboardData?.items ?? [])
+                .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+                .map((it) => it.getAsFile())
+                .filter((f): f is File => !!f);
+              if (imgs.length) {
+                e.preventDefault();
+                stageImages(imgs); // stage in the composer; send with your prompt
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -138,7 +245,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
               }
             }}
             rows={2}
-            placeholder={options.length ? "…or type your own answer" : "Describe your film, or answer the producer…"}
+            placeholder={options.length ? "…or type your own answer" : "Describe your film, paste an image, or answer the producer…"}
             className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-dim focus:outline-none"
           />
           <div className="flex items-center justify-between pt-1">
@@ -150,7 +257,7 @@ export function ChatPanel({ iv }: { iv: Interview }) {
             </IconButton>
             <button
               onClick={send}
-              disabled={!draft.trim() || iv.thinking}
+              disabled={(!draft.trim() && staged.length === 0) || iv.thinking}
               title="Send"
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-neon text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:bg-accent-neon/30"
             >
@@ -261,21 +368,27 @@ function PencilIcon() {
   );
 }
 
-function MessageView({ message }: { message: ChatMessage }) {
+function MessageView({ message, onOpenImage }: { message: ChatMessage; onOpenImage?: (url: string) => void }) {
   if (message.role === "user") return <UserBubble text={message.text} />;
   if (message.role === "assistant") return <Assistant text={message.text} />;
   if (message.role === "attachment")
-    return <AttachmentCard name={message.name} previewUrl={message.previewUrl} note={message.note} />;
+    return <AttachmentCard name={message.name} previewUrl={message.previewUrl} note={message.note} onOpen={onOpenImage} />;
   return <ToolRow label={message.label} detail={message.detail} />;
 }
 
-function AttachmentCard({ name, previewUrl, note }: { name: string; previewUrl?: string; note?: string }) {
+function AttachmentCard({ name, previewUrl, note, onOpen }: { name: string; previewUrl?: string; note?: string; onOpen?: (url: string) => void }) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[88%] overflow-hidden rounded-2xl rounded-tr-sm border border-border-glass bg-surface-3/60">
         {previewUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={name} className="max-h-40 w-full object-cover" />
+          <img
+            src={previewUrl}
+            alt={name}
+            onClick={onOpen ? () => onOpen(previewUrl) : undefined}
+            className={`max-h-40 w-full object-cover ${onOpen ? "cursor-zoom-in" : ""}`}
+            title={onOpen ? "Click to view full size" : undefined}
+          />
         )}
         <div className="flex items-center gap-2 px-3 py-2">
           <PaperclipIcon />

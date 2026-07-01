@@ -79,6 +79,8 @@ class WorkshopGenerateBody(BaseModel):
     instructions: str | None = None   # director's notes to the content agent
     imagePrompt: str | None = None    # edited diffusion prompt (used verbatim)
     contentPrompt: str | None = None  # the FULL writer prompt, edited (used verbatim)
+    imageInstruction: str | None = None  # change folded into the built image prompt
+    referenceImage: dict | None = None   # {mediaType, data} → image-to-image style transfer
     withImage: bool = True
 
 
@@ -115,7 +117,8 @@ async def regenerate_slide(
     b = body or WorkshopGenerateBody()
     mode = await dispatch("regenerate_slide", generation_service.regenerate_slide,
                           [str(slide_id), str(job.id), b.withImage,
-                           b.instructions, b.imagePrompt, b.contentPrompt],
+                           b.instructions, b.imagePrompt, b.contentPrompt, b.imageInstruction,
+                           b.referenceImage],
                           background_tasks)
     return _job_payload(job, mode)
 

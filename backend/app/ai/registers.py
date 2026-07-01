@@ -112,7 +112,8 @@ REGISTERS: dict[str, dict[str, Any]] = {
         "image_style": "Bright, saturated, cheerful, clean",
         "layout_style": "Playful cards, bold color blocks, friendly grids",
         "tags": ["comedy", "romcom", "fun", "family", "bright", "entertainer",
-                 "feel-good", "spiritual"],
+                 "feel-good", "spiritual", "animation", "animated", "anime", "cartoon",
+                 "toon", "manga", "2d", "3d", "kids", "cel"],
     },
     "pulp_stylized": {
         "label": "Pulp Stylized",

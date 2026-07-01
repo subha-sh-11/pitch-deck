@@ -5,11 +5,17 @@ import type { Slide, SlideContent, SlideType } from "@/types/slide";
 /** The editor mutation surface the agent's actions are applied through. */
 export interface DeckActionHandlers {
   slides: Slide[];
+  /** Image shared this turn — used as the img2img reference when an action sets useReference. */
+  referenceImage?: { mediaType: string; data: string };
   onUpdateSlide: (id: string, patch: Partial<SlideContent> & { title?: string }) => void;
   onMoveSlide: (index: number, direction: "up" | "down") => void;
   onInsertAfter: (index: number, slideType: SlideType) => void;
   onDeleteSlide: (id: string) => boolean;
-  onRegenerateSlide: (id: string) => Promise<void>;
+  onRegenerateSlide: (
+    id: string,
+    instruction?: string,
+    referenceImage?: { mediaType: string; data: string },
+  ) => Promise<void>;
   /** Instant, regen-free design changes (deck-wide). */
   onSetAccent?: (hex: string) => void;
   onSetTheme?: (palette: ColorToken[]) => void;
@@ -40,7 +46,17 @@ export async function applyDeckActions(
         break;
       }
       case "regenerate_slide": {
-        await h.onRegenerateSlide(a.slideId);
+        await h.onRegenerateSlide(
+          a.slideId,
+          a.instruction,
+          a.useReference ? h.referenceImage : undefined,
+        );
+        break;
+      }
+      case "style_image": {
+        const { op: _op, slideId, ...patch } = a;
+        void _op;
+        h.onUpdateSlide(slideId, patch); // imageBlur / imageDim / imageScale → content
         break;
       }
       case "add_slide": {
