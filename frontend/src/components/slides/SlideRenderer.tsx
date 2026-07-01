@@ -3,6 +3,7 @@ import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideContent } from "@/types/slide";
 import { DEFAULT_SLIDE_APPEARANCE, getBackgroundCss } from "@/lib/slide-appearance";
 import { SlideEditProvider, type ImageActions } from "./editing/SlideEditContext";
+import { SlideMotifs } from "./shared/SlideMotifs";
 import {
   CharacterSlide,
   ContactSlide,
@@ -11,6 +12,7 @@ import {
   GenreBlendSlide,
   LoglineSlide,
   MarketPotentialSlide,
+  RelationshipMapSlide,
   ShowCrossSlide,
   StoryWorldSlide,
   SynopsisSlide,
@@ -32,6 +34,17 @@ function paletteAccent(dd?: DesignDirection): string | undefined {
     dd.palette[Math.min(2, dd.palette.length - 1)]?.hex
   );
 }
+
+// "Loud" motifs (film-strip frame, inner border) only render on a few HERO slides, so the deck
+// doesn't read the same on every slide. Subtle grain/vignette stay deck-wide for texture.
+const HERO_MOTIF_SLIDES = new Set([
+  "cover",
+  "visual_aesthetic",
+  "directors_vision",
+  "story_world",
+  "contact",
+]);
+const LOUD_MOTIFS = new Set(["film_strip", "frame"]);
 
 // Theme display fonts → the CSS vars loaded in layout.tsx.
 const FONT_VARS: Record<string, string> = {
@@ -69,7 +82,19 @@ export function SlideRenderer({
   // The AI palette drives accent/text on every slide; a user-customized appearance wins.
   const accentColor =
     slide.appearance?.accentColor ?? paletteAccent(designDirection) ?? appearance.accentColor;
-  const textColor = byUsage(designDirection, "text");
+  const bgColor =
+    byUsage(designDirection, "background") ?? byUsage(designDirection, "base") ?? "#0a0a0c";
+  // Text that sits OVER a full-bleed photographic image must stay light (scrim-backed) for
+  // legibility, no matter the deck theme — otherwise a light theme's dark text vanishes on a dark
+  // photo. Text on the slide's own (theme) background follows the palette. Synopsis is excluded
+  // because it renders its copy on a solid theme-coloured panel, not over the image.
+  // A per-slide appearance.textColor override always wins.
+  const overImage = Boolean(content.imageUrl) && slideType !== "synopsis";
+  const themeText = byUsage(designDirection, "text") ?? "#F5F1E8";
+  const textColor = slide.appearance?.textColor ?? (overImage ? "#F5F1E8" : themeText);
+  // Muted tone blends toward the surface behind the text (a dark scrim over images, else the bg)
+  // so secondary copy stays readable in both cases.
+  const mutedColor = `color-mix(in srgb, ${textColor} 70%, ${overImage ? "#0a0a0c" : bgColor})`;
   const fontDisplay = designDirection?.fonts?.display
     ? FONT_VARS[designDirection.fonts.display]
     : undefined;
@@ -88,7 +113,7 @@ export function SlideRenderer({
       case "cover":
         return <CoverSlide content={content} layout={layoutType} />;
       case "logline":
-        return <LoglineSlide content={content} layout={layoutType} />;
+        return <LoglineSlide content={content} layout={layoutType} appearance={appearance} />;
       case "genre_blend":
         return <GenreBlendSlide content={content} />;
       case "synopsis":
@@ -98,6 +123,8 @@ export function SlideRenderer({
       case "character":
       case "supporting_characters":
         return <CharacterSlide content={content} />;
+      case "relationship_map":
+        return <RelationshipMapSlide content={content} />;
       case "usp":
         return <USPGridSlide content={content} />;
       case "show_cross":
@@ -111,7 +138,7 @@ export function SlideRenderer({
       case "contact":
         return <ContactSlide content={content} />;
       default:
-        return <GenericSlide content={content} layout={layoutType} />;
+        return <GenericSlide content={content} layout={layoutType} appearance={appearance} />;
     }
   })();
 
@@ -121,7 +148,9 @@ export function SlideRenderer({
       style={
         {
           "--slide-accent": accentColor,
-          ...(textColor ? { "--slide-text": textColor } : {}),
+          "--slide-text": textColor,
+          "--slide-bg": bgColor,
+          "--slide-text-muted": mutedColor,
           ...(fontDisplay ? { "--slide-font-display": fontDisplay } : {}),
         } as CSSProperties
       }
@@ -149,6 +178,28 @@ export function SlideRenderer({
           {template}
         </SlideEditProvider>
       </div>
+      {/* Graphic motifs from the design direction. Loud ones (film-strip, frame) are limited to
+          HERO slides so the deck varies; subtle grain/vignette stay deck-wide for texture. */}
+      <SlideMotifs
+        motifs={
+          HERO_MOTIF_SLIDES.has(slideType)
+            ? designDirection?.motifs
+            : designDirection?.motifs?.filter((m) => !LOUD_MOTIFS.has(m))
+        }
+      />
+      {/* Consistent slide nav per the deck spec: section label bottom-left, slide number
+          bottom-right. Subtle, non-interactive, kept in the bottom margin so it never covers copy.
+          Omitted on the cover and closing/contact slides. */}
+      {slideType !== "cover" && slideType !== "contact" && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between px-[4.5%] pb-[2.2%] text-[10px] uppercase tracking-[0.22em]"
+          style={{ color: "var(--slide-text-muted, #9CA3AF)", opacity: 0.72 }}
+          aria-hidden
+        >
+          <span>{slideType.replace(/_/g, " ")}</span>
+          {slide.slideNumber ? <span>{String(slide.slideNumber).padStart(2, "0")}</span> : null}
+        </div>
+      )}
     </div>
   );
 }

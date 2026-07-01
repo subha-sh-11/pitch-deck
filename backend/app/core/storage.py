@@ -113,6 +113,25 @@ def read_local_asset(key: str) -> bytes | None:
     return None
 
 
+def load_asset_bytes(key: str, stored_in_s3: bool | None = None) -> bytes | None:
+    """Read an asset's raw bytes back from wherever it lives (S3 if stored there, else local).
+
+    Used server-side (e.g. feeding user reference images back into image generation), unlike
+    `presigned_url`/`read_local_asset` which serve assets to the browser.
+    """
+    if not key:
+        return None
+    if stored_in_s3:
+        s3 = get_s3()
+        if s3 is not None:
+            try:
+                obj = s3.get_object(Bucket=settings.s3_bucket, Key=key)
+                return obj["Body"].read()
+            except Exception:
+                pass  # fall through to a local copy if one exists
+    return read_local_asset(key)
+
+
 def data_uri(data: bytes, content_type: str) -> str:
     b64 = base64.b64encode(data).decode("ascii")
     return f"data:{content_type};base64,{b64}"

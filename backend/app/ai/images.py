@@ -50,14 +50,25 @@ def _vertex_configured() -> bool:
 
 
 def _resolve_image_provider() -> str:
-    if settings.ai_offline or settings.image_provider == "none":
+    # Normalise: tolerate stray whitespace / casing in IMAGE_PROVIDER.
+    provider = (settings.image_provider or "").strip().lower()
+    if settings.ai_offline or provider == "none":
         return "placeholder"
-    if settings.image_provider == "vertex":
+    # "gemini" / "nano-banana" name a MODEL, not a backend. People naturally set
+    # IMAGE_PROVIDER=gemini; route it to the right Google backend instead of silently falling
+    # through to a placeholder: Vertex when a service account is configured, else the API-key path.
+    if provider in ("gemini", "nano-banana", "nanobanana", "google-gemini"):
+        if _vertex_configured():
+            return "vertex"
+        if settings.google_api_key:
+            return "google"
+        return "placeholder"
+    if provider == "vertex":
         return "vertex" if _vertex_configured() else "placeholder"
-    if settings.image_provider in _PROVIDER_KEY:
-        has_key = bool(getattr(settings, _PROVIDER_KEY[settings.image_provider]))
-        return settings.image_provider if has_key else "placeholder"
-    # auto
+    if provider in _PROVIDER_KEY:
+        has_key = bool(getattr(settings, _PROVIDER_KEY[provider]))
+        return provider if has_key else "placeholder"
+    # auto (and any unrecognised value) → first available backend
     if settings.vertex_project:
         return "vertex"
     if settings.fal_key:
@@ -71,6 +82,33 @@ def _resolve_image_provider() -> str:
     return "placeholder"
 
 
+# Prepended to the prompt when the director supplied reference images, so the model treats
+# them as a STYLE guide for new art rather than something to copy literally.
+_REF_STYLE_PREAMBLE = (
+    "Use the attached reference image(s) as the VISUAL STYLE GUIDE for brand-new, original key art: "
+    "match their colour palette, lighting, grain/texture and graphic treatment (framing, composition, "
+    "typographic mood, any film-strip / poster motifs). Render THIS film's subject described below — "
+    "do NOT copy the reference's people, faces, or any text/letters that appear in them.\n\n"
+)
+
+
+def _gemini_parts(prompt: str, reference_images: list[dict] | None) -> list[dict]:
+    """Build Gemini `contents[].parts`: reference images first (as inlineData), then the text."""
+    parts: list[dict] = []
+    text = prompt
+    if reference_images:
+        text = _REF_STYLE_PREAMBLE + prompt
+        for ref in reference_images[:4]:
+            data = ref.get("data")
+            if not data:
+                continue
+            parts.append(
+                {"inlineData": {"mimeType": ref.get("mediaType", "image/jpeg"), "data": data}}
+            )
+    parts.append({"text": text})
+    return parts
+
+
 def generate_image(
     prompt: str,
     *,
@@ -79,43 +117,83 @@ def generate_image(
     negative_prompt: str = "text, watermark, logo, signature, deformed",
     seed: int | None = None,
     label: str = "",
-    init_image: bytes | None = None,
-    init_mime: str = "image/png",
-    init_strength: float = 0.78,
+    reference_images: list[dict] | None = None,
 ) -> ImageResult:
-    """Generate an image. When ``init_image`` is given AND the provider supports it (fal),
-    runs IMAGE-TO-IMAGE so the result adopts the reference's style/composition (driven by
-    ``init_strength``: lower = closer to the reference, higher = more freedom from the prompt).
-    """
+    """Generate one image. ``reference_images`` ([{"mediaType", "data": <base64>}]) are the
+    director's visual references; on Gemini image models they condition the output (style/palette/
+    grade). Providers without image-input support ignore them gracefully and stay text-only."""
     provider = _resolve_image_provider()
     w, h = ASPECT_DIMENSIONS.get(aspect_ratio, ASPECT_DIMENSIONS["16:9"])
+    reason = "" if provider != "placeholder" else "no_image_provider_configured"
     try:
         if provider == "fal":
-            if init_image:
-                return _fal_i2i(prompt, init_image, init_mime, w, h, negative_prompt, seed, init_strength)
-            return _fal_generate(prompt, w, h, negative_prompt, seed)
+            return _fal_generate(prompt, w, h, negative_prompt, seed, reference_images)
         if provider == "replicate":
             return _replicate_generate(prompt, w, h, negative_prompt, seed)
         if provider == "vertex":
-            return _vertex_generate(prompt, aspect_ratio, seed)
+            return _vertex_generate(prompt, aspect_ratio, seed, reference_images)
         if provider == "google":
-            return _google_generate(prompt, aspect_ratio, seed)
+            return _google_generate(prompt, aspect_ratio, seed, reference_images)
     except Exception as exc:  # noqa: BLE001
+        # Surface WHY real generation failed: logged here AND recorded in the placeholder's meta
+        # (→ asset.generation_meta) so the reason is visible without grepping server logs.
         _log.warning("image provider %r failed, using placeholder: %s", provider, exc)
-    return _placeholder(prompt or label, w, h, palette or [])
+        reason = f"{provider}_error: {exc}"[:300]
+    return _placeholder(prompt or label, w, h, palette or [], reason=reason)
 
 
 # Imagen supports a fixed set of aspect ratios; map ours onto the nearest.
 _GOOGLE_ASPECT = {"21:9": "16:9", "16:9": "16:9", "4:3": "4:3", "1:1": "1:1", "3:4": "3:4"}
 
 
-def _google_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
-    """Google Imagen via the Gemini API (generativelanguage) :predict endpoint."""
+def _google_gemini_generate(prompt: str, aspect_ratio: str, seed: int | None,
+                            model: str, reference_images: list[dict] | None = None) -> ImageResult:
+    """Gemini image models via the API-key (generativelanguage) :generateContent endpoint."""
+    import base64
+
+    import httpx
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        f"?key={settings.google_api_key}"
+    )
+    generation_config: dict[str, Any] = {
+        "responseModalities": ["IMAGE"],
+        "imageConfig": {"aspectRatio": _GOOGLE_ASPECT.get(aspect_ratio, "16:9")},
+    }
+    if seed is not None:
+        generation_config["seed"] = seed
+    body = {
+        "contents": [{"role": "user", "parts": _gemini_parts(prompt, reference_images)}],
+        "generationConfig": generation_config,
+    }
+    resp = httpx.post(url, json=body, timeout=180)
+    if resp.status_code >= 400:
+        raise ValueError(f"Gemini image {resp.status_code} ({model}): {resp.text[:400]}")
+    payload = resp.json()
+    parts = (payload.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+    inline = next((p["inlineData"] for p in parts if isinstance(p, dict) and p.get("inlineData")), None)
+    if not inline or not inline.get("data"):
+        finish = (payload.get("candidates") or [{}])[0].get("finishReason", "")
+        raise ValueError(f"Gemini image returned no image (finishReason={finish or '?'}): "
+                         f"{str(payload)[:200]}")
+    data = base64.b64decode(inline["data"])
+    mime = inline.get("mimeType", "image/png")
+    return ImageResult(data, mime, {"provider": "google", "model": model,
+                                    "prompt": prompt, "seed": seed})
+
+
+def _google_generate(prompt: str, aspect_ratio: str, seed: int | None,
+                     reference_images: list[dict] | None = None) -> ImageResult:
+    """Google image via the API key. Routes by model name: gemini-* → :generateContent
+    ("Nano Banana" image models); imagen-* → :predict (legacy Imagen)."""
     import base64
 
     import httpx
 
     model = settings.google_image_model
+    if model.startswith("gemini"):
+        return _google_gemini_generate(prompt, aspect_ratio, seed, model, reference_images)
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:predict"
         f"?key={settings.google_api_key}"
@@ -163,7 +241,8 @@ def _vertex_token() -> str:
 
 
 def _vertex_gemini_generate(prompt: str, aspect_ratio: str, seed: int | None,
-                            token: str, loc: str, proj: str, model: str) -> ImageResult:
+                            token: str, loc: str, proj: str, model: str,
+                            reference_images: list[dict] | None = None) -> ImageResult:
     """Gemini image models ("Nano Banana": gemini-2.5-flash-image / gemini-3-pro-image / …)
     via Vertex AI :generateContent — a different request/response shape than Imagen's :predict."""
     import base64
@@ -181,7 +260,7 @@ def _vertex_gemini_generate(prompt: str, aspect_ratio: str, seed: int | None,
     if seed is not None:
         generation_config["seed"] = seed
     body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": _gemini_parts(prompt, reference_images)}],
         "generationConfig": generation_config,
     }
     headers = {"Authorization": f"Bearer {token}"}
@@ -206,12 +285,14 @@ def _vertex_gemini_generate(prompt: str, aspect_ratio: str, seed: int | None,
     return ImageResult(data, mime, {"provider": "vertex", "model": model, "prompt": prompt, "seed": seed})
 
 
-def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageResult:
+def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None,
+                     reference_images: list[dict] | None = None) -> ImageResult:
     """Google image models via Vertex AI. Routes by model name: gemini-* ("Nano Banana")
     → :generateContent; imagen-* → :predict. Auth is a service-account OAuth token.
 
     Credentials come from VERTEX_CREDENTIALS_PATH (a service-account .json) or, if that's blank,
     ambient Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS / gcloud auth).
+    Reference images condition the Gemini path; Imagen (:predict) ignores them (text-only).
     """
     import base64
 
@@ -220,7 +301,8 @@ def _vertex_generate(prompt: str, aspect_ratio: str, seed: int | None) -> ImageR
     token = _vertex_token()
     loc, proj, model = settings.vertex_location, settings.vertex_project, settings.vertex_image_model
     if model.startswith("gemini"):
-        return _vertex_gemini_generate(prompt, aspect_ratio, seed, token, loc, proj, model)
+        return _vertex_gemini_generate(prompt, aspect_ratio, seed, token, loc, proj, model,
+                                       reference_images)
     url = (
         f"https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}"
         f"/locations/{loc}/publishers/google/models/{model}:predict"
@@ -263,51 +345,57 @@ def _fetch_bytes(url: str) -> tuple[bytes, str]:
     return resp.content, resp.headers.get("content-type", "image/png")
 
 
-def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> ImageResult:
-    import fal_client  # lazy
-
-    import os
-
-    os.environ.setdefault("FAL_KEY", settings.fal_key)
-    result = fal_client.run(
-        settings.fal_image_model,
-        arguments={
-            "prompt": prompt,
-            "image_size": {"width": w, "height": h},
-            **({"seed": seed} if seed is not None else {}),
-        },
-    )
-    url = result["images"][0]["url"]
-    data, mime = _fetch_bytes(url)
-    return ImageResult(data, mime, {"provider": "fal", "model": settings.fal_image_model,
-                                    "prompt": prompt, "seed": seed})
-
-
-def _fal_i2i(prompt: str, init_image: bytes, init_mime: str, w: int, h: int,
-             neg: str, seed: int | None, strength: float) -> ImageResult:
-    """Image-to-image on fal: the reference image is the starting point, transformed by the
-    prompt. Used for "make this slide look like this image" so the result adopts its style."""
-    import base64
-    import os
+def _fal_run(model: str, args: dict, attempts: int = 3):
+    """Call fal with a short exponential backoff. A full deck fires ~20 image calls in two bursts
+    (backgrounds, then per-element portraits/genres); the later burst is the one that gets
+    rate-limited, and a single 429/timeout used to degrade straight to a placeholder. Retrying a
+    couple of times with jittered backoff turns those transient failures back into real images."""
+    import random
+    import time
 
     import fal_client  # lazy
 
+    last: Exception | None = None
+    for i in range(max(1, attempts)):
+        try:
+            return fal_client.run(model, arguments=args)
+        except Exception as exc:  # noqa: BLE001 — retry ANY error; non-transient ones just exhaust
+            last = exc
+            if i == attempts - 1:
+                raise
+            _log.warning("fal attempt %d/%d failed (%s); retrying…",
+                         i + 1, attempts, str(exc)[:140])
+            time.sleep(min(8.0, 1.5 * (2 ** i)) + random.uniform(0, 0.6))
+    raise last  # pragma: no cover — loop always returns or raises
+
+
+def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
+                  reference_images: list[dict] | None = None) -> ImageResult:
+    import os
+
     os.environ.setdefault("FAL_KEY", settings.fal_key)
-    data_uri = f"data:{init_mime};base64,{base64.b64encode(init_image).decode()}"
-    result = fal_client.run(
-        settings.fal_i2i_model,
-        arguments={
+    if reference_images:
+        # Reference supplied → image-to-image so the director's reference conditions the result
+        # (palette, grade, mood). fal accepts a data-URI for image_url.
+        ref = reference_images[0]
+        image_url = f"data:{ref.get('mediaType', 'image/jpeg')};base64,{ref['data']}"
+        model = settings.fal_image_to_image_model
+        args: dict[str, Any] = {
             "prompt": prompt,
-            "image_url": data_uri,
-            "strength": max(0.1, min(0.95, strength)),
+            "image_url": image_url,
+            "strength": settings.fal_image_strength,
             "image_size": {"width": w, "height": h},
-            **({"seed": seed} if seed is not None else {}),
-        },
-    )
+        }
+    else:
+        model = settings.fal_image_model
+        args = {"prompt": prompt, "image_size": {"width": w, "height": h}}
+    if seed is not None:
+        args["seed"] = seed
+    result = _fal_run(model, args)
     url = result["images"][0]["url"]
     data, mime = _fetch_bytes(url)
-    return ImageResult(data, mime, {"provider": "fal", "model": settings.fal_i2i_model,
-                                    "prompt": prompt, "seed": seed, "mode": "i2i"})
+    return ImageResult(data, mime, {"provider": "fal", "model": model, "prompt": prompt,
+                                    "seed": seed, "referenced": bool(reference_images)})
 
 
 def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> ImageResult:
@@ -326,28 +414,48 @@ def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None)
                                     "prompt": prompt, "seed": seed})
 
 
-def _placeholder(prompt: str, w: int, h: int, palette: list[dict]) -> ImageResult:
-    """Deterministic SVG: a gradient built from the deck palette + a caption from the prompt."""
-    colors = [c.get("hex") for c in palette if c.get("hex")] or ["#0B0B0D", "#1E1F22", "#B8862F"]
-    # deterministic angle/order from prompt so the same slide is stable across runs
-    h_seed = int(hashlib.sha256(prompt.encode("utf-8")).hexdigest(), 16)
+def _placeholder(prompt: str, w: int, h: int, palette: list[dict],
+                 reason: str = "") -> ImageResult:
+    """Deterministic cinematic gradient built from the deck palette, used when no image provider
+    is available (or one failed).
+
+    Intentionally art-like — a layered gradient with an accent highlight and vignette, and
+    crucially NO caption/text — so a fallback never looks like a broken black frame and never
+    leaks the internal prompt onto the slide (the old version drew ``prompt[:60]`` into the SVG).
+    ``reason`` is recorded in meta (not drawn) so callers/UI/logs can tell why real generation
+    was skipped."""
+    colors = [c.get("hex") for c in palette if c.get("hex")] or ["#14151C", "#2A1E16", "#B8862F"]
+    # Deterministic from the prompt: a given slide is stable across runs, but slides differ.
+    h_seed = int(hashlib.sha256((prompt or "").encode("utf-8")).hexdigest(), 16)
     angle = h_seed % 360
+    hx = 20 + (h_seed // 7) % 60          # accent-highlight centre x: 20%–80%
+    hy = 16 + (h_seed // 1009) % 44       # accent-highlight centre y: 16%–60%
+    accent = colors[min(len(colors) - 1, 2)]
     stops = "".join(
         f'<stop offset="{int(i * 100 / max(len(colors) - 1, 1))}%" stop-color="{html.escape(c)}"/>'
         for i, c in enumerate(colors)
     )
-    caption = html.escape((prompt[:60] + "…") if len(prompt) > 60 else prompt)
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
   <defs>
     <linearGradient id="g" gradientTransform="rotate({angle})">{stops}</linearGradient>
+    <radialGradient id="hl" cx="{hx}%" cy="{hy}%" r="70%">
+      <stop offset="0%" stop-color="{html.escape(accent)}" stop-opacity="0.42"/>
+      <stop offset="55%" stop-color="{html.escape(accent)}" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="{html.escape(accent)}" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vig" cx="50%" cy="50%" r="75%">
+      <stop offset="58%" stop-color="black" stop-opacity="0"/>
+      <stop offset="100%" stop-color="black" stop-opacity="0.5"/>
+    </radialGradient>
     <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
-      <feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="0.06"/></feComponentTransfer></filter>
+      <feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="0.05"/></feComponentTransfer></filter>
   </defs>
   <rect width="{w}" height="{h}" fill="url(#g)"/>
+  <rect width="{w}" height="{h}" fill="url(#hl)"/>
   <rect width="{w}" height="{h}" filter="url(#n)" opacity="0.5"/>
-  <rect width="{w}" height="{h}" fill="black" opacity="0.18"/>
-  <text x="40" y="{h - 40}" font-family="Georgia, serif" font-size="{max(14, w // 48)}"
-        fill="#FFFFFF" opacity="0.82">{caption}</text>
+  <rect width="{w}" height="{h}" fill="url(#vig)"/>
 </svg>"""
-    return ImageResult(svg.encode("utf-8"), "image/svg+xml",
-                       {"provider": "placeholder", "prompt": prompt})
+    meta = {"provider": "placeholder", "prompt": prompt}
+    if reason:
+        meta["reason"] = reason
+    return ImageResult(svg.encode("utf-8"), "image/svg+xml", meta)

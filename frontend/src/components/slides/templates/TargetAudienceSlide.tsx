@@ -1,6 +1,7 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
 interface TargetAudienceSlideProps {
   content: SlideContent;
@@ -14,7 +15,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
     <SlideFrame imageUrl={content.imageUrl}>
       <div
         className={`absolute inset-0 ${
-          content.imageUrl ? "bg-black/65" : "bg-gradient-to-br from-[#0c0c0e] to-[#101010]"
+          content.imageUrl ? "bg-black/65" : "bg-[var(--slide-bg,#0a0a0c)]"
         }`}
       />
       <div className="relative flex h-full flex-col p-[7%]">
@@ -32,19 +33,21 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
                   background: "color-mix(in srgb, var(--slide-accent) 6%, transparent)",
                 }}
               >
-                <EditableText
-                  k={`item-${i}-title`}
-                  as="h3"
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--slide-accent)" }}
-                  value={item.title}
-                />
+                <div className="flex items-center gap-2" style={{ color: "var(--slide-accent)" }}>
+                  <SlideIcon name={iconForLabel(item.title, "audience")} size={18} />
+                  <EditableText
+                    k={`item-${i}-title`}
+                    as="h3"
+                    className="text-sm font-semibold"
+                    value={item.title}
+                  />
+                </div>
                 {item.description && (
                   <EditableText
                     k={`item-${i}-desc`}
                     as="p"
                     multiline
-                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[#9CA3AF]"
+                    className="mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                     value={item.description}
                   />
                 )}
@@ -57,7 +60,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
               k="body"
               as="p"
               multiline
-              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[#C9CDD3]"
+              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[var(--slide-text-muted,#C9CDD3)]"
               value={content.body}
             />
           )

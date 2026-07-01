@@ -66,12 +66,21 @@ export function WorkshopProvider({
   const safeIndex = Math.min(index, Math.max(0, draftSlides.length - 1));
   const slide: Slide | undefined = draftSlides[safeIndex];
 
-  // When the selection changes, fetch the EXACT prompt the LLM will receive for this
-  // slide (the stored director-edited one, or the freshly composed real prompt).
+  // Reset the prompt panels when the selected slide changes — applied during render (the
+  // documented "adjust state when input changes" pattern), not synchronously in an effect.
+  const [promptSlideId, setPromptSlideId] = useState<string | undefined>(undefined);
+  if (slide && slide.id !== promptSlideId) {
+    setPromptSlideId(slide.id);
+    setInstructions("Composing the prompt…");
+    setImagePrompt(slide.prompts?.imagePrompt ?? slide.content.imagePrompt ?? "");
+    setError(null);
+  }
+
+  // Fetch the EXACT prompt the LLM will receive for this slide (the stored director-edited
+  // one, or the freshly composed real prompt). setState in the promise callback is fine.
   useEffect(() => {
     if (!slide) return;
     let cancelled = false;
-    setInstructions("Composing the prompt…");
     getSlidePrompt(slide.id)
       .then((res) => {
         if (!cancelled) setInstructions(res.prompt);
@@ -79,8 +88,6 @@ export function WorkshopProvider({
       .catch(() => {
         if (!cancelled) setInstructions(slide.prompts?.contentPrompt ?? "");
       });
-    setImagePrompt(slide.prompts?.imagePrompt ?? slide.content.imagePrompt ?? "");
-    setError(null);
     return () => {
       cancelled = true;
     };
@@ -207,6 +214,12 @@ export function useWorkshop(): WorkshopValue {
   const ctx = useContext(WorkshopContext);
   if (!ctx) throw new Error("useWorkshop must be used within WorkshopProvider");
   return ctx;
+}
+
+/** Like useWorkshop, but returns null instead of throwing when there's no provider —
+ *  lets the chat rail read the currently-selected slide without requiring the workshop. */
+export function useWorkshopOptional(): WorkshopValue | null {
+  return useContext(WorkshopContext);
 }
 
 /**

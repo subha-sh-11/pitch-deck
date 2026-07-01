@@ -16,6 +16,10 @@ export interface DesignFonts {
   body?: string;
 }
 
+/** Graphic motifs the deck carries deck-wide (rendered by SlideMotifs), derived from the
+ * design direction / the director's reference images. */
+export type DesignMotif = "film_strip" | "grain" | "vignette" | "frame";
+
 export interface DesignDirection {
   mood: string;
   cinematicTone: string;
@@ -27,4 +31,6 @@ export interface DesignDirection {
   layoutStyle: string;
   rationale: string;
   fonts?: DesignFonts;
+  /** Recurring graphic motifs applied across every slide (e.g. film-strip edges, grain). */
+  motifs?: DesignMotif[];
 }

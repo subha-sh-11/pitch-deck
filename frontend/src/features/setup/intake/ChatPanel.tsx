@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { projectRoutes } from "@/lib/routes";
 import type { ChatMessage, Interview } from "./useInterview";
+import { useWorkshopOptional } from "./workshop";
 
 // The left conversation rail (narrow). All state lives in the shared interview
 // hook. The producer asks here; tappable options appear inline; the deck builds
@@ -12,14 +13,13 @@ const ALL_ACCEPT = ".pdf,.docx,.fdx,.txt,.md,.rtf,image/*";
 
 export function ChatPanel({ iv }: { iv: Interview }) {
   const [draft, setDraft] = useState("");
-  // Images pasted / dropped / picked but NOT yet sent — they sit in the composer as
-  // thumbnails so the director can add a prompt and send both together.
-  const [staged, setStaged] = useState<{ id: string; file: File; url: string }[]>([]);
-  const [preview, setPreview] = useState<string | null>(null); // full-size lightbox
-  const stagedSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // The slide the director currently has open in the workshop — passed to the deck
+  // agent as the default target so "this slide" / "add an image" resolve correctly.
+  const workshop = useWorkshopOptional();
+  const selectedSlideId = workshop?.slide?.id;
 
   // Open the file picker filtered to a specific type (set per option / the + button).
   const openPicker = (accept: string) => {
@@ -29,39 +29,15 @@ export function ChatPanel({ iv }: { iv: Interview }) {
     el.click();
   };
 
-  const stageImages = (files: File[]) => {
-    const imgs = files.filter((f) => f.type.startsWith("image/"));
-    if (!imgs.length) return;
-    setStaged((prev) => [
-      ...prev,
-      ...imgs.map((file) => ({ id: `s${stagedSeq.current++}`, file, url: URL.createObjectURL(file) })),
-    ]);
-  };
-
-  const removeStaged = (id: string) => {
-    setStaged((prev) => {
-      const hit = prev.find((s) => s.id === id);
-      if (hit) URL.revokeObjectURL(hit.url);
-      return prev.filter((s) => s.id !== id);
-    });
-  };
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [iv.messages, iv.thinking]);
 
   const send = () => {
     const value = draft.trim();
-    if ((!value && staged.length === 0) || iv.thinking) return;
-    const files = staged.map((s) => s.file);
-    staged.forEach((s) => URL.revokeObjectURL(s.url));
-    setStaged([]);
+    if (!value || iv.thinking) return;
     setDraft("");
-    if (files.length) {
-      void iv.sendMessage(value, files);
-    } else {
-      iv.sendText(value);
-    }
+    iv.sendText(value, selectedSlideId);
   };
 
   const pending = [...iv.questions].reverse().find((q) => q.answer === undefined);
@@ -70,29 +46,6 @@ export function ChatPanel({ iv }: { iv: Interview }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-1/40">
-      {/* Full-size preview of a staged reference image */}
-      {preview && (
-        <div
-          onClick={() => setPreview(null)}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-8 backdrop-blur-sm"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview}
-            alt="reference preview"
-            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            type="button"
-            onClick={() => setPreview(null)}
-            title="Close"
-            className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white transition-colors hover:bg-white/20"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border-glass px-3 py-3">
         <Link
@@ -125,11 +78,11 @@ export function ChatPanel({ iv }: { iv: Interview }) {
       {/* Message log */}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-5">
         {iv.messages.map((m) => (
-          <MessageView key={m.id} message={m} onOpenImage={setPreview} />
+          <MessageView key={m.id} message={m} />
         ))}
         {/* Start state: labelled context options (only before the conversation gets going). */}
         {iv.messages.length <= 1 && options.length === 0 && !iv.thinking && (
-          <ContextOptions onPick={openPicker} onDescribe={() => textareaRef.current?.focus()} />
+          <ContextOptions onDescribe={() => textareaRef.current?.focus()} />
         )}
         {iv.thinking && <Thinking />}
       </div>
@@ -164,6 +117,9 @@ export function ChatPanel({ iv }: { iv: Interview }) {
         </div>
       )}
 
+      {/* Brief strength — tells the director how close they are to a strong deck. */}
+      {iv.draftSlides.length === 0 && <BriefStrength iv={iv} />}
+
       {/* Composer */}
       <div className="px-3 pb-3 pt-1">
         <input
@@ -174,81 +130,26 @@ export function ChatPanel({ iv }: { iv: Interview }) {
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
-            // Images stage in the composer (send with a prompt); docs/scripts upload as before.
-            stageImages(files.filter((f) => f.type.startsWith("image/")));
-            files.filter((f) => !f.type.startsWith("image/")).forEach((f) => void iv.uploadFile(f));
+            files.forEach((f) => void iv.uploadFile(f, selectedSlideId));
             e.currentTarget.value = "";
           }}
         />
-        <div
-          className="rounded-2xl border border-border-glass bg-surface-2/50 p-2.5"
-          onDragOver={(e) => {
-            if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === "file")) {
-              e.preventDefault();
-            }
-          }}
-          onDrop={(e) => {
-            const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
-              f.type.startsWith("image/"),
-            );
-            if (files.length) {
-              e.preventDefault();
-              stageImages(files);
-            }
-          }}
-        >
-          {/* Staged image thumbnails — pasted/dropped, not yet sent */}
-          {staged.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {staged.map((s) => (
-                <div key={s.id} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-border-glass">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={s.url}
-                    alt="reference"
-                    onClick={() => setPreview(s.url)}
-                    className="h-full w-full cursor-zoom-in object-cover"
-                    title="Click to preview"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeStaged(s.id)}
-                    title="Remove"
-                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="rounded-2xl border border-white/15 bg-surface-2/80 p-3 shadow-lg shadow-black/20 transition-colors focus-within:border-accent-neon/50">
           <textarea
             ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            // Paste a screenshot / image straight into the chat — the agent SEES it and
-            // folds its palette, mood, type and style into the brief. Text paste is untouched.
-            onPaste={(e) => {
-              const imgs = Array.from(e.clipboardData?.items ?? [])
-                .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
-                .map((it) => it.getAsFile())
-                .filter((f): f is File => !!f);
-              if (imgs.length) {
-                e.preventDefault();
-                stageImages(imgs); // stage in the composer; send with your prompt
-              }
-            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();
               }
             }}
-            rows={2}
-            placeholder={options.length ? "…or type your own answer" : "Describe your film, paste an image, or answer the producer…"}
-            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-dim focus:outline-none"
+            rows={3}
+            placeholder={options.length ? "…or type your own answer" : "Paste a logline, story idea, or script summary…"}
+            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:outline-none"
           />
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center justify-between pt-1.5">
             <IconButton
               title="Attach files — scripts, reference images, mood boards, themes"
               onClick={() => openPicker(ALL_ACCEPT)}
@@ -257,9 +158,9 @@ export function ChatPanel({ iv }: { iv: Interview }) {
             </IconButton>
             <button
               onClick={send}
-              disabled={(!draft.trim() && staged.length === 0) || iv.thinking}
+              disabled={!draft.trim() || iv.thinking}
               title="Send"
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-neon text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:bg-accent-neon/30"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-neon text-zinc-950 shadow-[0_0_16px_rgba(248,201,164,0.35)] transition-all hover:bg-accent-neon-dim active:scale-95 disabled:cursor-not-allowed disabled:bg-accent-neon/30 disabled:shadow-none"
             >
               <SendIcon />
             </button>
@@ -270,96 +171,94 @@ export function ChatPanel({ iv }: { iv: Interview }) {
   );
 }
 
-function ContextOptions({
-  onPick,
-  onDescribe,
-}: {
-  onPick: (accept: string) => void;
-  onDescribe: () => void;
-}) {
-  const items: { label: string; desc: string; tint: string; icon: ReactNode; onClick: () => void }[] = [
-    {
-      label: "Upload script",
-      desc: "PDF · DOCX · FDX · TXT — I'll pull the story",
-      tint: "bg-amber-500/15 text-amber-300",
-      icon: <DocIcon />,
-      onClick: () => onPick(".pdf,.docx,.fdx,.txt,.md,.rtf"),
-    },
-    {
-      label: "Reference images",
-      desc: "Stills, key art, locations",
-      tint: "bg-emerald-500/15 text-emerald-300",
-      icon: <ImgIcon />,
-      onClick: () => onPick("image/*"),
-    },
-    {
-      label: "Mood board / themes",
-      desc: "Looks & palettes to echo",
-      tint: "bg-fuchsia-500/15 text-fuchsia-300",
-      icon: <SwatchIcon />,
-      onClick: () => onPick("image/*"),
-    },
-    {
-      label: "Describe your film",
-      desc: "Type a logline or a paragraph",
-      tint: "bg-sky-500/15 text-sky-300",
-      icon: <PencilIcon />,
-      onClick: onDescribe,
-    },
-  ];
+function ContextOptions({ onDescribe }: { onDescribe: () => void }) {
   return (
-    <div className="space-y-2 pt-2">
-      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-dim">
-        Start with context
-      </p>
-      {items.map((it) => (
-        <button
-          key={it.label}
-          type="button"
-          onClick={it.onClick}
-          className="flex w-full items-center gap-3 rounded-xl border border-border-glass bg-surface-2/50 px-3 py-2.5 text-left transition-colors hover:border-accent-neon/40 hover:bg-surface-2"
-        >
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${it.tint}`}>
-            {it.icon}
+    <div className="animate-intake-fade-in pt-3">
+      {/* Primary action — the single, obvious place to start. */}
+      <button
+        type="button"
+        onClick={onDescribe}
+        className="group flex w-full items-center justify-between gap-3 rounded-xl border border-accent-neon/50 bg-accent-neon/10 px-4 py-3.5 text-left transition-all hover:border-accent-neon hover:bg-accent-neon/15 active:scale-[0.99]"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-neon text-zinc-950">
+            <PencilIcon />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-text-primary">{it.label}</span>
-            <span className="block truncate text-[11px] text-text-dim">{it.desc}</span>
+            <span className="block text-sm font-semibold text-text-primary">Describe your film idea</span>
+            <span className="block text-xs text-text-muted">Type a logline or a paragraph to begin</span>
           </span>
-        </button>
-      ))}
+        </span>
+        <ArrowIcon className="shrink-0 text-accent-neon transition-transform group-hover:translate-x-0.5" />
+      </button>
     </div>
   );
 }
 
-function DocIcon() {
+// How fully the brief is specified — drives the "Brief strength" guidance so the
+// director knows what to add next before generating questions.
+function BriefStrength({ iv }: { iv: Interview }) {
+  const f = iv.form;
+  const signals = [
+    (f.title ?? "").trim(),
+    ((f.logline ?? "").trim() || (f.synopsis ?? "").trim()),
+    (f.genreBlend ?? "").trim(),
+    (f.targetAudience ?? "").trim(),
+    (f.visualAesthetic ?? "").trim(),
+  ].filter(Boolean).length + (iv.referenceImages.length > 0 ? 1 : 0);
+
+  const level = signals >= 4 ? "Strong" : signals >= 2 ? "Medium" : "Low";
+  const hint =
+    level === "Strong"
+      ? "Ready to generate questions."
+      : level === "Medium"
+        ? "Getting there — add genre, audience, or visual references to sharpen it."
+        : "Add a story idea, genre, and visual references to improve it.";
+  const tone =
+    level === "Strong"
+      ? "text-accent-neon"
+      : level === "Medium"
+        ? "text-amber-300"
+        : "text-text-muted";
+  const filled = Math.min(6, signals);
+
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6M8 13h8M8 17h6" />
+    <div className="mx-3 mb-1 rounded-xl border border-border-glass bg-surface-2/40 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          Brief strength
+        </span>
+        <span className={`text-xs font-semibold ${tone}`}>{level}</span>
+      </div>
+      <div className="mt-2 flex gap-1" aria-hidden>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors ${
+              i < filled
+                ? level === "Strong"
+                  ? "bg-accent-neon"
+                  : level === "Medium"
+                    ? "bg-amber-400/70"
+                    : "bg-text-dim"
+                : "bg-surface-3"
+            }`}
+          />
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-text-dim">{hint}</p>
+    </div>
+  );
+}
+
+function ArrowIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   );
 }
-function ImgIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="M21 15l-5-5L5 21" />
-    </svg>
-  );
-}
-function SwatchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <circle cx="13.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="10.5" r="2.5" />
-      <circle cx="8.5" cy="7.5" r="2.5" />
-      <circle cx="6.5" cy="12.5" r="2.5" />
-      <path d="M12 22a10 10 0 1 1 0-20" />
-    </svg>
-  );
-}
+
 function PencilIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -368,27 +267,21 @@ function PencilIcon() {
   );
 }
 
-function MessageView({ message, onOpenImage }: { message: ChatMessage; onOpenImage?: (url: string) => void }) {
+function MessageView({ message }: { message: ChatMessage }) {
   if (message.role === "user") return <UserBubble text={message.text} />;
   if (message.role === "assistant") return <Assistant text={message.text} />;
   if (message.role === "attachment")
-    return <AttachmentCard name={message.name} previewUrl={message.previewUrl} note={message.note} onOpen={onOpenImage} />;
+    return <AttachmentCard name={message.name} previewUrl={message.previewUrl} note={message.note} />;
   return <ToolRow label={message.label} detail={message.detail} />;
 }
 
-function AttachmentCard({ name, previewUrl, note, onOpen }: { name: string; previewUrl?: string; note?: string; onOpen?: (url: string) => void }) {
+function AttachmentCard({ name, previewUrl, note }: { name: string; previewUrl?: string; note?: string }) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[88%] overflow-hidden rounded-2xl rounded-tr-sm border border-border-glass bg-surface-3/60">
         {previewUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt={name}
-            onClick={onOpen ? () => onOpen(previewUrl) : undefined}
-            className={`max-h-40 w-full object-cover ${onOpen ? "cursor-zoom-in" : ""}`}
-            title={onOpen ? "Click to view full size" : undefined}
-          />
+          <img src={previewUrl} alt={name} className="max-h-40 w-full object-cover" />
         )}
         <div className="flex items-center gap-2 px-3 py-2">
           <PaperclipIcon />

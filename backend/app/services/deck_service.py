@@ -110,5 +110,6 @@ def serialize_deck(deck: Deck) -> dict:
         "slideCount": deck.slide_count,
         "status": deck.status,
         "designDirection": design or None,
+        "qualityReview": deck.quality_review or None,
         "slides": [serialize_slide(s) for s in sorted(deck.slides, key=lambda s: s.slide_number)],
     }

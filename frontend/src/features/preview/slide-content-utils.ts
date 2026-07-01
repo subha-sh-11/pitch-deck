@@ -16,7 +16,7 @@ export function slideContentToText(content: SlideContent): string {
 
 export function textToSlideContentPatch(
   text: string,
-  existing: SlideContent,
+  _existing: SlideContent,
 ): Partial<SlideContent> {
   const lines = text.split("\n").filter((l) => l.trim());
   if (lines.length > 1) {

@@ -155,15 +155,63 @@ FONT_BY_REGISTER: dict[str, str] = {
 }
 
 
+# Brightness of each register's grounds, so selection isn't dark-by-default. Two of the five are
+# genuinely light — the system must reach them for warm/comedy/feel-good films.
+REGISTER_BRIGHTNESS: dict[str, str] = {
+    "restrained_cinematic": "dark",
+    "high_contrast_genre": "dark",
+    "pulp_stylized": "dark",
+    "editorial_warm": "light",
+    "playful_bright": "light",
+}
+# Preference order for ambiguous/no-signal projects: warm/light first, so a generic or "drama"
+# brief does NOT collapse to the darkest look (the old behaviour that made every deck feel dark).
+_NEUTRAL_PREFERENCE = ["editorial_warm", "restrained_cinematic", "playful_bright",
+                       "high_contrast_genre", "pulp_stylized"]
+
+_LIGHT_KW = ("comedy", "rom-com", "romcom", "romance", "romantic", "family", "feel-good",
+             "feelgood", "kids", "children", "musical", "sport", "sports", "slice-of-life",
+             "coming-of-age", "spiritual", "devotional", "fun", "uplifting", "heartwarming",
+             "wholesome", "entertainer")
+_DARK_KW = ("thriller", "horror", "crime", "noir", "survival", "war", "gore", "gritty", "dark",
+            "dystopia", "psychological", "suspense", "revenge", "massy", "violent", "tragedy",
+            "bleak")
+
+
+def infer_brightness(genres: list[str] | None, tone: list[str] | None, extra: str = "") -> str:
+    """Light | dark | neutral lean of a project from its genre/tone keywords."""
+    hay = " ".join([*(genres or []), *(tone or []), extra]).lower()
+    light = sum(1 for k in _LIGHT_KW if k in hay)
+    dark = sum(1 for k in _DARK_KW if k in hay)
+    if light > dark:
+        return "light"
+    if dark > light:
+        return "dark"
+    return "neutral"
+
+
+def _pick_by_lean(candidates: list[str], lean: str) -> str:
+    """Choose among candidate registers by brightness lean — never defaulting to the darkest."""
+    if lean in ("light", "dark"):
+        matching = [c for c in candidates if REGISTER_BRIGHTNESS.get(c) == lean]
+        if matching:
+            return min(matching, key=_NEUTRAL_PREFERENCE.index)
+    return min(candidates, key=_NEUTRAL_PREFERENCE.index)
+
+
 def select_register(genres: list[str] | None, tone: list[str] | None, extra: str = "") -> str:
-    """Score genre+tone keywords to pick the best-fit register id."""
+    """Best-fit register from genre+tone. Ties and no-match resolve by brightness lean (warm/light
+    first), not by defaulting to the darkest register."""
     haystack = " ".join([*(genres or []), *(tone or []), extra]).lower()
-    best, best_score = DEFAULT_REGISTER, -1
-    for key, reg in REGISTERS.items():
-        score = sum(1 for tag in reg["tags"] if tag in haystack)
-        if score > best_score:
-            best, best_score = key, score
-    return best
+    scored = [(sum(1 for tag in reg["tags"] if tag in haystack), key)
+              for key, reg in REGISTERS.items()]
+    best_score = max((s for s, _ in scored), default=0)
+    winners = [k for s, k in scored if s == best_score and s > 0]
+    lean = infer_brightness(genres, tone, extra)
+    if winners:
+        return winners[0] if len(winners) == 1 else _pick_by_lean(winners, lean)
+    # Nothing matched -> pick by brightness lean instead of the old dark default.
+    return _pick_by_lean(list(REGISTERS), lean)
 
 
 def _parse_palette_override(raw: str) -> list[dict] | None:
@@ -212,3 +260,4 @@ def design_direction_fallback(
         "fonts": {"display": FONT_BY_REGISTER.get(reg_id, "cormorant"), "body": "sans"},
         "_register": reg_id,  # internal hint, dropped before API serialization
     }
+

@@ -61,6 +61,15 @@ async def generate_deck(
     return _job_payload(job, mode)
 
 
+@router.post("/{project_id}/analyze", dependencies=[Depends(ai_generate_limit)])
+async def analyze_story(
+    project: Project = Depends(get_owned_project),
+):
+    """Story Blueprint: compute + persist the AI's StoryAnalysis from the current intake WITHOUT
+    generating slides, so the director can review the AI's understanding before building."""
+    return await run_in_threadpool(generation_service.run_story_analysis, str(project.id))
+
+
 @router.post("/{project_id}/design", dependencies=[Depends(ai_generate_limit)])
 async def generate_design(
     background_tasks: BackgroundTasks,

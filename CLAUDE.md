@@ -14,6 +14,11 @@ shareable web link.
 Monorepo with two apps: `backend/` (FastAPI) and `frontend/` (Next.js), plus
 `docker-compose.yml` for local infra and `nginx/` as the reverse proxy.
 
+**Design doctrine:** how decks must look and read (per-film Visual Identity Pack, shot/location
+variety, readability, deck pacing, the product flow) lives in `docs/DESIGN_BIBLE.md`. Read it
+before touching the AI agents (`backend/app/ai/agents/*`) or slide templates
+(`frontend/src/components/slides/*`), and keep those in sync with it.
+
 ## Architecture at a glance
 
 ```
@@ -67,11 +72,16 @@ Layout under `backend/app/`:
 
 ### AI agent pipeline (order)
 
-`intake → story_analysis → outline → content → design → image_prompt → layout → review`
+`intake → story_analysis → design → outline → content → image_prompt (+ images) → layout → review`
+
+(In code, `design` runs BEFORE `outline`/`content`, and `layout` is applied when slides are
+persisted — not as a separate later stage. See `run_full_deck` in `services/generation_service.py`.)
 
 Files present: `intake_interview.py`, `intake_extract.py`, `story_analysis.py`,
-`content.py`, `design.py`, `image_prompt.py`, `layout.py`. (Note: `agents/README.md`
-lists idealized names like `quality_review_agent.py`; trust the actual files on disk.)
+`outline.py`, `content.py`, `design.py`, `design_candidates.py`, `image_prompt.py`,
+`layout.py`, `slide_edit.py`, and `quality_review.py` (the `review` step — a structural
+QA pass stored on `Deck.quality_review`). (`agents/README.md` may use older/idealized
+names; trust the actual files on disk.)
 
 ## Frontend (`frontend/`)
 
@@ -102,13 +112,15 @@ Layout under `frontend/src/`:
 
 ## Local development
 
-Infra (Postgres+pgvector, Redis, MinIO) via Docker; backend and frontend run on host.
+Infra (Postgres+pgvector, Redis, floci S3 emulator) via Docker; backend and frontend run
+on host. See `SETUP.md` for the full team walkthrough.
 
 ```bash
-# 1. Infra
-docker compose up -d                  # postgres :5432, redis :6379, minio :9000/:9001
+# 1. Infra — floci is the default S3 (:4566); minio (:9000/:9001) is an alt, don't run both
+docker compose up -d postgres redis floci   # postgres :5432, redis :6379, floci :4566
 
 # 2. Backend
+cp backend/.env.example backend/.env  # PowerShell: Copy-Item backend/.env.example backend/.env
 cd backend
 python -m venv .venv && .venv\Scripts\activate     # Windows (use source .venv/bin/activate on *nix)
 pip install -r requirements.txt
@@ -131,14 +143,14 @@ test suite or lint config checked in — confirm before assuming one exists.
 ## Configuration
 
 Backend config is `backend/app/core/config.py` (pydantic-settings, reads `backend/.env`;
-keys are case-insensitive). See `.env.example` for the full list. Notable keys:
+keys are case-insensitive). See `backend/.env.example` for the full list. Notable keys:
 
 - `DATABASE_URL` (async, `postgresql+asyncpg://…`), `DATABASE_URL_SYNC` (optional; alembic
   derives a sync URL otherwise), `REDIS_URL`.
 - `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` (blank → fall back to `REDIS_URL`),
   `CELERY_EAGER`.
-- `S3_ENDPOINT` / `S3_BUCKET` / `S3_KEY` / `S3_SECRET` / `S3_REGION` (MinIO defaults:
-  `minioadmin`).
+- `S3_ENDPOINT` / `S3_BUCKET` / `S3_KEY` / `S3_SECRET` / `S3_REGION` (floci defaults:
+  `http://localhost:4566`, creds `test`/`test`; MinIO alt: `:9000`, `minioadmin`).
 - `LLM_PROVIDER` (`auto|anthropic|openai`), `ANTHROPIC_API_KEY`,
   `ANTHROPIC_DEFAULT_MODEL` (`claude-sonnet-4-6`), `OPENAI_API_KEY`, `OPENAI_DEFAULT_MODEL`.
 - `IMAGE_PROVIDER` (`auto|fal|replicate|google|none` — `none` produces palette-driven SVG

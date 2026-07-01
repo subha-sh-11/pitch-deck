@@ -1,56 +1,70 @@
 import type { SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
 interface GenreBlendSlideProps {
   content: SlideContent;
 }
 
-/**
- * Editorial "genre fusion" layout — a left-weighted, numbered vertical list with bold
- * display titles and accent rules, over a directional scrim so it stays legible on any image.
- */
 export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
   const items = content.items ?? [];
 
   return (
-    <SlideFrame imageUrl={content.imageUrl}>
-      {/* Directional scrim: dark where the text lives, opening up toward the image. */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/88 via-black/55 to-black/15" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-
-      <div className="relative flex h-full flex-col justify-center p-[7%]">
+    <SlideFrame>
+      {/* A grid of per-genre tiles — each genre gets its OWN image; no single shared background. */}
+      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+      <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Genre Blend"} />
         </SlideLabel>
-
-        <div className="mt-7 flex max-w-[64%] flex-col gap-5">
+        <div className="mt-6 grid flex-1 grid-cols-3 gap-4">
           {items.map((item, i) => (
-            <div key={i} className="flex items-start gap-4">
-              <span
-                className="font-display text-4xl font-bold leading-none"
-                style={{ color: "var(--slide-accent)" }}
-              >
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <div
-                className="border-l-2 pl-4"
-                style={{ borderColor: "color-mix(in srgb, var(--slide-accent) 55%, transparent)" }}
-              >
-                <EditableText
-                  k={`item-${i}-title`}
-                  as="h3"
-                  className="font-display text-[clamp(1.25rem,2.4vw,2rem)] font-semibold leading-tight text-[#F5F1E8]"
-                  value={item.title}
+            <div
+              key={i}
+              className="group relative flex flex-col justify-end overflow-hidden rounded-lg border border-white/[0.08] p-5 transition-colors hover:border-[var(--slide-accent,#22d3ee)]/30"
+              style={
+                item.imageUrl
+                  ? undefined
+                  : { background: `linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.4) 100%)` }
+              }
+            >
+              {item.imageUrl ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  {/* scrim so the genre label stays legible over its image */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/5" />
+                </>
+              ) : (
+                <div
+                  className="absolute inset-0 opacity-40"
+                  style={{
+                    background: `radial-gradient(circle at ${30 + i * 20}% 20%, rgba(34,211,238,${0.08 + i * 0.04}), transparent 60%)`,
+                  }}
                 />
-                <EditableText
-                  k={`item-${i}-desc`}
-                  as="p"
-                  multiline
-                  className="mt-1.5 max-w-md whitespace-pre-line text-[clamp(0.7rem,1vw,0.9rem)] leading-relaxed text-[#C9CDD3]"
-                  value={item.description}
-                />
+              )}
+              <div className="relative mb-2 flex items-center gap-2 text-[var(--slide-accent,#22d3ee)]">
+                <SlideIcon name={iconForLabel(item.title)} size={18} />
+                <span className="text-[10px] font-bold">0{i + 1}</span>
               </div>
+              <EditableText
+                k={`item-${i}-title`}
+                as="h3"
+                className="relative font-display text-xl font-semibold text-[var(--slide-text,#F5F1E8)]"
+                value={item.title}
+              />
+              <EditableText
+                k={`item-${i}-desc`}
+                as="p"
+                multiline
+                className="relative mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
+                value={item.description}
+              />
             </div>
           ))}
         </div>

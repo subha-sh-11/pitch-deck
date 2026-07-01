@@ -1,11 +1,10 @@
-import { redirect } from "next/navigation";
-import { projectRoutes } from "@/lib/routes";
+import { ReviewStudio } from "@/features/review/ReviewStudio";
 
-export default async function ReviewRedirect({
+export default async function ReviewPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(projectRoutes.editor(id));
+  return <ReviewStudio projectId={id} />;
 }

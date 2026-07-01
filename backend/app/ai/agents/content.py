@@ -30,6 +30,72 @@ def _mood_blocks(design: dict | None) -> list[dict]:
     ]
 
 
+def attach_film_backdrops(blocks: list) -> list:
+    """For visual-aesthetic mood tiles labelled with a reference FILM title, attach that film's
+    TMDB backdrop (a real still) as the tile image — so the slide shows actual visual references
+    from films whose look matches, not solid colours. Tiles TMDB can't match are left for the
+    image pipeline to fill with an original AI mood frame (never a bare colour swatch)."""
+    from app.ai import tmdb
+
+    out: list = []
+    for b in blocks or []:
+        if isinstance(b, dict):
+            b = dict(b)
+            label = str(b.get("label") or "").strip()
+            if label and not b.get("imageUrl"):
+                back = tmdb.backdrop_for(label)
+                if back:
+                    b["imageUrl"] = back
+        out.append(b)
+    return out
+
+
+def _three_acts(synopsis: str) -> list[dict]:
+    """Split a synopsis into a rough 3-act structure for the timeline (deterministic fallback)."""
+    sents = _split(synopsis, r"(?<=[.!?])\s+", 60)
+    if not sents:
+        return []
+    n = len(sents)
+    cut1 = max(1, round(n / 3))
+    cut2 = max(cut1 + 1, round(2 * n / 3))
+    chunks = [sents[:cut1], sents[cut1:cut2], sents[cut2:]]
+    labels = [("Act I", "Setup"), ("Act II", "Confrontation"), ("Act III", "Resolution")]
+    out: list[dict] = []
+    for (num, beat), chunk in zip(labels, chunks):
+        text = " ".join(chunk).strip()
+        if text:
+            out.append({"title": f"{num} · {beat}", "description": text})
+    return out
+
+
+def _parse_character_line(line: str) -> dict | None:
+    parts = [p.strip() for p in re.split(r"[—–-]", line) if p.strip()]
+    if not parts:
+        return None
+    return {"name": parts[0], "role": parts[1] if len(parts) > 1 else "",
+            "description": parts[2] if len(parts) > 2 else ""}
+
+
+def _relationship_fallback(intake: dict) -> dict:
+    """Deterministic relationship-map: character nodes + lead-to-others edges (no LLM)."""
+    nodes: list[dict] = []
+    seen: set[str] = set()
+    for key in ("mainCharacters", "supportingCharacters"):
+        for line in _split(_g(intake, key), r"[.;\n]", 4):
+            c = _parse_character_line(line)
+            if c and c["name"].lower() not in seen:
+                seen.add(c["name"].lower())
+                nodes.append(c)
+            if len(nodes) >= 6:
+                break
+    rels: list[dict] = []
+    if len(nodes) >= 2:
+        lead = nodes[0]["name"]
+        for other in nodes[1:]:
+            rels.append({"source": lead, "target": other["name"], "label": "connected to"})
+    return {"heading": "Relationship Map", "characters": nodes, "relationships": rels}
+
+
 def content_fallback(slide_type: str, intake: dict, design: dict | None = None) -> dict:
     """Deterministic SlideContent grounded in the intake form."""
     if slide_type == "cover":
@@ -43,7 +109,10 @@ def content_fallback(slide_type: str, intake: dict, design: dict | None = None) 
                  for t in _split(_g(intake, "genreBlend"), r"[+,&]", 3)]
         return {"heading": "Genre Blend", "items": items}
     if slide_type == "synopsis":
-        return {"heading": "Synopsis", "body": _g(intake, "synopsis")}
+        syn = _g(intake, "synopsis")
+        return {"heading": "Synopsis", "body": syn, "items": _three_acts(syn)}
+    if slide_type == "relationship_map":
+        return _relationship_fallback(intake)
     if slide_type == "story_world":
         return {"heading": "Story World", "body": _g(intake, "storyWorld")}
     if slide_type in ("character", "supporting_characters"):
@@ -71,22 +140,24 @@ def content_fallback(slide_type: str, intake: dict, design: dict | None = None) 
                 "items": [{"title": "Primary", "description": _g(intake, "targetAudience")},
                           {"title": "Release", "description": _g(intake, "releaseFit")}]}
     if slide_type == "budget":
-        return {"heading": "Budget & Production Scale",
-                "body": "Contained production positioned for strong ROI. Scale aligned with story scope."}
+        return {"heading": "Budget & Production Scale", "body": _g(intake, "budget")}
     if slide_type == "market_potential":
+        pairs = (("Release Fit", _g(intake, "releaseFit")),
+                 ("Distribution", _g(intake, "distribution")),
+                 ("Why Now", _g(intake, "whyNow")))
         return {"heading": "Market Potential",
-                "bullets": [b for b in [_g(intake, "releaseFit"),
-                                        "Regional OTT with pan-India subtitle appeal",
-                                        "Festival craft positioning available"] if b]}
+                "items": [{"title": t, "description": d} for t, d in pairs if d]}
     if slide_type == "directors_vision":
         return {"heading": "Director's Vision",
-                "body": _g(intake, "designDirection") or _g(intake, "synopsis")}
+                "body": (_g(intake, "directorVision") or _g(intake, "directorStatement")
+                         or _g(intake, "designDirection"))}
     if slide_type == "team":
         return {"heading": "Team & Production Status",
-                "body": "Development stage. Key creative attachments in progress."}
+                "body": " · ".join(b for b in (_g(intake, "creativeTeam"),
+                                               _g(intake, "productionStatus")) if b)}
     if slide_type == "contact":
         return {"heading": "Let's Talk", "subheading": _g(intake, "title"),
-                "body": "Ready for producer and investor conversations."}
+                "body": _g(intake, "pitchingTo") or _g(intake, "releaseFit")}
     return {"heading": "Slide", "body": _g(intake, "synopsis")}
 
 
@@ -101,20 +172,28 @@ _SYSTEM = (
     "anything that doesn't gets cut. A producer should grasp the slide in three seconds.\n"
     "  • GROUNDED: use STRICTLY the provided intake — never invent plot, characters, or facts "
     "not present. Specificity from the material beats cleverness.\n"
+    "  • DEPTH: a pitch slide can carry a substantial, well-structured beat — do NOT strip the "
+    "director's material down to a thin generic line. When the source gives you specifics (character "
+    "stakes, the world's texture, the real hook, numbers), put them on the slide. Use as much of the "
+    "provided content as the slide's job needs; under-using rich material reads as a WEAK deck, not "
+    "a premium one.\n"
     "  • PURPOSE-DRIVEN: the slide's stated purpose tells you the job — a cover seduces, a "
     "logline hooks, characters make us care, market slides make the money case. Write to the "
     "job, in the deck's stated tone.\n"
     "  • HEADLINES: evocative and specific to this story, never labels with a colon, never "
     "generic ('A World Like No Other' is a failure; name the world).\n"
-    "  • BODY: producer-readable — 1-3 tight sentences max, active voice, no filler ('truly', "
-    "'compelling', 'takes us on a journey'), no marketing froth. White space is part of the "
-    "design; less copy, better chosen, reads as more premium.\n"
-    "  • BULLETS/ITEMS: parallel construction, each one a distinct idea, 3-5 max, every word "
-    "earning its place.\n"
+    "  • BODY: producer-readable — 2-4 sentences (more on the synopsis / story-world slides where "
+    "the content warrants), active voice, no filler ('truly', 'compelling', 'takes us on a "
+    "journey') or marketing froth. Carry the SPECIFIC hook and stakes from the material rather than "
+    "compressing rich content into one generic line.\n"
+    "  • BULLETS/ITEMS: parallel construction, each a distinct, concrete idea pulled from the "
+    "material, 3-6 of them, every word earning its place.\n"
     "  • CHARACTERS: name — role — one line that makes a producer see the casting opportunity: "
-    "their want, their wound, their contradiction. For the main characters slide, include ONLY "
-    "the 3-4 PRIMARY leads (the people the story is about), most important first — never pad "
-    "with minor or supporting roles.\n"
+    "their want, their wound, their contradiction — PLUS a short `appearance`: apparent age or "
+    "age-range, build, and defining physical look, grounded in the script (infer sensibly from the "
+    "role when unstated), so the deck casts and renders the RIGHT face. For the main characters "
+    "slide, include ONLY the 3-4 PRIMARY leads (the people the story is about), most important "
+    "first — never pad with minor or supporting roles.\n"
     "  • SHOW CROSS / COMPS: always give exactly 3 comparable films or shows (never 2), each a "
     "real, recognisable title; the note says who it reached and why this project rhymes with it.\n"
     "  • EMOTIONAL THROUGHLINE: echo the story's central tension in the slide's language so the "
@@ -125,8 +204,28 @@ _SYSTEM = (
     "story material.\n"
     "Return ONLY a JSON object using ONLY the fields relevant to this slide type, from this set: "
     "heading (required), subheading, body, bullets (array of strings), items (array of {title, "
-    "description}), characters (array of {name, role, description}), comps (array of {title, note}), "
-    "moodBlocks (array of {label, color})."
+    "description}), characters (array of {name, role, description, appearance, wound}), comps "
+    "(array of {title, note}) — for SHOW CROSS, each comp.title is a real comparable film/series "
+    "the deck will show a poster for, so use exact, findable titles. For a GENRE-BLEND slide, items "
+    "are the genres THIS film actually blends (from its genreBlend): title = the genre, description "
+    "= ONE specific line on how THAT genre genuinely shows up in THIS story (distinct per genre, "
+    "grounded in real events — NEVER the same line or the tone repeated across all three). "
+    "moodBlocks (array of {label, "
+    "color}) — for a VISUAL AESTHETIC slide, make these 4-6 REFERENCE FILMS whose cinematography, "
+    "mood and tone match THIS film: set label to the EXACT, findable film title and color to a hex "
+    "sampled from that film's palette; the deck shows each film's still as a visual reference. "
+    "relationships (array of {source, target, label}). "
+    "For a SYNOPSIS slide, ALSO return `items` as EXACTLY THREE acts so the slide renders as a "
+    "3-act timeline: title = 'Act I · <2-3 word beat>' (then Act II, Act III), description = 2-3 "
+    "sentences of that act's story drawn from the synopsis. "
+    "For a RELATIONSHIP MAP slide, return `characters` (the 4-6 key people as nodes: name, role, "
+    "one short line) AND `relationships`: each {source, target, label} where source and target are "
+    "character NAMES from this story and label is the relationship in 1-3 words grounded in the "
+    "dynamics (e.g. 'protects', 'hunts', 'mentors', 'betrays', 'awakens hope in') — never a generic "
+    "'connected to'. "
+    "For a MARKET-POTENTIAL slide, return `items` as 3-4 {title, description}: title = a SHORT "
+    "market-angle label (e.g. 'Release Fit', 'Distribution', 'Why Now', 'Audience Size'), "
+    "description = one concrete sentence making that commercial point for THIS film."
 )
 
 
@@ -136,16 +235,17 @@ _PRIMARY_FIELDS: dict[str, list[str]] = {
     "cover": ["body"],
     "logline": ["body"],
     "genre_blend": ["items"],
-    "synopsis": ["body"],
+    "synopsis": ["body", "items"],
     "story_world": ["body"],
     "character": ["characters"],
     "supporting_characters": ["characters"],
+    "relationship_map": ["relationships"],
     "usp": ["bullets"],
     "show_cross": ["comps"],
     "visual_aesthetic": ["body", "moodBlocks"],
     "target_audience": ["items"],
     "budget": ["body"],
-    "market_potential": ["bullets"],
+    "market_potential": ["items"],
     "directors_vision": ["body"],
     "team": ["body"],
     "contact": ["body"],
@@ -171,12 +271,43 @@ def _label(camel: str) -> str:
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", camel).replace("_", " ").title()
 
 
+# The extracted-summary fields each slide is BUILT FROM — its "placeholders". Generation slots
+# THESE (and only these) into the per-slide prompt, so every slide stays on its own beat and
+# grounded in the story, instead of drowning in the entire intake dump on every slide.
+_SLIDE_FIELDS: dict[str, list[str]] = {
+    "cover": ["title", "tagline", "logline", "genreBlend"],
+    "logline": ["logline", "tone", "themes"],
+    "genre_blend": ["genreBlend", "tone", "themes"],
+    "synopsis": ["synopsis", "storyWorld", "themes"],
+    "story_world": ["storyWorld", "visualMood", "keyScenes", "themes"],
+    "character": ["mainCharacters", "characterDynamics"],
+    "supporting_characters": ["supportingCharacters", "characterDynamics"],
+    "relationship_map": ["mainCharacters", "characterDynamics", "supportingCharacters"],
+    "usp": ["usp", "whyNow", "genreBlend"],
+    "show_cross": ["showCross", "targetAudience"],
+    "visual_aesthetic": ["visualAesthetic", "colorPalette", "textureStyle", "visualMood", "designDirection"],
+    "target_audience": ["targetAudience", "releaseFit", "distribution"],
+    "budget": ["budget", "productionStatus", "format"],
+    "market_potential": ["releaseFit", "distribution", "whyNow", "targetAudience"],
+    "directors_vision": ["directorVision", "directorStatement", "designDirection", "themes"],
+    "team": ["creativeTeam", "productionStatus"],
+    "contact": ["title", "pitchingTo"],
+    "generic": ["logline", "synopsis"],
+}
+
+# A compact throughline carried on every slide (so the deck reads as one voice), unless the field
+# is already this slide's primary material.
+_THROUGHLINE = ["title", "logline", "tone"]
+
+
 def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
                    design: dict | None, instructions: str | None = None,
                    reference_slide: dict | None = None) -> str:
-    """The exact user-prompt string sent to the LLM for this slide — plain English,
-    so the workshop's prompt panel reads like a brief, not code. Generation uses
-    this same text verbatim."""
+    """The exact user-prompt sent to the LLM for THIS slide — a focused brief that slots only the
+    extracted-summary fields this slide is built from (its "placeholders") plus a short throughline,
+    rather than dumping the whole intake on every slide. Shown verbatim in the workshop panel, so
+    each slide's prompt reads as a clear, on-theme brief. ``reference_slide`` optionally supplies a
+    matching slide from an uploaded reference deck to emulate."""
     design = design or {}
     lines: list[str] = [
         f'Write the "{title}" slide of this film pitch deck.',
@@ -186,16 +317,28 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
     ]
     if design.get("cinematicTone"):
         lines.append(f"DECK TONE: {design['cinematicTone']}")
-    if design.get("mood"):
-        lines.append(f"DECK MOOD: {design['mood']}")
     visual_style = design.get("visualStyle")
     if isinstance(visual_style, list) and visual_style:
-        lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style))
+        lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style[:4]))
 
-    lines += ["", "STORY MATERIAL (ground every word strictly in this; never invent):"]
-    for key, value in (intake or {}).items():
-        if isinstance(value, str) and value.strip():
-            lines.append(f"- {_label(key)}: {value.strip()}")
+    relevant = _SLIDE_FIELDS.get(slide_type, ["logline", "synopsis"])
+    lines += ["", "THIS SLIDE IS BUILT FROM (use these exact details; do not pull in other slides' "
+              "material):"]
+    filled = False
+    for key in relevant:
+        val = _g(intake, key)
+        if val:
+            lines.append(f"- {_label(key)}: {val}")
+            filled = True
+    if not filled:
+        lines.append("- (nothing specific captured yet — infer tightly from the throughline below; "
+                     "never invent plot)")
+
+    throughline = [f"- {_label(k)}: {_g(intake, k)}"
+                   for k in _THROUGHLINE if _g(intake, k) and k not in relevant]
+    if throughline:
+        lines += ["", "STORY THROUGHLINE (keep one voice; do NOT restate these on this slide):"]
+        lines += throughline
 
     # The matching slide from the director's reference deck — match its ANGLE, section
     # framing and length, but write entirely from THIS film's story material above.
@@ -239,9 +382,13 @@ def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | 
     )
     if not isinstance(result, dict):
         result = fb
-    # visual_aesthetic moodBlocks should reflect the real palette even if the LLM omitted them
-    if slide_type == "visual_aesthetic" and not result.get("moodBlocks"):
-        result["moodBlocks"] = _mood_blocks(design)
+    # visual_aesthetic: each mood tile is a REFERENCE FILM — attach its real still (TMDB backdrop)
+    # so the slide shows actual visual references, not solid colours. Tiles TMDB can't match are
+    # filled with an original AI mood frame later in the image pipeline.
+    if slide_type == "visual_aesthetic":
+        if not result.get("moodBlocks"):
+            result["moodBlocks"] = _mood_blocks(design)
+        result["moodBlocks"] = attach_film_backdrops(result["moodBlocks"])
     result = _ensure_renderable(slide_type, result, fb)
 
     # Show Cross: attach real comparable-film posters (TMDB) when available.

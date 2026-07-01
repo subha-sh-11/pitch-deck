@@ -1,11 +1,10 @@
-import { redirect } from "next/navigation";
-import { projectRoutes } from "@/lib/routes";
+import { ExportStudio } from "@/features/export/ExportStudio";
 
-export default async function ExportRedirect({
+export default async function ExportPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(projectRoutes.editor(id));
+  return <ExportStudio projectId={id} />;
 }

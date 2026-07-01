@@ -21,8 +21,10 @@ export const projectRoutes = {
   outline: (id: string) => `/projects/${id}/templates`,
   content: (id: string) => `/projects/${id}/templates`,
   design: (id: string) => `/projects/${id}/templates`,
-  review: (id: string) => `/projects/${id}/setup/identity`,
-  export: (id: string) => `/projects/${id}/setup/identity`,
+  /** AI quality-review screen (deck QA score + issues to fix). */
+  review: (id: string) => `/projects/${id}/review`,
+  /** Real export/download page (PDF / PPTX / images / print). */
+  export: (id: string) => `/projects/${id}/export`,
   step: (id: string, stepId: WorkflowStepId) => {
     const map: Record<WorkflowStepId, (projectId: string) => string> = {
       intake: projectRoutes.setupIdentity,
@@ -32,8 +34,8 @@ export const projectRoutes = {
       content: projectRoutes.templates,
       design: projectRoutes.templates,
       editor: projectRoutes.editor,
-      review: projectRoutes.editor,
-      export: projectRoutes.editor,
+      review: projectRoutes.review,
+      export: projectRoutes.export,
     };
     return map[stepId](id);
   },

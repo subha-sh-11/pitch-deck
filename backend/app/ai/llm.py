@@ -17,6 +17,15 @@ from app.core.logging import get_logger
 
 _log = get_logger("llm")
 
+# The most recent LLM failure reason (empty after any success), so the UI can show WHY a request
+# fell back to deterministic output — a generic "can't reach the model" hides quota/key problems.
+_last_error: str = ""
+
+
+def last_error() -> str:
+    """Reason the last LLM call fell back (e.g. 'openai (gpt-4o): … insufficient_quota'), or ''."""
+    return _last_error
+
 
 # ─── Provider backends (each returns raw assistant text) ───
 
@@ -170,8 +179,11 @@ def complete_json(
     interview) where every turn must be fresh — caching identical (system, prompt) pairs
     would make the agent repeat itself verbatim.
     """
+    global _last_error
     resolved = resolve_provider()
     if resolved is None:
+        _last_error = ("no AI text provider configured — set ANTHROPIC_API_KEY or OPENAI_API_KEY in "
+                       "backend/.env (and LLM_PROVIDER=auto)")
         _log.info("llm[%s] no provider → fallback", cache_prefix)
         return fallback()
 
@@ -200,8 +212,10 @@ def complete_json(
             context,
         )
         result = _extract_json(raw)
+        _last_error = ""
         _log.info("llm[%s] %s/%s ok", cache_prefix, name, use_model)
     except Exception as exc:  # noqa: BLE001
+        _last_error = f"{name} ({use_model}): {str(exc)[:200]}"
         _log.warning("llm[%s] %s failed (%s) → fallback", cache_prefix, name, exc)
         return fallback()
 

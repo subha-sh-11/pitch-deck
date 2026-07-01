@@ -121,15 +121,14 @@ export function ProjectForm() {
           <Input
             label="Language / Market"
             name="language"
-            placeholder="Telugu, Hindi, Pan-India, Global Indie"
-            defaultValue="Telugu"
+            placeholder="e.g. Telugu, Hindi, Pan-India, Global Indie"
           />
-          <Input label="Primary Genre" name="genre" placeholder="Survival Thriller" />
+          <Input label="Primary Genre" name="genre" placeholder="e.g. Crime Drama" />
           <div className="md:col-span-2">
             <Input
               label="Genre Blend"
               name="genreBlend"
-              placeholder="Survival Thriller + Suspense Drama + Childhood Comedy"
+              placeholder="e.g. Crime + Comedy + Drama"
             />
           </div>
         </div>

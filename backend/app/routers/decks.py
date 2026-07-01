@@ -1,6 +1,7 @@
 """Deck + slide read/edit endpoints."""
 from __future__ import annotations
 
+import base64
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.ai.agents import slide_edit
+from app.ai.agents import design_candidates, slide_edit
 from app.core.db import get_db
-from app.models import Project, Slide
+from app.core.storage import load_asset_bytes
+from app.models import Asset, Project, Slide
 from app.routers.deps import get_owned_project
 from app.schemas.slide import SlideCreate, SlideUpdate
 from app.services import deck_service
@@ -24,9 +26,35 @@ class DeckCommand(BaseModel):
 
     instruction: str
     slides: list[dict] = Field(default_factory=list)
-    # Reference images shared this turn: [{"name", "mediaType", "data": <base64>}]. Lets the
-    # editor SEE a screenshot of a slide (to target it) or a style reference.
+    # Recent chat turns [{"role": "user"|"assistant", "text": str}] so the agent can resolve
+    # follow-ups ("9th", "that slide") against its own previous question.
+    history: list[dict] = Field(default_factory=list)
+    # The slide the director currently has open in the workshop — the default edit target.
+    selected_slide_id: str | None = Field(default=None, alias="selectedSlideId")
+    # Reference images shared this turn ([{"name","mediaType","data": <base64>}]) the agent
+    # analyses to adapt the deck's look. Capped/cleaned defensively.
     images: list[dict] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+_MAX_IMAGES = 4
+_MAX_IMAGE_B64 = 4_000_000  # ~3 MB binary per image
+
+
+def _clean_images(images: list[dict]) -> list[dict] | None:
+    cleaned = [
+        {
+            "name": str(img.get("name", "reference"))[:120],
+            "mediaType": str(img.get("mediaType", "image/jpeg")),
+            "data": img["data"],
+        }
+        for img in images
+        if isinstance(img, dict)
+        and isinstance(img.get("data"), str)
+        and 0 < len(img["data"]) <= _MAX_IMAGE_B64
+    ][:_MAX_IMAGES]
+    return cleaned or None
 
 
 @router.post("/projects/{project_id}/deck/command")
@@ -39,8 +67,71 @@ async def deck_command(
     This is the agent action layer: the chat drives real changes to the deck. The LLM call is
     blocking, so it runs off the event loop; results are sanitized to safe, well-formed actions.
     """
-    result = await run_in_threadpool(slide_edit.run, body.instruction, body.slides, body.images)
+    result = await run_in_threadpool(
+        slide_edit.run,
+        body.instruction,
+        body.slides,
+        body.history,
+        body.selected_slide_id,
+        _clean_images(body.images),
+    )
     return slide_edit.sanitize(result if isinstance(result, dict) else {}, body.slides)
+
+
+class DesignApply(BaseModel):
+    """A chosen visual-system candidate to apply deck-wide."""
+
+    design: dict = Field(default_factory=dict)
+
+
+async def _reference_images(db: AsyncSession, project_id, limit: int = 4) -> list[dict] | None:
+    """Director's visual-direction references as [{"mediaType","data": <base64>}] so the design
+    agent can match them. Async mirror of generation_service._load_reference_images."""
+    rows = (await db.execute(
+        select(Asset).where(Asset.project_id == project_id, Asset.kind == "upload_ref")
+    )).scalars().all()
+    refs: list[dict] = []
+    for a in rows:
+        meta = a.generation_meta or {}
+        if meta.get("source") != "visual_direction":
+            continue
+        data = await run_in_threadpool(load_asset_bytes, a.storage_key, meta.get("stored_in_s3"))
+        if not data:
+            continue
+        refs.append({"mediaType": a.mime or "image/jpeg",
+                     "data": base64.b64encode(data).decode("ascii")})
+        if len(refs) >= limit:
+            break
+    return refs or None
+
+
+@router.post("/projects/{project_id}/design/candidates")
+async def design_candidates_endpoint(
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Generate 4-5 distinct, story-grounded visual systems for the director to choose from.
+    When the director has uploaded visual references, they steer at least one candidate.
+
+    Synchronous (one LLM call returning all candidates) — runs off the event loop.
+    """
+    proj = {"genres": project.genres or [], "tone": project.tone or []}
+    refs = await _reference_images(db, project.id)
+    return await run_in_threadpool(design_candidates.run, proj, project.intake_form or {}, refs)
+
+
+@router.put("/projects/{project_id}/deck/design")
+async def set_deck_design(
+    body: DesignApply,
+    project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply a chosen visual system to the deck so every slide (and future generation) uses it."""
+    deck = await _get_deck_or_404(db, project.id)
+    deck.design_direction = body.design
+    await db.commit()
+    refreshed = await deck_service.get_deck_for_project(db, project.id)
+    return deck_service.serialize_deck(refreshed) if refreshed else {"ok": True}
 
 
 @router.get("/projects/{project_id}/deck")

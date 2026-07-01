@@ -1,5 +1,6 @@
 import type { DesignDirection } from "./design";
 import type { Slide, SlideType } from "./slide";
+import type { QualityReview } from "./workflow";
 
 export type DeckStatus =
   | "draft"
@@ -24,4 +25,6 @@ export interface Deck {
   status: DeckStatus;
   slides: Slide[];
   designDirection: DesignDirection;
+  /** Structural QA over the finished deck (backend quality-review pass). */
+  qualityReview?: QualityReview | null;
 }

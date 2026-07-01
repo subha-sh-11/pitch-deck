@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
 import { projectRoutes } from "@/lib/routes";
+import { useSmoothProgress } from "@/lib/use-smooth-progress";
 import type { SlideContent } from "@/types/slide";
 import { DeckSlideIndex } from "./DeckSlideIndex";
 import { GeneratingOverlay } from "./GeneratingOverlay";
@@ -33,6 +34,10 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const displayProgress = useSmoothProgress(
+    generationProgress,
+    generationStatus === "generating",
+  );
 
   useEffect(() => {
     if (!isStepComplete("pitch")) {
@@ -47,13 +52,9 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
     }
   }, [draftSlides.length, initDraftSlides]);
 
-  useEffect(() => {
-    if (draftSlides.length > 0 && !selectedId) {
-      setSelectedId(draftSlides[0].id);
-    }
-  }, [draftSlides, selectedId]);
-
-  const selected = getSelectedSlide(draftSlides, selectedId);
+  // Default to the first slide when nothing is explicitly selected — derived, not stored,
+  // so there's no setState-in-effect. User selections still take precedence via selectedId.
+  const selected = getSelectedSlide(draftSlides, selectedId) ?? draftSlides[0];
 
   async function handleRegenerateSlide() {
     if (!selected) return;
@@ -81,7 +82,7 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
   if (draftSlides.length === 0 || !selected) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center text-sm text-zinc-500">
-        {generationStatus === "generating" && <GeneratingOverlay progress={generationProgress} />}
+        {generationStatus === "generating" && <GeneratingOverlay progress={displayProgress} />}
         {generationError ? (
           <p className="max-w-md text-red-400">Generation failed: {generationError}</p>
         ) : (
@@ -93,7 +94,7 @@ export function SlideContentPreview({ projectId }: SlideContentPreviewProps) {
 
   return (
     <>
-      {generationStatus === "generating" && <GeneratingOverlay progress={generationProgress} />}
+      {generationStatus === "generating" && <GeneratingOverlay progress={displayProgress} />}
 
       <div className="preview-studio-root preview-page-refined flex min-h-0 flex-1 flex-col">
         <PreviewCinematicBackground />

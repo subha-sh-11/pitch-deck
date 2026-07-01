@@ -25,6 +25,7 @@ _MIN_SLIDES, _MAX_SLIDES = 6, 20
 # Optional slide types and the intake fields that justify including them.
 _GROUNDING: dict[str, tuple[str, ...]] = {
     "supporting_characters": ("mainCharacters", "characterDynamics"),
+    "relationship_map": ("characterDynamics", "mainCharacters", "supportingCharacters"),
     "team": ("creativeTeam", "productionStatus"),
     "budget": ("budget",),
     "market_potential": ("releaseFit", "distribution", "targetAudience"),

@@ -10,10 +10,9 @@ export function VisualAestheticSlide({ content }: VisualAestheticSlideProps) {
   const blocks = content.moodBlocks ?? [];
 
   return (
-    <SlideFrame imageUrl={content.imageUrl}>
-      <div
-        className={`absolute inset-0 ${content.imageUrl ? "bg-black/45" : "bg-[#0a0a0c]"}`}
-      />
+    <SlideFrame>
+      {/* A moodboard of per-tile film references — each tile its OWN still; no single shared bg. */}
+      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Visual Aesthetic"} />
@@ -23,7 +22,7 @@ export function VisualAestheticSlide({ content }: VisualAestheticSlideProps) {
             k="body"
             as="p"
             multiline
-            className="mt-2 whitespace-pre-line text-xs text-[#9CA3AF]"
+            className="mt-2 whitespace-pre-line text-xs text-[var(--slide-text-muted,#9CA3AF)]"
             value={content.body}
           />
         )}
@@ -34,9 +33,17 @@ export function VisualAestheticSlide({ content }: VisualAestheticSlideProps) {
               className={`relative flex flex-col justify-end overflow-hidden rounded-md p-3 ${
                 i === 0 ? "col-span-2 row-span-1" : ""
               }`}
-              style={{ backgroundColor: block.color }}
+              style={block.imageUrl ? undefined : { backgroundColor: block.color }}
             >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              {block.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={block.imageUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
               <EditableText
                 k={`mood-${i}-label`}
                 as="span"
