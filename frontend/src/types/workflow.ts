@@ -37,19 +37,27 @@ export interface IntakeAnalysis {
   followUpQuestions: { question: string; placeholder: string }[];
 }
 
-export interface QualityReviewFinding {
-  slideTitle: string;
-  status: "strong" | "needs_work" | "needs_detail";
-  suggestion: string;
+export type QualityIssueSeverity = "high" | "medium" | "low";
+
+/** One problem the quality-review agent found. Mirrors backend quality_review.run() output. */
+export interface QualityReviewIssue {
+  severity: QualityIssueSeverity;
+  /** 1-based slide number the issue is about, when slide-specific. */
+  slideNumber?: number | null;
+  slideType?: string | null;
+  /** repeated_images | missing_producer_slide | readability | generic_copy | spelling | … */
+  category: string;
+  message: string;
 }
 
+/** Structural QA over the finished deck (stored on Deck.qualityReview). */
 export interface QualityReview {
-  overallReadiness: number;
-  contentClarity: number;
-  visualConsistency: number;
-  investorReadiness: number;
-  exportReadiness: number;
-  findings: QualityReviewFinding[];
+  /** 0–100, a clean 100 docked by issue severity. */
+  score: number;
+  summary: string;
+  issues: QualityReviewIssue[];
+  /** ISO-8601 timestamp of when the review ran. */
+  checkedAt?: string;
 }
 
 export interface IntakeFormData {
@@ -61,6 +69,7 @@ export interface IntakeFormData {
   synopsis: string;
   storyWorld: string;
   mainCharacters: string;
+  supportingCharacters: string;
   characterDynamics: string;
   usp: string;
   showCross: string;
@@ -81,6 +90,7 @@ export interface IntakeFormData {
   pitchingTo: string;
   creativeTeam: string;
   directorStatement: string;
+  directorVision: string;
   budget: string;
   productionStatus: string;
   distribution: string;

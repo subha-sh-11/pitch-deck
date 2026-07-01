@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-# Canonical 16-slide outline (slide_type, title, purpose, required)
+# Canonical slide outline (slide_type, title, purpose, required). `relationship_map` is appended
+# LAST so existing template indices stay stable; templates place it after the character slides.
 CANONICAL_OUTLINE: list[dict[str, Any]] = [
     {"slide_type": "cover", "title": "Cover", "purpose": "Establish title, tone, and first cinematic impression.", "required": True},
     {"slide_type": "logline", "title": "Logline", "purpose": "Communicate the story hook in one powerful sentence.", "required": True},
@@ -26,32 +27,35 @@ CANONICAL_OUTLINE: list[dict[str, Any]] = [
     {"slide_type": "directors_vision", "title": "Director's Vision", "purpose": "Present the filmmaker's emotional and creative intent.", "required": True},
     {"slide_type": "team", "title": "Team & Production Status", "purpose": "Show attached talent, stage, and current readiness.", "required": False},
     {"slide_type": "contact", "title": "Contact", "purpose": "End with clear next-step communication.", "required": True},
+    {"slide_type": "relationship_map", "title": "Relationship Map", "purpose": "Map the emotional and conflict relationships that drive the story.", "required": False},
 ]
+# Index of the appended relationship-map slide, inserted into templates after the character block.
+_REL_MAP = len(CANONICAL_OUTLINE) - 1
 
 # Templates select a subset of the canonical outline by index.
 TEMPLATES: dict[str, dict[str, Any]] = {
     "investor-thriller": {
         "name": "Investor Thriller Deck",
         "description": "For financiers and producers. Emphasizes market, budget, and commercial hook.",
-        "indices": list(range(0, 14)),
+        "indices": [0, 1, 2, 3, 4, 5, 6, _REL_MAP, 7, 8, 9, 10, 11, 12, 13],
         "match_tags": ["survival", "thriller", "investor", "suspense", "dark", "contained"],
     },
     "ott-streaming": {
         "name": "OTT / Streaming Pitch",
         "description": "Audience-first structure for platform executives.",
-        "indices": [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 12, 15],
+        "indices": [0, 1, 2, 3, 4, 5, _REL_MAP, 7, 8, 9, 10, 12, 15],
         "match_tags": ["ott", "streaming", "audience", "telugu", "series", "thriller"],
     },
     "festival-directors": {
         "name": "Festival Director's Vision",
         "description": "Craft and vision led. For festival programmers and creative attachments.",
-        "indices": [0, 1, 2, 3, 4, 5, 8, 9, 10, 13, 14, 15],
+        "indices": [0, 1, 2, 3, 4, 5, _REL_MAP, 8, 9, 10, 13, 14, 15],
         "match_tags": ["festival", "director", "vision", "poetic", "artistic"],
     },
     "series-bible-lite": {
         "name": "Series Bible Lite",
         "description": "Expanded character and world focus for limited series or multi-season OTT.",
-        "indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15],
+        "indices": [0, 1, 2, 3, 4, 5, 6, _REL_MAP, 7, 8, 10, 12, 13, 14, 15],
         "match_tags": ["web series", "series", "character", "world", "ott"],
     },
 }

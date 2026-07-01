@@ -39,6 +39,12 @@ export function contentForSlideType(
   slideType: SlideType,
   form: IntakeFormData,
 ): SlideContent {
+  // Everything below derives from the user's OWN intake — no hardcoded story content. Empty fields
+  // yield empty content; the backend content agent writes the real copy at generation time.
+  const split = (text: string, re: RegExp, limit: number) =>
+    text.split(re).map((s) => s.trim()).filter(Boolean).slice(0, limit);
+  const joined = (...xs: string[]) => xs.map((s) => s.trim()).filter(Boolean);
+
   switch (slideType) {
     case "cover": {
       const synopsisLead = form.synopsis.trim().split(/\n/)[0]?.trim() ?? "";
@@ -52,136 +58,91 @@ export function contentForSlideType(
     case "logline":
       return { heading: "Logline", body: form.logline };
     case "genre_blend": {
-      const genres = form.genreBlend
-        .split(/[+,&]/)
-        .map((g) => g.trim())
-        .filter(Boolean)
-        .slice(0, 3);
-      const descriptions = [
-        "A race against rising water and disappearing air.",
-        "Parents search helplessly while the truth stays above them.",
-        "Mischief, friendship, and innocence make the danger hit harder.",
-      ];
+      const genres = split(form.genreBlend, /[+,&]/, 3);
       return {
         heading: "Genre Blend",
-        items: genres.map((title, i) => ({
+        items: genres.map((title) => ({
           title,
-          description: descriptions[i] ?? form.tone,
+          description: form.tone || (form.title ? `${title} in ${form.title}` : title),
         })),
       };
     }
     case "synopsis":
-      return {
-        heading: "Synopsis",
-        body: form.synopsis,
-      };
+      return { heading: "Synopsis", body: form.synopsis };
     case "story_world":
-      return {
-        heading: "Story World",
-        body: form.storyWorld,
-        items: [
-          { title: "Rooftop Water Tank", description: "The silent villain above the city" },
-          { title: "Apartment Corridors", description: "Claustrophobic urban maze" },
-          { title: "Family Homes", description: "Emotional anchor and guilt" },
-          { title: "City Search", description: "Desperate scale, wrong direction" },
-        ],
-      };
+      return { heading: "Story World", body: form.storyWorld };
     case "character":
-    case "supporting_characters":
+    case "supporting_characters": {
+      const source =
+        slideType === "supporting_characters"
+          ? form.supportingCharacters || form.mainCharacters
+          : form.mainCharacters;
       return {
         heading: slideType === "character" ? "Main Characters" : "Supporting Characters",
-        characters: form.mainCharacters
-          .split(/[.;]/)
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .slice(0, 3)
-          .map((line) => {
-            const parts = line.split("—").map((p) => p.trim());
-            return {
-              name: parts[0] || "Character",
-              role: parts[1] || "Lead",
-              description: parts[2] || form.characterDynamics,
-            };
-          }),
+        characters: split(source, /[.;]/, 6).map((line) => {
+          const parts = line.split("—").map((p) => p.trim());
+          return {
+            name: parts[0] || "Character",
+            role: parts[1] || "",
+            description: parts[2] || form.characterDynamics || "",
+          };
+        }),
+      };
+    }
+    case "relationship_map":
+      return {
+        heading: "Relationship Map",
+        characters: split(form.mainCharacters, /[.;]/, 6).map((line) => {
+          const parts = line.split("—").map((p) => p.trim());
+          return { name: parts[0] || "Character", role: parts[1] || "", description: parts[2] || "" };
+        }),
+        relationships: [],
       };
     case "usp":
-      return {
-        heading: "Unique Selling Points",
-        bullets: [
-          "Low-budget high-impact contained thriller",
-          "Child heroes with immediate audience empathy",
-          "Contained survival premise",
-          "Strong family emotional payoff",
-          "OTT-friendly survival tension",
-        ],
-      };
+      return { heading: "Unique Selling Points", bullets: split(form.usp, /[.;]/, 5) };
     case "show_cross":
       return {
         heading: "Show Cross",
-        body: "Fall meets Helen with the emotional survival intensity of Manjummel Boys.",
-        comps: form.showCross
-          .split(/[,×x]/)
-          .map((c) => c.trim())
-          .filter(Boolean)
-          .slice(0, 3)
-          .map((title) => ({
-            title,
-            note:
-              title.toLowerCase().includes("fall")
-                ? "Vertigo dread and contained height tension."
-                : title.toLowerCase().includes("helen")
-                  ? "Parental search drama with ticking urgency."
-                  : "Friendship under survival pressure.",
-          })),
+        comps: split(form.showCross, /[,×x]/, 3).map((title) => ({
+          title,
+          note: form.targetAudience,
+        })),
       };
     case "visual_aesthetic":
       return {
         heading: "Visual Aesthetic",
         body: form.visualAesthetic || form.designDirection,
-        moodBlocks: [
-          { label: "Concrete", color: "#2A2A2A" },
-          { label: "Water", color: "#A9C6C7" },
-          { label: "Rust", color: "#8A4B2A" },
-          { label: "Moss Green", color: "#3F5F4A" },
-          { label: "Narrow Light", color: "#67e8f9" },
-          { label: "Rooftop Isolation", color: "#1a1a1f" },
-        ],
+        // Reference-film mood tiles are generated by the backend — nothing hardcoded here.
+        moodBlocks: [],
       };
     case "target_audience":
       return {
         heading: "Target Audience",
         items: [
-          { title: "Family Audience", description: "Emotional payoff with universal parental stakes" },
-          { title: "Thriller Viewers", description: "Contained survival tension with escalating dread" },
-          { title: "Telugu Urban Viewers", description: "Hyderabad apartment world with regional authenticity" },
-          { title: "OTT Survival Drama", description: "Bingeable tension with strong emotional resolution" },
-        ],
+          { title: "Audience", description: form.targetAudience },
+          { title: "Release", description: form.releaseFit },
+        ].filter((it) => it.description.trim()),
       };
     case "budget":
-      return {
-        heading: "Budget & Production Scale",
-        body: "Estimated range: ₹8–15 crore. Single primary location (apartment + rooftop tank). 45–55 shooting days.",
-        bullets: ["Single-location production", "Limited night exteriors", "Modular tank set build"],
-      };
+      return { heading: "Budget & Production Scale", body: form.budget };
     case "market_potential":
       return {
         heading: "Market Potential",
         items: [
-          { title: "Contained production scale", description: form.releaseFit },
-          { title: "OTT-friendly tension", description: "Bingeable survival arc with emotional climax" },
-          { title: "Strong emotional payoff", description: "Family reconciliation drives word-of-mouth" },
-          { title: "Regional authenticity", description: "Telugu urban world with pan-India subtitle appeal" },
-        ],
+          { title: "Release Fit", description: form.releaseFit },
+          { title: "Distribution", description: form.distribution },
+          { title: "Why Now", description: form.whyNow },
+        ].filter((it) => it.description.trim()),
       };
     case "directors_vision":
       return {
         heading: "Director's Vision",
-        body: form.designDirection || form.synopsis,
+        body: form.directorVision || form.directorStatement || form.designDirection,
       };
     case "team":
       return {
         heading: "Team & Production Status",
-        body: "Development stage. Key creative attachments in progress.",
+        body: joined(form.creativeTeam, form.productionStatus).join(" · "),
       };
     case "contact":
       return {

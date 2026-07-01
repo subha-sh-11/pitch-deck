@@ -4,6 +4,7 @@ export { GenreBlendSlide } from "./GenreBlendSlide";
 export { SynopsisSlide } from "./SynopsisSlide";
 export { StoryWorldSlide } from "./StoryWorldSlide";
 export { CharacterSlide } from "./CharacterSlide";
+export { RelationshipMapSlide } from "./RelationshipMapSlide";
 export { USPGridSlide } from "./USPGridSlide";
 export { ShowCrossSlide } from "./ShowCrossSlide";
 export { VisualAestheticSlide } from "./VisualAestheticSlide";

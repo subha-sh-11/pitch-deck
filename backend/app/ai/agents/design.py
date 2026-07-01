@@ -13,8 +13,14 @@ from app.ai.registers import (
     FONT_BY_REGISTER,
     REGISTERS,
     design_direction_fallback,
+    infer_brightness,
     select_register,
 )
+
+# Display fonts the frontend can actually load, and graphic motifs it can render. The LLM is
+# constrained to these so a reference-driven choice always maps to something renderable.
+_VALID_FONTS = {"cormorant", "playfair", "oswald", "poppins", "anton"}
+_VALID_MOTIFS = {"film_strip", "grain", "vignette", "frame"}
 
 
 _SYSTEM = (
@@ -29,11 +35,24 @@ _SYSTEM = (
     "fonts in typography, so the result clearly resembles their reference, then refine for "
     "cinematic quality and contrast.\n"
     "Craft rules:\n"
-    "  • PALETTE (6 colors, real hex): build it like a colorist grading the film — a dominant "
-    "dark base for slide grounds, one signature accent that carries the story's emotional "
-    "temperature, supporting mid-tones, and a light text tone. Name colors evocatively for THIS "
-    "story ('Monsoon Slate', not 'Dark Gray') and give each a concrete `usage` (backgrounds / "
-    "headlines / accents / captions) so every slide applies them identically — consistency across "
+    "  • GENRE REGISTER — tune the WHOLE system to the genre; do NOT default every deck to the "
+    "same dark look. Crime/thriller/horror → dark, gritty, high-contrast, cold. Romance → warm, "
+    "soft, airy. Comedy → bright, playful, saturated. Sports → energetic, punchy, motion. "
+    "Mythology/fantasy → grand, rich, ornamental. Family/feel-good → warm and luminous. Match the "
+    "story's emotional temperature, not a house style. The payload's targetBrightness "
+    "(light | dark | neutral) is BINDING: light -> light/warm slide grounds, dark -> deep dark "
+    "grounds, neutral -> tasteful mid-tones; never force near-black on a light or neutral brief.\n"
+    "  • PALETTE (6 colors, real hex), covering these 5 ROLES at minimum: a base for slide grounds, "
+    "primary text, secondary text, one signature accent that carries the story's emotional "
+    "temperature, and a highlight/CTA. Build it like a colorist grading the film. The base is "
+    "GENRE-TUNED, not dark-by-default: gritty crime/thriller/horror → deep dark grounds; "
+    "romance/comedy/sports/feel-good → warm, bright or light grounds. When reference images are "
+    "attached, take the base FROM THEM (warm/amber/light references → warm/amber/light grounds — "
+    "never force a dark base over warm references). The text tone must CONTRAST the base (light "
+    "text on a dark base, dark text on a light/warm base). NEVER make everything black — even a "
+    "dark deck needs breathing space and tonal range. Name colors evocatively for THIS story "
+    "('Monsoon Slate', not 'Dark Gray') and give each a concrete `usage` (backgrounds / headlines / "
+    "captions / accents / highlight) so every slide applies them identically — consistency across "
     "the deck is the difference between curated and assembled.\n"
     "  • cinematicTone: the deck's emotional register in one line, as a DP would describe the "
     "film's look.\n"
@@ -49,27 +68,54 @@ _SYSTEM = (
     "flows, full-bleed vs framed imagery.\n"
     "  • rationale: one tight paragraph connecting every choice back to the story's emotion — "
     "why THIS look sells THIS film.\n"
+    "REFERENCE IMAGES: if reference images are attached, they ARE the director's chosen look — "
+    "read them and let them DRIVE the system. Sample the actual palette and make the slide "
+    "BACKGROUND match the references' dominant ground (a warm amber reference → warm amber slide "
+    "grounds, NOT near-black). Match the typography CHARACTER you see (bold condensed display vs "
+    "elegant serif), the mood, and the graphic treatment. Prioritise what you SEE over the register.\n"
+    "  • displayFont: the ONE display font that best matches the GENRE and look — exactly one of: "
+    "cormorant, playfair, oswald, poppins, anton (oswald/anton = bold condensed, for crime / "
+    "thriller / sports / action; cormorant/playfair = elegant serif, for romance / drama / period / "
+    "mythology; poppins = clean modern, for comedy / contemporary / feel-good). Paired with a "
+    "clean readable body face — never more than two faces total.\n"
+    "  • motifs: recurring GRAPHIC motifs the deck should carry, each exactly one of: film_strip, "
+    "grain, vignette, frame. Include a motif ONLY when the story/references genuinely call for it "
+    "(a film-strip border for a filmmaking story, grain for a gritty look); use [] when none fit — "
+    "never decorate gratuitously.\n"
     "Return ONLY JSON with keys: mood, cinematicTone, palette (array of {name, hex, usage}), "
     "typography ({headings, body, accents, treatment}), visualStyle (array), backgroundStyle, "
-    "imageStyle, layoutStyle, rationale."
+    "imageStyle, layoutStyle, displayFont, motifs (array), rationale."
 )
 
 
-def run(project: dict, intake: dict, reference: dict | None = None) -> dict:
+def run(project: dict, intake: dict, reference_images: list[dict] | None = None,
+        reference: dict | None = None) -> dict:
+    """Design direction for the deck. ``reference_images`` ([{"mediaType","data": <base64>}]) are
+    the director's visual-direction references; when present they're shown to the vision model so
+    the palette, typography character and graphic motifs are pulled FROM the references.
+    ``reference`` is a director-supplied reference DECK (extracted colours/fonts) the palette and
+    typography are additionally anchored to."""
     genres = project.get("genres") or []
     tone = project.get("tone") or []
-    register_id = select_register(genres, tone, (intake or {}).get("genreBlend", ""))
+    genre_blend = (intake or {}).get("genreBlend", "")
+    register_id = select_register(genres, tone, genre_blend)
     fallback = lambda: design_direction_fallback(genres, tone, intake, register_id)
 
     reg = REGISTERS[register_id]
     payload = {
         "genres": genres,
         "tone": tone,
+        # light | dark | neutral — the slide grounds MUST follow this. Pairs with the system
+        # rule (genre-tuned, never dark-by-default) so instruction and grounding agree.
+        "targetBrightness": infer_brightness(genres, tone, genre_blend),
         "intake": {k: (intake or {}).get(k) for k in
                    ("visualAesthetic", "colorPalette", "textureStyle", "visualMood",
                     "designDirection", "genreBlend")},
         "recommendedRegister": {"id": register_id, "label": reg["label"], "palette": reg["palette"]},
     }
+    if reference_images:
+        payload["note"] = ("Reference images are ATTACHED — extract the palette, typography "
+                           "character, mood and graphic motifs from them and prioritise them.")
     # A director-supplied reference deck: anchor the palette/typography to its real
     # colours and fonts so the generated deck looks like the one they handed us.
     if reference and (reference.get("colors") or reference.get("fonts")):
@@ -81,11 +127,20 @@ def run(project: dict, intake: dict, reference: dict | None = None) -> dict:
         system=_SYSTEM,
         prompt="Design brief:\n" + json.dumps(payload, ensure_ascii=False),
         fallback=fallback,
-        # Reference-anchored designs must not collide with the cached generic one.
-        cache_prefix="design:ref" if payload.get("referenceDeck") else "design",
+        # Reference-anchored designs (deck or images) must not collide with the cached generic one.
+        cache_prefix="design:ref" if (payload.get("referenceDeck") or reference_images) else "design",
+        images=reference_images,
     )
-    # Always tag the register + apply its font pairing (deterministic, not LLM-chosen).
     if isinstance(result, dict):
         result.setdefault("_register", register_id)
-        result["fonts"] = {"display": FONT_BY_REGISTER.get(register_id, "cormorant"), "body": "sans"}
+        # Font: honour the LLM's reference-matched displayFont when valid, else the register default.
+        df = str(result.get("displayFont") or "").strip().lower()
+        display = df if df in _VALID_FONTS else FONT_BY_REGISTER.get(register_id, "cormorant")
+        result["fonts"] = {"display": display, "body": "sans"}
+        # Motifs: keep only ones the frontend can render; default to none.
+        motifs = result.get("motifs")
+        result["motifs"] = (
+            [m for m in motifs if isinstance(m, str) and m in _VALID_MOTIFS]
+            if isinstance(motifs, list) else []
+        )
     return result

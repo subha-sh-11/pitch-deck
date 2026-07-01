@@ -62,12 +62,14 @@ export function PresentationMode({
     hideTimer.current = setTimeout(() => setChromeVisible(false), 2200);
   }, []);
 
+  // Chrome starts visible; just arm the auto-hide timer on mount (no synchronous setState
+  // in the effect body — the timer callback flips it off after a beat).
   useEffect(() => {
-    nudgeChrome();
+    hideTimer.current = setTimeout(() => setChromeVisible(false), 2200);
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
-  }, [nudgeChrome]);
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

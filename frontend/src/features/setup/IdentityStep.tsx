@@ -63,7 +63,7 @@ export function IdentityStep({ projectId }: IdentityStepProps) {
           value={formData.genreBlend}
           onChange={(e) => updateForm({ genreBlend: e.target.value })}
           rows={2}
-          placeholder="Survival Thriller + Suspense Drama + Childhood Comedy"
+          placeholder="e.g. Crime + Comedy + Drama"
         />
         <Textarea
           label="Tone"

@@ -5,6 +5,8 @@ import {
   extractScript,
   finalizeInterview,
   interview,
+  pollJob,
+  workshopSlideImage,
   type InterviewAssumption,
   type InterviewBrief,
   type InterviewHistoryTurn,
@@ -15,13 +17,12 @@ import {
   type InterviewPillars,
   type InterviewResult,
 } from "@/lib/api";
-import { deckCommand } from "@/lib/api/deck";
+import { deckCommand, type DeckCommandImage } from "@/lib/api/deck";
 import { applyDeckActions, type DeckActionHandlers } from "@/lib/apply-deck-actions";
-import { FALLBACK_DESIGN, withAccent } from "@/lib/deck-themes";
 import { EMPTY_INTAKE_FORM, type GenerationStatus } from "@/types/setup";
 import type { IntakeFormData } from "@/types/workflow";
 import type { Slide } from "@/types/slide";
-import type { ColorToken, DesignDirection } from "@/types/design";
+import type { DesignDirection } from "@/types/design";
 import { useSetupWizard } from "../SetupWizardContext";
 
 // ── Shared interview state ────────────────────────────────────────────────
@@ -48,7 +49,17 @@ export interface AskedQuestion {
   answer?: string;
 }
 
+/** One uploaded inspiration reference shown in the visual-direction gallery. */
+export interface ReferenceImage {
+  id: string;
+  name: string;
+  previewUrl: string;
+}
+
 const PILLARS = ["title", "logline", "synopsis"] as const;
+
+// How many inspiration references the director can collect under "Choose Your Visual Direction".
+const MAX_REFERENCES = 10;
 
 // Per-load random prefix so freshly-minted ids can never collide with ids
 // restored from sessionStorage (which were minted in a previous page load).
@@ -179,10 +190,12 @@ export interface Interview {
   generationProgress: number;
   projectName: string;
   setProjectName: (name: string) => void;
-  sendText: (text: string) => void;
-  sendMessage: (text: string, files: File[]) => Promise<void>;
+  sendText: (text: string, selectedSlideId?: string) => void;
   chooseOption: (opt: InterviewOption) => void;
-  uploadFile: (file: File) => void;
+  uploadFile: (file: File, selectedSlideId?: string) => void;
+  referenceImages: ReferenceImage[];
+  addReferenceImages: (files: File[]) => void;
+  removeReferenceImage: (id: string) => void;
   editAssumption: (field: string, value: string) => void;
   editField: (field: string, value: string) => void;
   build: () => Promise<void>;
@@ -201,10 +214,15 @@ export function useInterview(projectId: string): Interview {
     generationStatus,
     generationProgress,
     updateDraftSlide,
+    updateDraftSlideMeta,
     deleteDraftSlide,
     insertDraftSlideAfter,
     moveDraftSlide,
     regenerateDraftSlide,
+    replaceDraftSlide,
+    applyAccent,
+    applyThemePalette,
+    applyDisplayFont,
   } = useSetupWizard();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -215,9 +233,9 @@ export function useInterview(projectId: string): Interview {
   const [thinking, setThinking] = useState(false);
   const [offline, setOffline] = useState(false);
   const [building, setBuilding] = useState(false);
-  // Agent-driven design override (instant, regen-free). Folded into the effective design below.
-  const [designOverride, setDesignOverride] = useState<DesignDirection | null>(null);
-  const designDirection = designOverride ?? ctxDesign;
+  // The deck's design lives in the shared wizard context (the canvas reads it), so agent
+  // colour/theme/font changes flow through that single source and render instantly.
+  const designDirection = ctxDesign;
   const [projectName, setProjectName] = useState("project");
 
   const history = useRef<InterviewHistoryTurn[]>([]);
@@ -225,6 +243,14 @@ export function useInterview(projectId: string): Interview {
   // Reference images waiting to be shown to the agent on the next turn (sent once, then cleared —
   // the agent folds what it saw into the brief, so the analysis persists as text).
   const pendingImages = useRef<InterviewImage[]>([]);
+  // The visual-direction reference library shown in the Questions tab. Kept here (not in the
+  // persisted wizard state) because base64 thumbnails would blow the localStorage quota; the
+  // names live on the brief's `visualReferences` field and the agent's analysis persists there.
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const referenceImagesRef = useRef<ReferenceImage[]>([]);
+  useEffect(() => {
+    referenceImagesRef.current = referenceImages;
+  }, [referenceImages]);
   const started = useRef(false);
   const storageKey = `pitch-interview-${projectId}`;
 
@@ -232,6 +258,13 @@ export function useInterview(projectId: string): Interview {
   useEffect(() => {
     formRef.current = formData;
   }, [formData]);
+
+  // Mirror `thinking` into a ref so async handlers (e.g. reference uploads) can avoid firing a
+  // second interview turn while one is already in flight.
+  const thinkingRef = useRef(thinking);
+  useEffect(() => {
+    thinkingRef.current = thinking;
+  }, [thinking]);
 
   const pillarsNow = useCallback((): InterviewPillars => {
     const v = formRef.current;
@@ -292,6 +325,10 @@ export function useInterview(projectId: string): Interview {
   // Restore a saved conversation — localStorage survives reloads and restarts, so the
   // director resumes where they left off. Only the recent tail of the chat is shown
   // (the full history/brief still ride along for the agent's continuity).
+  /* eslint-disable react-hooks/set-state-in-effect --
+     One-time hydration on mount: seeds chat state + refs from a saved session (and a
+     "picking up" marker). Guarded by started.current so it runs exactly once — there's no
+     cascading-render risk the rule guards against. */
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -332,12 +369,12 @@ export function useInterview(projectId: string): Interview {
         id: nextId(),
         role: "assistant",
         text:
-          "Hi — I'm your pitch producer. Tell me about your film — a sentence, a paragraph, or " +
-          "drop a script — and I'll generate a tailored design brief on the right.",
+          "Start by describing your film idea, uploading a script, or adding visual references. " +
+          "I'll turn it into a structured pitch-deck brief.",
       },
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Persist durably (localStorage) so closing the tab doesn't lose the chat or brief.
   useEffect(() => {
@@ -351,20 +388,33 @@ export function useInterview(projectId: string): Interview {
     }
   }, [messages, sections, assumptions, ready, storageKey]);
 
-  // Instant, regen-free design changes driven by the agent.
-  const setAccent = useCallback(
-    (hex: string) => setDesignOverride((p) => withAccent(p ?? ctxDesign ?? FALLBACK_DESIGN, hex)),
-    [ctxDesign],
-  );
-  const setTheme = useCallback(
-    (palette: ColorToken[]) => setDesignOverride((p) => ({ ...(p ?? ctxDesign ?? FALLBACK_DESIGN), palette })),
-    [ctxDesign],
-  );
-
   // After the deck is built, the chat BECOMES the deck-editing agent: each message → slide_edit
   // agent → structured actions applied live. Colour/theme actions are instant; content via mutations.
+  // Generate (or replace) just the image on a slide, then adopt the backend's updated slide.
+  const generateSlideImage = useCallback(
+    async (id: string, imagePrompt?: string) => {
+      try {
+        const job = await workshopSlideImage(id, imagePrompt);
+        const final = await pollJob(job);
+        if (final.status === "failed") return;
+        const res = final.result as { slide?: Slide; ok?: boolean } | Slide | undefined;
+        const updated = (res as { slide?: Slide })?.slide ?? (res as Slide | undefined);
+        // Mark generated so the workshop canvas renders the image instead of the shell.
+        if (updated?.id) replaceDraftSlide({ ...updated, generated: true });
+      } catch {
+        /* keep existing image */
+      }
+    },
+    [replaceDraftSlide],
+  );
+
   const runDeckCommand = useCallback(
-    async (value: string) => {
+    async (value: string, selectedSlideId?: string, images?: DeckCommandImage[]) => {
+      // The conversation BEFORE this instruction — sent so the agent can resolve follow-ups
+      // (a bare "9th" answering its own "which slide?") instead of re-guessing from scratch.
+      const priorHistory = history.current
+        .slice(-8)
+        .map((t) => ({ role: t.role, text: t.text ?? "" }));
       setMessages((m) => [...m, { id: nextId(), role: "user", text: value }]);
       // Track deck-editing turns in the persistent history too, so conversations
       // started from the Slides tab survive reloads and stay in the agent's context.
@@ -378,27 +428,30 @@ export function useInterview(projectId: string): Interview {
           title: s.title,
           content: s.content,
         }));
-        // Send any staged reference images so the editor can SEE a slide screenshot (to
-        // target the right slide) or a style reference. Consumed once, then cleared.
-        const imgs = pendingImages.current.length ? [...pendingImages.current] : undefined;
-        const res = await deckCommand(projectId, value, slim, imgs);
-        if (imgs) pendingImages.current = [];
+        const res = await deckCommand(projectId, value, slim, priorHistory, selectedSlideId, images);
         const handlers: DeckActionHandlers = {
           slides: draftSlides,
-          referenceImage: imgs?.[0]
-            ? { mediaType: imgs[0].mediaType, data: imgs[0].data }
-            : undefined,
           onUpdateSlide: updateDraftSlide,
           onMoveSlide: moveDraftSlide,
           onInsertAfter: insertDraftSlideAfter,
           onDeleteSlide: deleteDraftSlide,
           onRegenerateSlide: regenerateDraftSlide,
-          onSetAccent: setAccent,
-          onSetTheme: setTheme,
+          onGenerateImage: generateSlideImage,
+          onSetAppearance: (id, patch) => updateDraftSlideMeta(id, { appearance: patch }),
+          onSetAccent: applyAccent,
+          onSetTheme: applyThemePalette,
+          onSetFont: applyDisplayFont,
         };
         await applyDeckActions(res.actions, handlers);
-        setMessages((m) => [...m, { id: nextId(), role: "assistant", text: res.message }]);
-        history.current = [...history.current, { role: "assistant", text: res.message }];
+        // Report honestly: only echo the agent's confirmation when it actually did something;
+        // otherwise say nothing changed instead of a fabricated "Done".
+        const text =
+          res.actions.length > 0
+            ? res.message
+            : res.message ||
+              "I didn't change anything — tell me which slide and what to change and I'll do it.";
+        setMessages((m) => [...m, { id: nextId(), role: "assistant", text }]);
+        history.current = [...history.current, { role: "assistant", text }];
       } catch {
         setMessages((m) => [
           ...m,
@@ -409,18 +462,19 @@ export function useInterview(projectId: string): Interview {
       }
     },
     [
-      projectId, draftSlides, updateDraftSlide, moveDraftSlide, insertDraftSlideAfter,
-      deleteDraftSlide, regenerateDraftSlide, setAccent, setTheme,
+      projectId, draftSlides, updateDraftSlide, updateDraftSlideMeta, moveDraftSlide,
+      insertDraftSlideAfter, deleteDraftSlide, regenerateDraftSlide, generateSlideImage,
+      applyAccent, applyThemePalette, applyDisplayFont,
     ],
   );
 
   const submitAnswer = useCallback(
-    (text: string) => {
+    (text: string, selectedSlideId?: string) => {
       const value = text.trim();
       if (!value || thinking) return;
       // Once the deck exists, the chat edits the deck instead of running intake.
       if (draftSlides.length > 0) {
-        void runDeckCommand(value);
+        void runDeckCommand(value, selectedSlideId);
         return;
       }
       // Attach the answer to the pending (last) question.
@@ -451,60 +505,34 @@ export function useInterview(projectId: string): Interview {
 
   const chooseOption = useCallback((opt: InterviewOption) => submitAnswer(opt.label), [submitAnswer]);
 
-  // Send a chat message WITH staged reference images in a single turn: the images are
-  // encoded and attached to this turn (the agent SEES them), then the text is sent so the
-  // model reads "make the deck in this style / use this font" alongside the actual image.
-  const sendMessage = useCallback(
-    async (text: string, files: File[]) => {
-      if (thinking) return;
-      for (const file of files) {
-        if (!file.type.startsWith("image/")) continue;
-        const previewUrl = URL.createObjectURL(file);
-        setMessages((m) => [
-          ...m,
-          { id: nextId(), role: "attachment", name: file.name || "image", previewUrl, note: "Reference image" },
-        ]);
-        const cur = (formRef.current.visualReferences || "").trim();
-        updateForm({ visualReferences: cur ? `${cur}, ${file.name || "pasted image"}` : (file.name || "pasted image") });
-        try {
-          const encoded = await encodeReferenceImage(file);
-          pendingImages.current = [...pendingImages.current, encoded].slice(-4);
-        } catch {
-          /* unreadable image — skip, keep the rest of the turn */
-        }
-      }
-      const value = text.trim();
-      if (value) {
-        // submitAnswer advances the turn and picks up the staged pendingImages.
-        submitAnswer(value);
-      } else if (pendingImages.current.length) {
-        // Image(s) with no text — still send so the agent reacts to them.
-        const baseHistory = [...history.current, { role: "user" as const, text: "(shared a reference image)" }];
-        history.current = baseHistory;
-        void advance(baseHistory, pillarsNow());
-      }
-    },
-    [thinking, updateForm, submitAnswer, advance, pillarsNow],
-  );
-
   const uploadFile = useCallback(
-    async (file: File) => {
+    async (file: File, selectedSlideId?: string) => {
       if (thinking) return;
       const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
       const isDoc = /\.(pdf|docx|fdx|txt|md|rtf)$/i.test(file.name) || /pdf|word|officedocument|text/.test(file.type);
 
-      // Images / inspiration boards / references → the agent SEES them: encode, attach to the
-      // next interview turn, and let the model's real analysis drive the reply and the brief.
+      // Images / inspiration boards / references → the agent SEES them: encode, then either
+      // fold into the intake brief (pre-build) or hand to the deck agent to adapt the look (post-build).
       if (isImage) {
         const previewUrl = URL.createObjectURL(file);
         setMessages((m) => [
           ...m,
           { id: nextId(), role: "attachment", name: file.name, previewUrl, note: "Reference image" },
         ]);
-        const cur = (formRef.current.visualReferences || "").trim();
-        updateForm({ visualReferences: cur ? `${cur}, ${file.name}` : file.name });
         try {
           const encoded = await encodeReferenceImage(file);
+          // After the deck exists, a shared image is creative direction for the deck —
+          // let the deck agent analyse it and adapt theme/visuals (onto the selected slide if any).
+          if (draftSlides.length > 0) {
+            await runDeckCommand(
+              `Use this reference image as visual direction${selectedSlideId ? " for the slide I have open" : " for the deck"}.`,
+              selectedSlideId,
+              [encoded],
+            );
+            return;
+          }
+          const cur = (formRef.current.visualReferences || "").trim();
+          updateForm({ visualReferences: cur ? `${cur}, ${file.name}` : file.name });
           pendingImages.current = [...pendingImages.current, encoded].slice(-4);
           const baseHistory = [
             ...history.current,
@@ -539,21 +567,15 @@ export function useInterview(projectId: string): Interview {
             ),
           );
           updateForm(f);
-          // A script already fills most of the brief. Do NOT auto-launch a fresh question
-          // round here — that repopulates `sections`, which flips the review view out from
-          // under the user (the "it jumps to another page while I'm reading" bug). Instead,
-          // land on the review and let them refine via "Re-analyze" or go to "Build deck".
+          const pillars: InterviewPillars = {
+            title: f.title || formRef.current.title,
+            logline: f.logline || formRef.current.logline,
+            synopsis: f.synopsis || formRef.current.synopsis,
+          };
           const baseHistory = [...history.current, { role: "user" as const, text: `(uploaded script: ${res.fileName ?? file.name})` }];
           history.current = baseHistory;
           setThinking(false);
-          setMessages((m) => [
-            ...m,
-            {
-              id: nextId(),
-              role: "assistant",
-              text: "I've pulled your pitch brief from the script — review it on the right and edit anything. When you're ready, hit Build deck, or ask me to refine.",
-            },
-          ]);
+          await advance(baseHistory, pillars);
         } catch {
           setThinking(false);
           setMessages((m) =>
@@ -568,7 +590,77 @@ export function useInterview(projectId: string): Interview {
       // Anything else → just share it in the conversation.
       setMessages((m) => [...m, { id: nextId(), role: "attachment", name: file.name, note: "Attached" }]);
     },
-    [thinking, projectId, updateForm, advance, pillarsNow],
+    [thinking, projectId, updateForm, advance, pillarsNow, draftSlides, runDeckCommand],
+  );
+
+  // ── Visual-direction reference library ──────────────────────────────────
+  // Collect up to MAX_REFERENCES inspiration images. They feed the producer the same way a
+  // single chat-dropped image does (encoded → pendingImages → the agent analyses them and folds
+  // the look into the brief), but they also live in a persistent gallery the director can browse.
+  const addReferenceImages = useCallback(
+    async (files: File[]) => {
+      const images = files.filter(
+        (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(f.name),
+      );
+      if (!images.length) return;
+      const room = MAX_REFERENCES - referenceImagesRef.current.length;
+      if (room <= 0) return;
+      const accepted = images.slice(0, room);
+
+      // Show the thumbnails immediately (object URLs revoked on remove / unmount).
+      const entries: ReferenceImage[] = accepted.map((file) => ({
+        id: nextId(),
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      setReferenceImages((prev) => [...prev, ...entries].slice(0, MAX_REFERENCES));
+
+      // Keep the reference set as text on the brief so it survives reloads even though the
+      // thumbnails themselves don't.
+      const names = accepted.map((f) => f.name);
+      const cur = (formRef.current.visualReferences || "").trim();
+      updateForm({ visualReferences: [cur, ...names].filter(Boolean).join(", ") });
+
+      // Encode and hand to the producer so it analyses the references for inspiration.
+      try {
+        const encoded = await Promise.all(accepted.map(encodeReferenceImage));
+        pendingImages.current = [...pendingImages.current, ...encoded].slice(-MAX_REFERENCES);
+        // Only run a turn now if the agent is idle; otherwise the images ride along on the
+        // next turn (they stay queued in pendingImages until delivered).
+        if (!thinkingRef.current) {
+          const baseHistory = [
+            ...history.current,
+            {
+              role: "user" as const,
+              text: `(shared ${accepted.length} reference image${
+                accepted.length > 1 ? "s" : ""
+              } for visual inspiration: ${names.join(", ")})`,
+            },
+          ];
+          history.current = baseHistory;
+          await advance(baseHistory, pillarsNow());
+        }
+      } catch {
+        /* the gallery still shows the references even if encoding/analysis fails */
+      }
+    },
+    [updateForm, advance, pillarsNow],
+  );
+
+  const removeReferenceImage = useCallback((id: string) => {
+    setReferenceImages((prev) => {
+      const hit = prev.find((r) => r.id === id);
+      if (hit) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((r) => r.id !== id);
+    });
+  }, []);
+
+  // Release any object URLs still held when the studio unmounts.
+  useEffect(
+    () => () => {
+      referenceImagesRef.current.forEach((r) => URL.revokeObjectURL(r.previewUrl));
+    },
+    [],
   );
 
   const editAssumption = useCallback(
@@ -643,9 +735,11 @@ export function useInterview(projectId: string): Interview {
     projectName,
     setProjectName,
     sendText: submitAnswer,
-    sendMessage,
     chooseOption,
     uploadFile,
+    referenceImages,
+    addReferenceImages,
+    removeReferenceImage,
     editAssumption,
     editField,
     build,

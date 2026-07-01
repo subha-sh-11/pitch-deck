@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  applyDeckDesign,
   createSlide as apiCreateSlide,
   deleteSlide as apiDeleteSlide,
   generateDeck,
@@ -27,7 +28,8 @@ import {
 import { buildSlideFromOutline, renumberSlides } from "@/lib/build-slides";
 import { DEFAULT_SLIDE_APPEARANCE } from "@/lib/slide-appearance";
 import { ADDABLE_SLIDE_TYPES } from "@/lib/regenerate-slide";
-import type { DesignDirection } from "@/types/design";
+import { FALLBACK_DESIGN, withAccent } from "@/lib/deck-themes";
+import type { ColorToken, DesignDirection } from "@/types/design";
 import type { ProjectStatus } from "@/types/project";
 import type { Slide, SlideAppearance, SlideComment, SlideContent, SlideType } from "@/types/slide";
 import {
@@ -98,6 +100,12 @@ interface SetupWizardContextValue extends SetupWizardState {
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
   regenerateDraftSlide: (id: string, instruction?: string, referenceImage?: { mediaType: string; data: string }) => Promise<void>;
   regenerateAllDraftSlides: () => Promise<void>;
+  /** Deck-wide design changes that render instantly (the canvas reads designDirection). */
+  applyAccent: (hex: string) => void;
+  applyThemePalette: (palette: ColorToken[]) => void;
+  applyDisplayFont: (font: string) => void;
+  /** Choose a full visual-system candidate (preview now, apply deck-wide at/after build). */
+  chooseDesign: (design: DesignDirection) => void;
   setGenerationStatus: (status: GenerationStatus) => void;
   approveContent: () => void;
   getEditorSlides: () => Slide[];
@@ -134,16 +142,25 @@ export function SetupWizardProvider({
   projectId: string;
   children: ReactNode;
 }) {
-  const [state, setState] = useState<SetupWizardState>(DEFAULT_STATE);
+  // Seed synchronously from storage (lazy initializer) so we never setState in an effect just
+  // to hydrate — SSR-safe because loadState returns null when there's no window.
+  const [state, setState] = useState<SetupWizardState>(() => loadState(projectId) ?? DEFAULT_STATE);
   const [designDirection, setDesignDirection] = useState<DesignDirection | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [hydrated, setHydrated] = useState(false);
 
-  const stateRef = useRef<SetupWizardState>(DEFAULT_STATE);
+  const stateRef = useRef<SetupWizardState>(state);
   const generatingRef = useRef(false);
-  stateRef.current = state;
+  // A visual-system candidate the director picked before building — applied to the deck once
+  // it's prepared so generation + rendering use it.
+  const selectedDesignRef = useRef<DesignDirection | null>(null);
+  // Mirror the latest state into a ref for callbacks/async work — in an effect, not during
+  // render (refs must not be written while rendering).
+  useEffect(() => {
+    stateRef.current = state;
+  });
 
   // ── Save tracking: every backend write goes through trackSave so the UI can
   // show saving / saved / error instead of silently losing edits. ──
@@ -212,8 +229,9 @@ export function SetupWizardProvider({
   // The backend deck is the source of truth for slides now that edits persist.
   useEffect(() => {
     let cancelled = false;
+    // State is already seeded from storage via the lazy initializer; we only re-read here to
+    // decide whether the backend intake should override it.
     const saved = loadState(projectId);
-    if (saved) setState(saved);
     (async () => {
       let deckMayExist = false;
       try {
@@ -342,7 +360,13 @@ export function SetupWizardProvider({
       const final = await pollJob(job, { onProgress: (j) => setGenerationProgress(j.progress) });
       if (final.status === "failed") throw new Error(final.error ?? "Preparation failed");
       const deck = await getDeck(projectId);
-      setDesignDirection(deck.designDirection ?? null);
+      // If the director chose a visual system before building, apply it deck-wide so every
+      // slide (and its generation) uses that look instead of the auto-selected register.
+      const chosen = selectedDesignRef.current;
+      if (chosen) {
+        await applyDeckDesign(projectId, chosen).catch(() => {});
+      }
+      setDesignDirection(chosen ?? deck.designDirection ?? null);
       setState((prev) => ({
         ...prev,
         draftSlides: deck.slides ?? [],
@@ -573,6 +597,34 @@ export function SetupWizardProvider({
     }
   }, []);
 
+  // Deck-wide design changes from the agent — update designDirection so every rendered slide
+  // (workshop canvas + thumbnails + preview) reflects them immediately.
+  const applyAccent = useCallback((hex: string) => {
+    setDesignDirection((d) => withAccent(d ?? FALLBACK_DESIGN, hex));
+  }, []);
+  const applyThemePalette = useCallback((palette: ColorToken[]) => {
+    setDesignDirection((d) => ({ ...(d ?? FALLBACK_DESIGN), palette }));
+  }, []);
+  const applyDisplayFont = useCallback((font: string) => {
+    setDesignDirection((d) => ({
+      ...(d ?? FALLBACK_DESIGN),
+      fonts: { display: font, body: d?.fonts?.body },
+    }));
+  }, []);
+
+  // Director picked a visual-system candidate — preview it instantly, remember it for build, and
+  // persist to the deck if one already exists.
+  const chooseDesign = useCallback(
+    (design: DesignDirection) => {
+      selectedDesignRef.current = design;
+      setDesignDirection(design);
+      if (stateRef.current.draftSlides.some((s) => isBackendSlide(s.id))) {
+        void applyDeckDesign(projectId, design).catch(() => {});
+      }
+    },
+    [projectId],
+  );
+
   const setGenerationStatus = useCallback((status: GenerationStatus) => {
     setState((prev) => ({ ...prev, generationStatus: status }));
   }, []);
@@ -609,6 +661,10 @@ export function SetupWizardProvider({
       moveDraftSlide,
       regenerateDraftSlide,
       regenerateAllDraftSlides,
+      applyAccent,
+      applyThemePalette,
+      applyDisplayFont,
+      chooseDesign,
       setGenerationStatus,
       approveContent,
       getEditorSlides,
@@ -619,7 +675,8 @@ export function SetupWizardProvider({
       setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
       updateDraftSlide, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
-      regenerateDraftSlide, regenerateAllDraftSlides, setGenerationStatus, approveContent,
+      regenerateDraftSlide, regenerateAllDraftSlides, applyAccent, applyThemePalette,
+      applyDisplayFont, chooseDesign, setGenerationStatus, approveContent,
       getEditorSlides,
     ],
   );

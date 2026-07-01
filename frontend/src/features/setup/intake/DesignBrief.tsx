@@ -1,16 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { InterviewSection } from "@/lib/api";
 import {
   clearReferenceDeck,
   getProject,
-  saveIntake,
   uploadReferenceDeck,
   type ReferenceDeck,
 } from "@/lib/api/projects";
-import type { IntakeFormData } from "@/types/workflow";
 import type { Interview } from "./useInterview";
 
 type FieldStatus = "confirmed" | "suggested" | "skipped";
@@ -21,6 +18,23 @@ type FieldStatus = "confirmed" | "suggested" | "skipped";
 // for the next round.
 
 type FormShape = Record<string, string>;
+
+// One-tap starters for the empty state — teach the user what to type by example.
+const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
+  { label: "Telugu survival thriller", prompt: "A Telugu survival thriller" },
+  { label: "Indie coming-of-age drama", prompt: "An indie coming-of-age drama" },
+  { label: "Sci-fi short film", prompt: "A sci-fi short film" },
+  { label: "Mythological action film", prompt: "A mythological action film" },
+];
+
+// What the generated brief delivers — shown before any input so the value is tangible.
+const BRIEF_INCLUDES = [
+  "Story world",
+  "Visual tone",
+  "Character mood",
+  "Reference direction",
+  "Pitch-deck structure",
+];
 
 // Ordered, human-labelled brief fields shown in the "Captured so far" summary.
 const CAPTURED_FIELDS: [field: string, label: string][] = [
@@ -33,6 +47,7 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["themes", "Themes"],
   ["synopsis", "Synopsis"],
   ["mainCharacters", "Main characters"],
+  ["supportingCharacters", "Supporting characters"],
   ["characterDynamics", "Character dynamics"],
   ["storyWorld", "Setting & world"],
   ["whyNow", "Why now"],
@@ -49,6 +64,7 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["releaseFit", "Release fit"],
   ["creativeTeam", "Creative team & talent"],
   ["directorStatement", "Director's statement"],
+  ["directorVision", "Director's vision"],
   ["budget", "Budget & the ask"],
   ["productionStatus", "Production status"],
   ["distribution", "Distribution & marketing"],
@@ -57,21 +73,7 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["deliveryFormat", "Delivery format"],
 ];
 
-// Visual style presets. Selecting one steers the whole deck's look — the generated
-// imagery especially (cinematic film key art by default; anime / cartoon / 3D otherwise).
-// The keyword is folded into `genreBlend`, which drives both the palette register and the
-// image medium on the backend.
-const STYLE_OPTIONS: { label: string; kw: string }[] = [
-  { label: "Cinematic", kw: "" }, // default — no style keyword
-  { label: "Anime", kw: "anime" },
-  { label: "Cartoon", kw: "cartoon" },
-  { label: "3D Animation", kw: "3d animation" },
-  { label: "Comic book", kw: "comic book" },
-];
-const STYLE_KWS = STYLE_OPTIONS.map((o) => o.kw).filter(Boolean);
-
 export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: string }) {
-  const router = useRouter();
   const form = iv.form as unknown as FormShape;
   const sections = iv.sections;
   const [sel, setSel] = useState<Record<string, string[]>>({});
@@ -159,9 +161,11 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
     return null;
   };
 
-  useEffect(() => {
+  // Default selection for a set of sections, from the current form values or the agent's
+  // pre-selected options.
+  const buildSel = (secs: InterviewSection[]): Record<string, string[]> => {
     const init: Record<string, string[]> = {};
-    for (const s of sections) {
+    for (const s of secs) {
       if (s.kind === "chips" || s.kind === "multi" || s.kind === "swatches") {
         const fromForm =
           s.field && s.field in form
@@ -173,9 +177,23 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
         init[s.id] = [String(s.value ?? Math.round(((s.min ?? 8) + (s.max ?? 20)) / 2))];
       }
     }
-    setSel(init);
-    // Auto-commit the agent's pre-selected suggestion for any field that's still
-    // empty, so accepted defaults count as answered and never get re-asked.
+    return init;
+  };
+
+  // Re-seed local selection whenever the agent sends a new set of sections — applied during
+  // render (the documented "adjust state when input changes" pattern), not in an effect.
+  const sectionsSig = sections.map((s) => s.id).join("|");
+  const [seenSig, setSeenSig] = useState<string | null>(null);
+  if (sectionsSig !== seenSig) {
+    setSeenSig(sectionsSig);
+    setSel(buildSel(sections));
+  }
+
+  // Auto-commit the agent's pre-selected suggestion for any still-empty field, so accepted
+  // defaults count as answered and never get re-asked. This writes to the shared brief (an
+  // external store), which is exactly what effects are for.
+  useEffect(() => {
+    const init = buildSel(sections);
     for (const s of sections) {
       if (!s.field || (form[s.field] ?? "").trim()) continue;
       const def =
@@ -184,25 +202,6 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections]);
-
-  // Which style keyword (if any) is currently active in the genre blend.
-  const genreLower = (form.genreBlend ?? "").toLowerCase();
-  const activeStyle = STYLE_KWS.find((kw) => genreLower.includes(kw)) ?? "";
-
-  const setStyle = (kw: string) => {
-    // Strip any existing style keyword, then add the chosen one (Cinematic = none).
-    let base = form.genreBlend ?? "";
-    for (const k of STYLE_KWS) {
-      base = base.replace(new RegExp(`\\s*[+,]?\\s*${k}`, "ig"), "");
-    }
-    base = base.replace(/\s*[+,]\s*$/, "").trim();
-    const next = kw ? (base ? `${base} + ${kw}` : kw) : base;
-    iv.editField("genreBlend", next);
-    markTouched("genreBlend");
-    // Persist immediately so "Rebuild deck" (which reads the backend intake) picks up the
-    // style even if the user never re-runs the full Build flow.
-    void saveIntake(projectId, { ...(iv.form as IntakeFormData), genreBlend: next }).catch(() => {});
-  };
 
   const choose = (s: InterviewSection, val: string, multi: boolean) => {
     const cur = sel[s.id] ?? [];
@@ -216,12 +215,18 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
 
   const isSel = (s: InterviewSection, val: string) => (sel[s.id] ?? []).includes(val);
 
-  // Everything captured so far (non-empty brief fields), for the running summary.
-  const captured = CAPTURED_FIELDS.filter(([f]) => (form[f] ?? "").trim().length > 0).map(
-    ([field, label]) => ({ field, label, value: form[field] }),
-  );
   // Open questions minus anything the user chose to skip.
   const visibleSections = sections.filter((s) => !s.field || !skipped.has(s.field));
+  // Fields with an open follow-up question right now — kept OUT of the summary so a
+  // field is never shown twice (settled fields → summary, still-being-asked → questions).
+  const openFields = new Set(
+    visibleSections.map((s) => s.field).filter((f): f is string => !!f),
+  );
+  // Everything captured so far (non-empty brief fields that aren't an open question),
+  // for the running summary.
+  const captured = CAPTURED_FIELDS.filter(
+    ([f]) => (form[f] ?? "").trim().length > 0 && !openFields.has(f),
+  ).map(([field, label]) => ({ field, label, value: form[field] }));
   // Empty + not skipped → "still to add"; skipped → its own group.
   const pending = CAPTURED_FIELDS.filter(
     ([f]) => !(form[f] ?? "").trim().length && !skipped.has(f),
@@ -231,19 +236,48 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
   // Truly empty: nothing captured and no open questions yet.
   if (!visibleSections.length && !captured.length) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-        <SparklesIcon />
+      <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-8 text-center">
+        {/* Signature warm halo — the one branded flourish on the empty canvas. */}
+        <div className="intake-halo pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
         {iv.thinking ? (
-          <p className="text-sm text-text-dim">Thinking through your story…</p>
+          <div className="relative flex flex-col items-center gap-3">
+            <SparklesIcon />
+            <p className="text-sm text-text-muted">Thinking through your story…</p>
+          </div>
         ) : (
-          <>
-            <p className="font-display text-2xl text-text-muted">Your design brief appears here</p>
-            <p className="max-w-sm text-sm text-text-dim">
-              Tell me about your film on the left — e.g.{" "}
-              <em>“a Telugu survival thriller about three kids trapped in a flooding tank”</em> — and
-              I’ll ask a few smart questions to shape it.
-            </p>
-          </>
+          <div className="animate-intake-fade-in relative flex w-full max-w-md flex-col items-center gap-3">
+            <SparklesIcon />
+            <p className="font-display text-3xl text-text-primary">Your design brief appears here</p>
+
+            {/* Example prompts — one tap starts the conversation. */}
+            <div className="mt-1 flex flex-wrap justify-center gap-2">
+              {EXAMPLE_PROMPTS.map((ex) => (
+                <button
+                  key={ex.label}
+                  type="button"
+                  onClick={() => iv.sendText(ex.prompt)}
+                  className="rounded-full border border-border-glass bg-surface-2/60 px-3.5 py-1.5 text-sm text-text-muted transition-all hover:-translate-y-px hover:border-accent-neon/50 hover:text-text-primary active:scale-95"
+                >
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+
+            {/* What the director gets — makes the value tangible before any input. */}
+            <div className="mt-6 w-full rounded-2xl border border-border-glass bg-surface-1/40 px-5 py-4 text-left">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                Your brief will include
+              </p>
+              <ul className="mt-3 space-y-2">
+                {BRIEF_INCLUDES.map((item) => (
+                  <li key={item} className="flex items-center gap-2.5 text-sm text-text-muted">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-neon" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -252,54 +286,25 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-8 py-10 lg:px-10">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mb-5 inline-flex items-center gap-1.5 rounded-lg border border-border-glass px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
         <h1 className="font-display text-3xl font-medium tracking-tight text-text-primary">
           Let&apos;s shape the {iv.projectName} deck
         </h1>
-        <p className="mt-1.5 text-sm text-text-dim">
-          {visibleSections.length
-            ? "A few questions at a time — tap an answer, type your own, then Continue."
-            : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
+        <p className="mt-1.5 text-sm text-text-muted">
+          {captured.length > 0 && visibleSections.length
+            ? "Here’s everything I pulled from your story — review and edit it, then answer a few follow-ups below to sharpen the deck."
+            : visibleSections.length
+              ? "A few questions at a time — tap an answer, type your own, then Continue."
+              : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
         </p>
 
-        {/* Visual style — steers the whole deck's look (esp. generated imagery). */}
-        {!visibleSections.length && (
-          <div className="mt-8">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
-              Visual style
-            </h2>
-            <p className="mt-1 text-xs text-text-dim">
-              Cinematic by default. Pick an animated style and the whole deck — especially the
-              generated art — is rendered that way.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {STYLE_OPTIONS.map((o) => (
-                <Chip
-                  key={o.label}
-                  label={o.label}
-                  selected={o.kw === activeStyle}
-                  onClick={() => setStyle(o.kw)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Final summary — shown ONLY at the end (no open questions left), editable */}
-        {captured.length > 0 && !visibleSections.length && (
+        {/* Extracted summary — shown as soon as we've captured anything (e.g. right
+            after a script upload), and kept visible while follow-up questions are open
+            below it. Editable. */}
+        {captured.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
-                Your pitch brief — review &amp; edit
+                {visibleSections.length ? "Story summary — review & edit" : "Your pitch brief — review & edit"}
               </h2>
               <button
                 type="button"
@@ -334,8 +339,8 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
               Reference deck (optional)
             </h2>
-            <p className="mt-1 text-xs text-text-dim">
-              Upload a PowerPoint <span className="text-text-muted">.pptx</span> and I&apos;ll match its
+            <p className="mt-1 text-xs text-text-muted">
+              Upload a PowerPoint <span className="text-text-primary">.pptx</span> and I&apos;ll match its
               slide structure and visual style when building your deck.
             </p>
             <input
@@ -388,7 +393,7 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
         )}
 
         {/* Assumptions the system made (distinct from confirmed answers) */}
-        {!visibleSections.length && iv.assumptions.length > 0 && (
+        {iv.assumptions.length > 0 && (
           <div className="mt-7">
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-400/80">
               Assumptions I made
@@ -419,7 +424,7 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
                 </span>
               ))}
             </div>
-            <p className="mt-2 text-xs text-text-dim">
+            <p className="mt-2 text-xs text-text-muted">
               Tell me any of these on the left and I’ll fold them in — or just build with what you have.
             </p>
           </div>
@@ -452,9 +457,17 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
         )}
 
         {visibleSections.length > 0 && (
-          <h2 className="mt-9 text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
-            Open questions
-          </h2>
+          <div className="mt-9">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+              {captured.length > 0 ? "Follow-up questions" : "A few questions"}
+            </h2>
+            {captured.length > 0 && (
+              <p className="mt-1 text-xs text-text-dim">
+                Pulled from the analysis to sharpen the deck — tap an answer or type your own. All optional;
+                build whenever you’re ready.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="mt-3 space-y-8">
@@ -475,7 +488,7 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
                   )}
                 </div>
               </div>
-              {s.help && <p className="mt-0.5 text-xs text-text-dim">{s.help}</p>}
+              {s.help && <p className="mt-0.5 text-xs text-text-muted">{s.help}</p>}
 
               {s.kind === "textarea" && (
                 <textarea

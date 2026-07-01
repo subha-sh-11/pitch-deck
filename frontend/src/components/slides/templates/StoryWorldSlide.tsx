@@ -20,14 +20,14 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
           className={`absolute inset-0 ${
             content.imageUrl
               ? "bg-gradient-to-r from-black/75 via-black/20 to-transparent"
-              : "bg-gradient-to-br from-[#0c0c0e] via-[#121216] to-[#080808]"
+              : "bg-[var(--slide-bg,#0a0a0c)]"
           }`}
         />
         <div className="relative flex h-full items-center p-[7%]">
           <div className="max-w-[44%] rounded-xl border border-white/[0.08] bg-black/45 p-7 backdrop-blur-md">
             <SlideLabel>{content.heading || "Story World"}</SlideLabel>
             {content.body && (
-              <p className="mt-4 text-[clamp(0.75rem,1.15vw,1rem)] leading-relaxed text-[#E8E6E0]">
+              <p className="mt-4 text-[clamp(0.75rem,1.15vw,1rem)] leading-relaxed text-[var(--slide-text,#E8E6E0)]">
                 {content.body}
               </p>
             )}
@@ -48,7 +48,7 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
         className={`absolute inset-0 ${
           content.imageUrl
             ? "bg-gradient-to-t from-black/90 via-black/45 to-black/30"
-            : "bg-gradient-to-t from-[#080808] via-[#101010] to-[#0c0c0e]"
+            : "bg-[var(--slide-bg,#0a0a0c)]"
         }`}
       />
 
@@ -61,7 +61,7 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
             k="body"
             as="p"
             multiline
-            className="mt-4 max-w-2xl whitespace-pre-line text-[clamp(0.8rem,1.2vw,1.05rem)] leading-relaxed text-[#E8E6E0]"
+            className="mt-4 max-w-2xl whitespace-pre-line text-[clamp(0.8rem,1.2vw,1.05rem)] leading-relaxed text-[var(--slide-text,#E8E6E0)]"
             value={content.body}
           />
         )}
@@ -75,7 +75,7 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
                 <EditableText
                   k={`item-${i}-title`}
                   as="h3"
-                  className="font-display text-sm font-semibold text-[#F5F1E8]"
+                  className="font-display text-sm font-semibold text-[var(--slide-text,#F5F1E8)]"
                   value={loc.title}
                 />
                 {loc.description && (
@@ -83,7 +83,7 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
                     k={`item-${i}-desc`}
                     as="p"
                     multiline
-                    className="mt-1 whitespace-pre-line text-xs text-[#9CA3AF]"
+                    className="mt-1 whitespace-pre-line text-xs text-[var(--slide-text-muted,#9CA3AF)]"
                     value={loc.description}
                   />
                 )}

@@ -21,6 +21,7 @@ _LAYOUT_TYPE: dict[str, str] = {
     "story_world": "atmospheric",
     "character": "character_cards",
     "supporting_characters": "character_cards",
+    "relationship_map": "map",
     "usp": "grid",
     "show_cross": "comp_cards",
     "visual_aesthetic": "moodboard",
@@ -36,6 +37,18 @@ _LAYOUT_TYPE: dict[str, str] = {
 # Visual pacing: hero beats land bold, dense-copy beats stay quiet, the rest standard.
 _BOLD = {"cover", "visual_aesthetic", "directors_vision", "story_world"}
 _MINIMAL = {"logline", "synopsis", "contact"}
+
+# Auto-varied compositions so the deck doesn't read the same on every slide: text-centric slides
+# get a side-by-side ("split") or inset ("framed") layout instead of full-bleed-with-overlay,
+# alternating which side the image sits on. Only slide types whose template supports composition
+# (logline, and the generic-rendered text slides) — grids/heroes keep their own strong layouts.
+_COMPOSITION_BY_TYPE: dict[str, tuple[str, str]] = {
+    "logline": ("split", "right"),           # text left, image right
+    "directors_vision": ("split", "left"),   # image left, text right
+    "budget": ("framed", "left"),
+    "team": ("split", "right"),
+    "generic": ("framed", "right"),
+}
 
 
 def _text_len(content: dict | None, key: str = "body") -> int:
@@ -96,4 +109,9 @@ def appearance_for(slide_type: str, design: dict | None = None) -> dict:
         variant = "minimal"
     else:
         variant = "standard"
-    return {"styleVariant": variant}
+
+    appearance: dict = {"styleVariant": variant}
+    comp = _COMPOSITION_BY_TYPE.get(slide_type)
+    if comp:
+        appearance["composition"], appearance["imageSide"] = comp
+    return appearance

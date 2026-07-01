@@ -34,13 +34,17 @@ const theme = (name: string, base: string, accent: string, text: string): DeckTh
   ],
 });
 
+// Brightness-varied so the picker is never dark-only. Dark themes use light text;
+// light themes use dark text (the renderer's byUsage() reads these by `usage`).
 export const DECK_THEMES: DeckTheme[] = [
-  theme("Electric Teal", "#0A0F14", "#22D3EE", "#E6F6FA"),
+  // Dark
   theme("Cinematic Noir", "#0B0B0D", "#B8862F", "#EDE7DA"),
-  theme("Warm Romance", "#2A1A12", "#E8B04B", "#F3E9DC"),
+  theme("Electric Teal", "#0A0F14", "#22D3EE", "#E6F6FA"),
   theme("Crimson Bold", "#0A0A0A", "#E11D48", "#FAFAFA"),
-  theme("Royal Violet", "#0E0B1A", "#A78BFA", "#EDE9FE"),
-  theme("Forest Emerald", "#07120E", "#34D399", "#E7F8F0"),
+  // Light / warm
+  theme("Warm Cream", "#F3E9D8", "#C16A4B", "#3A2A1C"),
+  theme("Sunlit Pop", "#FFF7E6", "#FF6F61", "#2B2B2B"),
+  theme("Daylight Sage", "#EDF2EC", "#2F5A57", "#1E2A26"),
 ];
 
 /** Replace (or insert) the accent colour in a design's palette — returns a new design. */

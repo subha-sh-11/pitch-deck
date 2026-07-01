@@ -1,0 +1,29 @@
+# Line-ending policy. Without this, a Windows checkout rewrites the whole tree to
+# CRLF and every file shows as "modified" against the LF index — pure noise that
+# buries real diffs. Force LF for text in the repo and on checkout.
+* text=auto eol=lf
+
+# Windows-only scripts must stay CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets — never normalize or diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.svgz binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.otf  binary
+*.mp4  binary
+*.mov  binary
+*.mp3  binary
+*.zip  binary
+*.gz   binary

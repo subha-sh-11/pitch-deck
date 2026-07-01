@@ -11,7 +11,7 @@ export function ShowCrossSlide({ content }: ShowCrossSlideProps) {
 
   return (
     <SlideFrame>
-      <div className="absolute inset-0 bg-gradient-to-b from-[#101010] to-[#080808]" />
+      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Show Cross"} />
@@ -36,7 +36,7 @@ export function ShowCrossSlide({ content }: ShowCrossSlideProps) {
                   <EditableText
                     k={`comp-${i}-title`}
                     as="p"
-                    className="font-display text-base font-bold leading-tight text-[#F5F1E8]"
+                    className="font-display text-base font-bold leading-tight text-[var(--slide-text,#F5F1E8)]"
                     value={comp.title}
                   />
                 </div>
@@ -46,7 +46,7 @@ export function ShowCrossSlide({ content }: ShowCrossSlideProps) {
                   k={`comp-${i}-note`}
                   as="p"
                   multiline
-                  className="line-clamp-3 whitespace-pre-line text-[11px] leading-relaxed text-[#9CA3AF]"
+                  className="line-clamp-3 whitespace-pre-line text-[11px] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                   value={comp.note}
                 />
               </div>
