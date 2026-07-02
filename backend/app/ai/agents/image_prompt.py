@@ -64,6 +64,38 @@ def _clean(text: str) -> str:
     return re.sub(r"\s{2,}", " ", _STRIP.sub("", text or "")).strip(" ,.-")
 
 
+# ─── Visual medium ──────────────────────────────────────────────────────────────────
+# The deck is photoreal-cinematic by default. When the director picks an animated style
+# (Visual style chips → folded into genreBlend / visualAesthetic), we switch the rendering
+# MEDIUM and OVERRIDE the cinematic-realism system prompt.
+_MEDIA: list[tuple[str, str, str]] = [
+    (r"anime|manga|cel[\s-]?shad|ghibli|shonen|shoujo|isekai", "anime",
+     "anime key visual, cel-shaded anime illustration, clean vibrant linework, expressive "
+     "studio-anime art, NOT photorealistic, not a photo, not live-action"),
+    (r"3d\s*animat|cgi\s*animat|pixar|dreamworks|claymation|stop[\s-]?motion", "3D animation",
+     "3D animated feature-film style, stylized 3D characters, soft global illumination, polished "
+     "CGI render, animated-movie key art, NOT photorealistic, not live-action"),
+    (r"cartoon|toon|comic[\s-]?book|comic\b|graphic[\s-]?novel|2d\s*animat|hand[\s-]?drawn", "cartoon",
+     "stylized 2D cartoon illustration, bold clean outlines, flat cel shading, animated-film key "
+     "art, hand-drawn look, NOT photorealistic, not live-action"),
+    (r"\banimat", "animation",
+     "stylized animated illustration, expressive, NOT photorealistic, not live-action"),
+]
+
+
+def _visual_medium(intake: dict, design: dict | None) -> tuple[str, str] | None:
+    """Return (label, style-descriptor) when the director chose an animated style, else None."""
+    text = " ".join([
+        _g(intake, "genreBlend"), _g(intake, "visualAesthetic"),
+        _g(intake, "visualMood"), _g(intake, "textureStyle"),
+        str((design or {}).get("imageStyle") or ""),
+    ]).lower()
+    for pattern, label, desc in _MEDIA:
+        if re.search(pattern, text):
+            return label, desc
+    return None
+
+
 def _bg_hex(design: dict) -> str:
     """The deck's base/background colour from the palette, if any."""
     for c in design.get("palette") or []:
@@ -381,6 +413,14 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
     else:
         theme = "DARK — cinematic low-key, dramatic directional light, deep shadows"
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
+    medium = _visual_medium(intake, design)
+    medium_line = (
+        f"\n\nRENDER MEDIUM OVERRIDE (HIGHEST PRIORITY): the director chose a {medium[0]} visual "
+        f"style. IGNORE every instruction to be photorealistic / cinematic / live-action / a film "
+        f"still. Write the prompt for a {medium[0]} image — {medium[1]}. The ENTIRE image must be "
+        f"in {medium[0]} style."
+        if medium else ""
+    )
     prompt = (
         "FILM SUMMARY (ground every visual in this; never invent unrelated elements):\n"
         f"{_story_context(intake, slide_type)}\n\n"
@@ -389,7 +429,8 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
         f"SHOT FOR THIS SLIDE (use this framing, and a DIFFERENT location than other slides): "
         f"{_shot_for(slide_type)}\n"
         f"THEME: {theme}\n"
-        f"PALETTE: {palette or '(use a fitting palette)'}\n\n"
+        f"PALETTE: {palette or '(use a fitting palette)'}"
+        f"{medium_line}\n\n"
         "Write ONE image-generation prompt for this slide's artwork. Return ONLY the JSON."
     )
     result = complete_json(
@@ -405,7 +446,12 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
         text = result["prompt"].strip()
     if not text:
         text = _deterministic_prompt(slide_type, intake, design, has_references)
-    return _clean(text)
+    final = _clean(text)
+    if medium:
+        # Lead with the medium so the diffusion model weights it heavily (overrides any
+        # photoreal wording the writer may have slipped in).
+        final = f"{medium[1]}. {final}"
+    return final
 
 
 # Per-genre VISUAL character, so each genre tile on the genre-blend slide actually looks like THAT

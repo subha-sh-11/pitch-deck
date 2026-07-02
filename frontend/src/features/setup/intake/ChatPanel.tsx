@@ -9,13 +9,35 @@ import { useWorkshopOptional } from "./workshop";
 // The left conversation rail (narrow). All state lives in the shared interview
 // hook. The producer asks here; tappable options appear inline; the deck builds
 // on the canvas to the right.
-const ALL_ACCEPT = ".pdf,.docx,.fdx,.txt,.md,.rtf,image/*";
+// Scripts/docs get parsed, images get staged, and ANY other file is attached as-is.
+const ALL_ACCEPT = "*/*";
 
 export function ChatPanel({ iv }: { iv: Interview }) {
   const [draft, setDraft] = useState("");
+  // Images pasted/dropped/picked but NOT sent — held as chips IN the composer (like Claude),
+  // so the director can add a prompt and send both together. They never touch the chat until Send.
+  const [staged, setStaged] = useState<{ id: string; file: File; name: string; url: string }[]>([]);
+  const stagedSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const stageImages = (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    setStaged((prev) => [
+      ...prev,
+      ...imgs.map((file) => ({ id: `s${stagedSeq.current++}`, file, name: file.name, url: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const removeStaged = (id: string) => {
+    setStaged((prev) => {
+      const hit = prev.find((s) => s.id === id);
+      if (hit) URL.revokeObjectURL(hit.url);
+      return prev.filter((s) => s.id !== id);
+    });
+  };
   // The slide the director currently has open in the workshop — passed to the deck
   // agent as the default target so "this slide" / "add an image" resolve correctly.
   const workshop = useWorkshopOptional();
@@ -33,11 +55,24 @@ export function ChatPanel({ iv }: { iv: Interview }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [iv.messages, iv.thinking]);
 
-  const send = () => {
+  const send = async () => {
     const value = draft.trim();
-    if (!value || iv.thinking) return;
+    if ((!value && staged.length === 0) || iv.thinking) return;
+    const files = staged.map((s) => s.file);
+    staged.forEach((s) => URL.revokeObjectURL(s.url));
+    setStaged([]);
     setDraft("");
-    iv.sendText(value, selectedSlideId);
+    // Queue each staged image (shows it in the chat + queues for the turn) — no agent call yet.
+    for (const f of files) await iv.uploadFile(f, selectedSlideId, true);
+    if (value) {
+      iv.sendText(value, selectedSlideId);
+    } else if (files.length) {
+      // Image-only send (director gave no prompt) → let the agent react to the queued image.
+      iv.sendText(
+        files.length > 1 ? "Use these reference images as visual direction." : "Use this reference image as visual direction.",
+        selectedSlideId,
+      );
+    }
   };
 
   const pending = [...iv.questions].reverse().find((q) => q.answer === undefined);
@@ -126,19 +161,68 @@ export function ChatPanel({ iv }: { iv: Interview }) {
           ref={fileRef}
           type="file"
           multiple
-          accept=".pdf,.docx,.fdx,.txt,.md,.rtf,image/*"
+          accept="*/*"
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? []);
-            files.forEach((f) => void iv.uploadFile(f, selectedSlideId));
+            // Images stage as chips (send with a prompt); docs/scripts process immediately.
+            stageImages(files.filter((f) => f.type.startsWith("image/")));
+            files.filter((f) => !f.type.startsWith("image/")).forEach((f) => void iv.uploadFile(f, selectedSlideId));
             e.currentTarget.value = "";
           }}
         />
-        <div className="rounded-2xl border border-white/15 bg-surface-2/80 p-3 shadow-lg shadow-black/20 transition-colors focus-within:border-accent-neon/50">
+        <div
+          className="rounded-2xl border border-white/15 bg-surface-2/80 p-3 shadow-lg shadow-black/20 transition-colors focus-within:border-accent-neon/50"
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === "file")) e.preventDefault();
+          }}
+          onDrop={(e) => {
+            const imgs = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+            if (imgs.length) {
+              e.preventDefault();
+              stageImages(imgs); // chip in the composer — sent on Send
+            }
+          }}
+        >
+          {/* Staged image chips (pasted/dropped, not yet sent) */}
+          {staged.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {staged.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center gap-2 rounded-lg border border-white/15 bg-surface-3/70 py-1 pl-1 pr-2"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.url} alt="" className="h-6 w-6 rounded object-cover" />
+                  <span className="max-w-[130px] truncate text-xs text-text-muted">{s.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeStaged(s.id)}
+                    aria-label="Remove"
+                    className="text-text-dim transition-colors hover:text-text-primary"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            // Paste an image straight from the clipboard. Text paste is untouched (we only
+            // intercept when the clipboard actually contains image files).
+            onPaste={(e) => {
+              const imgs = Array.from(e.clipboardData?.items ?? [])
+                .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+                .map((it) => it.getAsFile())
+                .filter((f): f is File => !!f);
+              if (imgs.length) {
+                e.preventDefault();
+                stageImages(imgs); // chip in the composer — sent on Send
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -157,8 +241,8 @@ export function ChatPanel({ iv }: { iv: Interview }) {
               <PlusIcon />
             </IconButton>
             <button
-              onClick={send}
-              disabled={!draft.trim() || iv.thinking}
+              onClick={() => void send()}
+              disabled={(!draft.trim() && staged.length === 0) || iv.thinking}
               title="Send"
               className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-neon text-zinc-950 shadow-[0_0_16px_rgba(248,201,164,0.35)] transition-all hover:bg-accent-neon-dim active:scale-95 disabled:cursor-not-allowed disabled:bg-accent-neon/30 disabled:shadow-none"
             >
@@ -276,13 +360,29 @@ function MessageView({ message }: { message: ChatMessage }) {
 }
 
 function AttachmentCard({ name, previewUrl, note }: { name: string; previewUrl?: string; note?: string }) {
+  // An image → show the ACTUAL image, nothing else. Anything without a preview (a document, or
+  // a reference whose thumbnail couldn't be made) → the compact file card.
+  if (previewUrl) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[70%] overflow-hidden rounded-2xl rounded-tr-sm border border-border-glass">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt={name}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+            className="block w-full"
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-end">
       <div className="max-w-[88%] overflow-hidden rounded-2xl rounded-tr-sm border border-border-glass bg-surface-3/60">
-        {previewUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={name} className="max-h-40 w-full object-cover" />
-        )}
         <div className="flex items-center gap-2 px-3 py-2">
           <PaperclipIcon />
           <div className="min-w-0">
@@ -353,10 +453,9 @@ function Thinking() {
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-neon/15 text-[11px] font-bold text-accent-neon">
         P
       </span>
-      <div className="flex gap-1 rounded-full bg-surface-2/60 px-3 py-2.5">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-dim [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-dim [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-dim" />
+      <div className="flex items-center gap-2 rounded-full bg-surface-2/60 px-3 py-2">
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent-neon/70 border-t-transparent" />
+        <span className="text-xs text-text-muted">Thinking…</span>
       </div>
     </div>
   );

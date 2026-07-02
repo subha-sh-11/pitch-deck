@@ -31,9 +31,9 @@ async def dispatch(
         except Exception:
             pass  # broker unreachable / celery missing → run locally
 
-    if background_tasks is not None:
-        background_tasks.add_task(sync_fn, *args)
-        return "background"
-
+    # Eager / no broker: run INLINE (the request waits and returns a finished job). We used to
+    # use FastAPI BackgroundTasks here, but those left jobs stuck at "queued" — they run after
+    # the response and swallow errors — so nothing ever generated. Inline is reliable.
+    _ = background_tasks  # kept for signature compatibility; unused in eager mode
     await run_in_threadpool(sync_fn, *args)
     return "inline"

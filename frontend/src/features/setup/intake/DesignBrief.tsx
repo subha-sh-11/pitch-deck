@@ -5,12 +5,26 @@ import type { InterviewSection } from "@/lib/api";
 import {
   clearReferenceDeck,
   getProject,
+  saveIntake,
   uploadReferenceDeck,
   type ReferenceDeck,
 } from "@/lib/api/projects";
+import type { IntakeFormData } from "@/types/workflow";
 import type { Interview } from "./useInterview";
 
 type FieldStatus = "confirmed" | "suggested" | "skipped";
+
+// Visual-style presets. Picking one steers the whole deck's look — the generated imagery
+// especially (cinematic film key art by default; anime / cartoon / 3D otherwise). The keyword
+// is folded into `genreBlend`, which the backend reads to switch the render medium.
+const STYLE_OPTIONS: { label: string; kw: string }[] = [
+  { label: "Cinematic", kw: "" },
+  { label: "Anime", kw: "anime" },
+  { label: "Cartoon", kw: "cartoon" },
+  { label: "3D Animation", kw: "3d animation" },
+  { label: "Comic book", kw: "comic book" },
+];
+const STYLE_KWS = STYLE_OPTIONS.map((o) => o.kw).filter(Boolean);
 
 // Renders the LLM-GENERATED questionnaire (iv.sections), a few questions per round.
 // Nothing is hardcoded: the agent reasons about THIS film and asks 3-4 questions at a
@@ -75,6 +89,19 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
 
 export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: string }) {
   const form = iv.form as unknown as FormShape;
+
+  // Which visual-style keyword (if any) is active in the genre blend.
+  const genreLower = (form.genreBlend ?? "").toLowerCase();
+  const activeStyle = STYLE_KWS.find((kw) => genreLower.includes(kw)) ?? "";
+  const setStyle = (kw: string) => {
+    let base = form.genreBlend ?? "";
+    for (const k of STYLE_KWS) base = base.replace(new RegExp(`\\s*[+,]?\\s*${k}`, "ig"), "");
+    base = base.replace(/\s*[+,]\s*$/, "").trim();
+    const next = kw ? (base ? `${base} + ${kw}` : kw) : base;
+    iv.editField("genreBlend", next);
+    // Persist immediately so a later Build/Rebuild uses the chosen style.
+    void saveIntake(projectId, { ...(iv.form as IntakeFormData), genreBlend: next }).catch(() => {});
+  };
   const sections = iv.sections;
   const [sel, setSel] = useState<Record<string, string[]>>({});
 
@@ -296,6 +323,24 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
               ? "A few questions at a time — tap an answer, type your own, then Continue."
               : "Everything I’ve captured so far — edit anything, or hit Build deck above."}
         </p>
+
+        {/* Visual style — steers the whole deck's look (esp. the generated imagery). */}
+        {captured.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+              Visual style
+            </h2>
+            <p className="mt-1 text-xs text-text-dim">
+              Cinematic by default. Pick an animated style and the whole deck — especially the
+              generated art — is rendered that way.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {STYLE_OPTIONS.map((o) => (
+                <Chip key={o.label} label={o.label} selected={o.kw === activeStyle} onClick={() => setStyle(o.kw)} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Extracted summary — shown as soon as we've captured anything (e.g. right
             after a script upload), and kept visible while follow-up questions are open

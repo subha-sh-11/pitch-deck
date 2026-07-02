@@ -83,6 +83,15 @@ ACTIONS (emit only what's needed, in order):
 - set_theme:        { "op": "set_theme", "palette": [ {"name": "Base", "hex": "#RRGGBB", "usage": "background"},
                       {"name": "Accent", "hex": "#RRGGBB", "usage": "accent"}, {"name": "Text", "hex": "#RRGGBB", "usage": "text"} ] }
 - set_font:         { "op": "set_font", "font": "cormorant"|"playfair"|"oswald"|"poppins"|"anton" }  # deck-wide display font
+- style_image:      { "op": "style_image", "slideId": "<id>", "blur": <0-16 px>, "dim": <0-0.85>, "scale": <1.0-1.8> }
+                      # adjust the EXISTING background image without regenerating: blur it, dim/darken
+                      # it (for text legibility), or zoom in. Use for "blur the image", "darken the
+                      # background", "zoom in" — never generate_image for those.
+
+edit_slide also takes an "items" array — LIST slides (genre blend, USP, market potential, target
+audience…) render "items": [ {"title": "<short>", "description": "<one line>"} ], NOT bullets. To
+change how many points show ("make it 5 points"), return the FULL new "items" list with exactly that
+many entries. Your confirmation message must never claim a change you didn't emit as an action.
 
 slideType is one of: cover, logline, genre_blend, synopsis, story_world, character,
 supporting_characters, usp, show_cross, visual_aesthetic, target_audience, budget, market_potential,
@@ -245,9 +254,23 @@ def _fallback(instruction: str, slides: list[dict]) -> dict:
 
 _VALID_OPS = {
     "edit_slide", "move_slide", "add_slide", "delete_slide", "regenerate_slide",
-    "generate_image", "set_appearance", "set_accent", "set_theme", "set_font",
+    "generate_image", "set_appearance", "set_accent", "set_theme", "set_font", "style_image",
 }
-_EDITABLE = {"title", "heading", "subheading", "body", "bullets"}
+_EDITABLE = {"title", "heading", "subheading", "body", "bullets", "items"}
+
+
+def _clean_items(raw) -> list[dict] | None:
+    """Normalise an `items` list ([{title, description}] or [str]) for list-style slides."""
+    if not isinstance(raw, list) or not raw:
+        return None
+    out: list[dict] = []
+    for it in raw:
+        if isinstance(it, dict) and (str(it.get("title") or "").strip() or str(it.get("description") or "").strip()):
+            out.append({"title": str(it.get("title") or "").strip(),
+                        "description": str(it.get("description") or "").strip()})
+        elif isinstance(it, str) and it.strip():
+            out.append({"title": it.strip(), "description": ""})
+    return out or None
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _STYLE_VARIANTS = {"cinematic", "minimal", "bold"}
 _BACKGROUND_KEYS = {"default", "warm-portrait", "concrete", "water", "dark-gradient"}
@@ -290,14 +313,30 @@ def sanitize(result: dict, slides: list[dict]) -> dict:
         if op not in _VALID_OPS:
             continue
         if op in {"edit_slide", "move_slide", "delete_slide", "regenerate_slide",
-                  "generate_image", "set_appearance"}:
+                  "generate_image", "set_appearance", "style_image"}:
             if a.get("slideId") not in ids:
                 continue
         if op == "edit_slide":
-            patch = {k: v for k, v in a.items() if k in _EDITABLE and v not in (None, "")}
+            patch = {k: v for k, v in a.items()
+                     if k in _EDITABLE and k != "items" and v not in (None, "", [])}
+            items = _clean_items(a.get("items"))
+            if items is not None:
+                patch["items"] = items
             if not patch:
                 continue
             clean.append({"op": "edit_slide", "slideId": a["slideId"], **patch})
+        elif op == "style_image":
+            sty: dict[str, Any] = {}
+            blur, dim, scale = a.get("blur"), a.get("dim"), a.get("scale")
+            if isinstance(blur, (int, float)):
+                sty["imageBlur"] = max(0.0, min(16.0, float(blur)))
+            if isinstance(dim, (int, float)):
+                sty["imageDim"] = max(0.0, min(0.85, float(dim)))
+            if isinstance(scale, (int, float)):
+                sty["imageScale"] = max(1.0, min(1.8, float(scale)))
+            if not sty:
+                continue
+            clean.append({"op": "style_image", "slideId": a["slideId"], **sty})
         elif op == "move_slide":
             direction = a.get("direction")
             if direction not in {"up", "down"}:

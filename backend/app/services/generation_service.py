@@ -162,6 +162,14 @@ def _persist_image(session, project_id, slide: Slide, prompt: str, img) -> None:
     url = f"{settings.public_base_url}{settings.api_v1_prefix}/assets/{asset.id}"
     slide.image_asset_id = asset.id
     content = dict(slide.content or {})
+    # Keep the image being replaced as a selectable option so a regenerate never loses it.
+    old_url = content.get("imageUrl")
+    cands = [u for u in (content.get("imageCandidates") or []) if isinstance(u, str)]
+    if old_url and old_url != url and old_url not in cands:
+        cands.append(old_url)
+    if url not in cands:
+        cands.append(url)
+    content["imageCandidates"] = cands[-12:]
     content["imageUrl"] = url
     content["imagePrompt"] = prompt
     slide.content = content
@@ -583,11 +591,14 @@ def run_design(project_id: str, job_id: str | None = None) -> dict:
 
 def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool = True,
                      instructions: str | None = None, image_prompt: str | None = None,
-                     content_prompt: str | None = None) -> dict:
+                     content_prompt: str | None = None, image_instruction: str | None = None,
+                     reference_image: dict | None = None) -> dict:
     """(Re)generate one slide. Workshop parameters (all editable in the UI):
     ``instructions`` — director's notes the content agent must follow for this slide;
     ``image_prompt`` — an edited diffusion prompt, used verbatim instead of the built one;
-    ``content_prompt`` — the FULL writer prompt, edited in the workshop, used verbatim.
+    ``content_prompt`` — the FULL writer prompt, edited in the workshop, used verbatim;
+    ``image_instruction`` — a change folded into the built image prompt ("add guns and roses");
+    ``reference_image`` — {mediaType, data} used as an extra img2img style reference.
     """
     with session_scope() as session:
         slide = session.get(Slide, uuid.UUID(slide_id))
@@ -598,6 +609,11 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         intake = project.intake_form or {}
         design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
         references = _load_reference_images(session, project.id)
+        # A per-call reference (deck-edit "make this slide look like this image") joins the
+        # persisted intake references as an img2img style source.
+        if reference_image and reference_image.get("data"):
+            references = [{"mediaType": reference_image.get("mediaType", "image/jpeg"),
+                           "data": reference_image["data"]}, *references][:4]
         reference = project.reference_deck or None
         ref_slide = (pptx_ref.match_slide(slide.title or "", slide.purpose or "", reference)
                      if reference else None)
@@ -642,6 +658,10 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             used_image_prompt = (image_prompt or "").strip() or image_prompt_agent.build_prompt(
                 slide.slide_type, intake, design, slide.content, has_references=bool(references)
             )
+            # A chat instruction ("add realistic guns and roses") leads the prompt so the change
+            # is reflected in the regenerated art.
+            if image_instruction and image_instruction.strip():
+                used_image_prompt = f"{image_instruction.strip()}. {used_image_prompt}"
             img = generate_image(
                 used_image_prompt,
                 aspect_ratio=image_prompt_agent.aspect_for(slide.slide_type),
@@ -668,6 +688,12 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             **({"imagePrompt": used_image_prompt} if used_image_prompt else {}),
         }
         meta["generated"] = True
+        # An explicit "Regenerate slide" (carries a fresh-take instruction) should also change
+        # the LAYOUT — rotate the composition / image side / style pacing to a new look.
+        if instructions and instructions.strip():
+            meta["appearance"] = layout_agent.varied_appearance(
+                slide.slide_type, design, meta.get("appearance")
+            )
         slide.meta = meta
         session.flush()
 
@@ -847,7 +873,9 @@ def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
                 return result
 
             content = dict(slide.content or {})
-            content["imageCandidates"] = urls
+            # ACCUMULATE so the gallery keeps earlier options — append new ones (deduped), cap 12.
+            existing = [u for u in (content.get("imageCandidates") or []) if isinstance(u, str)]
+            content["imageCandidates"] = (existing + [u for u in urls if u not in existing])[-12:]
             content["imagePrompt"] = use_prompt
             if not content.get("imageUrl"):
                 content["imageUrl"] = urls[0]

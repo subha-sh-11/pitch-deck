@@ -82,7 +82,8 @@ export const reorderSlides = (projectId: string, slideIds: string[]) =>
 // ── Agent action layer: natural-language deck edits ──
 
 export type DeckAction =
-  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[] }
+  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[] }
+  | { op: "style_image"; slideId: string; imageBlur?: number; imageDim?: number; imageScale?: number }
   | { op: "move_slide"; slideId: string; direction: "up" | "down"; steps?: number }
   | { op: "add_slide"; afterSlideNumber: number; slideType: string }
   | { op: "delete_slide"; slideId: string }

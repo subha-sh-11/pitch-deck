@@ -62,6 +62,12 @@ export async function applyDeckActions(
         h.onSetAppearance?.(slideId, patch);
         break;
       }
+      case "style_image": {
+        const { op: _op, slideId, ...patch } = a;
+        void _op;
+        h.onUpdateSlide(slideId, patch); // imageBlur / imageDim / imageScale → content
+        break;
+      }
       case "add_slide": {
         const idx = Math.min(Math.max((a.afterSlideNumber ?? order.length) - 1, 0), Math.max(order.length - 1, 0));
         h.onInsertAfter(idx, a.slideType as SlideType);

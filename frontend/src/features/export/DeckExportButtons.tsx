@@ -44,10 +44,14 @@ export function DeckExportButtons({
         const onProgress = (i: number, n: number) => setStatus(`Rendering slide ${i} / ${n}…`);
         if (pending === "pdf") await exportPDF(els, name, onProgress);
         else await exportPPTX(els, name, onProgress);
-      } catch {
-        if (!cancelled) setStatus("Export failed — try the Download page (Print always works).");
+      } catch (e) {
+        console.error("[deck export] failed:", e); // surface the real cause in the console
+        if (!cancelled) {
+          const msg = (e as Error)?.message || "unknown error";
+          setStatus(`Export failed: ${msg.slice(0, 80)}`);
+        }
         // keep the message briefly
-        await new Promise((r) => setTimeout(r, 2500));
+        await new Promise((r) => setTimeout(r, 4000));
       } finally {
         if (!cancelled) {
           setStatus("");

@@ -110,6 +110,32 @@ async function encodeReferenceImage(file: File): Promise<InterviewImage> {
   }
 }
 
+// A small (≈360px) JPEG data-URI thumbnail for the chat bubble. Tiny enough to persist in
+// localStorage and survive reloads (unlike a blob URL, and without the full image's bulk).
+async function makeThumb(file: File, max = 360): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("unreadable image"));
+      el.src = url;
+    });
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return "";
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function deriveTitle(text: string): string {
   const words = text.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean).slice(0, 6);
   if (!words.length) return "Untitled Project";
@@ -192,7 +218,7 @@ export interface Interview {
   setProjectName: (name: string) => void;
   sendText: (text: string, selectedSlideId?: string) => void;
   chooseOption: (opt: InterviewOption) => void;
-  uploadFile: (file: File, selectedSlideId?: string) => void;
+  uploadFile: (file: File, selectedSlideId?: string, stage?: boolean) => void;
   referenceImages: ReferenceImage[];
   addReferenceImages: (files: File[]) => void;
   removeReferenceImage: (id: string) => void;
@@ -379,9 +405,18 @@ export function useInterview(projectId: string): Interview {
   // Persist durably (localStorage) so closing the tab doesn't lose the chat or brief.
   useEffect(() => {
     try {
+      // Keep small data-URI thumbnails so images survive a reload, but drop dead blob: URLs
+      // (they break) and any oversized preview (would blow the storage quota).
+      const slimMessages = messages.map((m) => {
+        if (m.role !== "attachment" || !m.previewUrl) return m;
+        if (m.previewUrl.startsWith("blob:") || m.previewUrl.length > 80_000) {
+          return { ...m, previewUrl: undefined };
+        }
+        return m;
+      });
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ messages, sections, assumptions, ready, brief: brief.current, history: history.current }),
+        JSON.stringify({ messages: slimMessages, sections, assumptions, ready, brief: brief.current, history: history.current }),
       );
     } catch {
       /* ignore quota */
@@ -472,9 +507,12 @@ export function useInterview(projectId: string): Interview {
     (text: string, selectedSlideId?: string) => {
       const value = text.trim();
       if (!value || thinking) return;
-      // Once the deck exists, the chat edits the deck instead of running intake.
+      // Once the deck exists, the chat edits the deck instead of running intake. Any image the
+      // director staged (pasted/dropped) rides along on this turn as visual direction.
       if (draftSlides.length > 0) {
-        void runDeckCommand(value, selectedSlideId);
+        const imgs = pendingImages.current.length ? [...pendingImages.current] : undefined;
+        pendingImages.current = [];
+        void runDeckCommand(value, selectedSlideId, imgs);
         return;
       }
       // Attach the answer to the pending (last) question.
@@ -506,7 +544,7 @@ export function useInterview(projectId: string): Interview {
   const chooseOption = useCallback((opt: InterviewOption) => submitAnswer(opt.label), [submitAnswer]);
 
   const uploadFile = useCallback(
-    async (file: File, selectedSlideId?: string) => {
+    async (file: File, selectedSlideId?: string, stage = false) => {
       if (thinking) return;
       const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
       const isDoc = /\.(pdf|docx|fdx|txt|md|rtf)$/i.test(file.name) || /pdf|word|officedocument|text/.test(file.type);
@@ -514,26 +552,41 @@ export function useInterview(projectId: string): Interview {
       // Images / inspiration boards / references → the agent SEES them: encode, then either
       // fold into the intake brief (pre-build) or hand to the deck agent to adapt the look (post-build).
       if (isImage) {
-        const previewUrl = URL.createObjectURL(file);
-        setMessages((m) => [
-          ...m,
-          { id: nextId(), role: "attachment", name: file.name, previewUrl, note: "Reference image" },
-        ]);
         try {
-          const encoded = await encodeReferenceImage(file);
-          // After the deck exists, a shared image is creative direction for the deck —
-          // let the deck agent analyse it and adapt theme/visuals (onto the selected slide if any).
+          const [encoded, thumb] = await Promise.all([encodeReferenceImage(file), makeThumb(file)]);
+          // Small self-contained data-URI thumbnail — shows the ACTUAL image and persists across
+          // reloads (a blob URL would break; the full base64 would blow the storage quota).
+          setMessages((m) => [
+            ...m,
+            {
+              id: nextId(),
+              role: "attachment",
+              name: file.name,
+              previewUrl: thumb || undefined,
+              note: "Reference image",
+            },
+          ]);
+          // Queue the image for the next turn (pre-build → the producer folds it into the brief;
+          // post-build → it's visual direction for the deck).
+          pendingImages.current = [...pendingImages.current, encoded].slice(-4);
+          if (draftSlides.length === 0) {
+            const cur = (formRef.current.visualReferences || "").trim();
+            updateForm({ visualReferences: cur ? `${cur}, ${file.name}` : file.name });
+          }
+          // STAGE mode (paste / drop): hold the image and WAIT — the director types a prompt and
+          // hits Send; the staged image rides along on that turn. Don't fire the agent now.
+          // Applies whether or not the deck exists.
+          if (stage) return;
           if (draftSlides.length > 0) {
+            const imgs = pendingImages.current.length ? [...pendingImages.current] : [encoded];
+            pendingImages.current = [];
             await runDeckCommand(
               `Use this reference image as visual direction${selectedSlideId ? " for the slide I have open" : " for the deck"}.`,
               selectedSlideId,
-              [encoded],
+              imgs,
             );
             return;
           }
-          const cur = (formRef.current.visualReferences || "").trim();
-          updateForm({ visualReferences: cur ? `${cur}, ${file.name}` : file.name });
-          pendingImages.current = [...pendingImages.current, encoded].slice(-4);
           const baseHistory = [
             ...history.current,
             { role: "user" as const, text: `(shared a reference image: ${file.name})` },

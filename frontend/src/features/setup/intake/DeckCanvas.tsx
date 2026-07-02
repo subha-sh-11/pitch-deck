@@ -1,13 +1,10 @@
 "use client";
 
 import { useMemo, type CSSProperties } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
 import { SlideThumbnailPreview } from "@/components/slides/SlideThumbnailPreview";
 import { DeckExportButtons } from "@/features/export/DeckExportButtons";
 import { buildSlideFromOutline } from "@/lib/build-slides";
 import { FALLBACK_DESIGN } from "@/lib/deck-themes";
-import { projectRoutes } from "@/lib/routes";
 import { useSmoothProgress } from "@/lib/use-smooth-progress";
 import type { SlideType } from "@/types/slide";
 import type { Interview } from "./useInterview";
@@ -30,8 +27,6 @@ const DOT_BG: CSSProperties = {
 };
 
 export function DeckCanvas({ iv }: { iv: Interview }) {
-  const params = useParams();
-  const projectId = (params?.id as string) || "";
   const form = iv.form;
   const real = iv.draftSlides;
   const generating = iv.generationStatus === "generating";
@@ -62,22 +57,6 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
           {!generating && (
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <DeckExportButtons slides={real} design={effectiveDesign} />
-              {projectId && (
-                <Link
-                  href={projectRoutes.review(projectId)}
-                  className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-text-primary transition hover:bg-white/10"
-                >
-                  Review
-                </Link>
-              )}
-              {projectId && (
-                <Link
-                  href={projectRoutes.export(projectId)}
-                  className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-text-primary transition hover:bg-white/10"
-                >
-                  More ↓
-                </Link>
-              )}
             </div>
           )}
         </div>

@@ -5,9 +5,12 @@ export const SLIDE_W = 1280;
 export const SLIDE_H = 720;
 
 const CDN = {
-  html2canvas: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+  // html-to-image renders through the browser's own engine (SVG foreignObject), so modern CSS
+  // like Tailwind v4's oklch()/oklab() colours works — html2canvas 1.4.1 crashes on them.
+  htmlToImage: "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js",
   jspdf: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
-  pptxgen: "https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js",
+  // pptxgenjs isn't reliably on cdnjs — use jsDelivr's canonical dist bundle (exposes PptxGenJS).
+  pptxgen: "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js",
   jszip: "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
 };
 
@@ -43,17 +46,55 @@ export async function waitForImages(container: HTMLElement): Promise<void> {
   await new Promise((r) => setTimeout(r, 120));
 }
 
+/** Replace every <img> src with a same-origin data URI so html2canvas can't taint the canvas.
+ *  (Cross-origin images — even CORS-enabled — taint if the browser cached a non-CORS copy.) */
+async function inlineImages(el: HTMLElement): Promise<void> {
+  const imgs = Array.from(el.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.currentSrc || img.src;
+      if (!src || src.startsWith("data:")) return;
+      try {
+        const res = await fetch(src, { mode: "cors", cache: "reload" });
+        const blob = await res.blob();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result as string);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+        img.src = dataUrl;
+        img.removeAttribute("srcset");
+      } catch {
+        /* leave the original src — worst case that one image is blank in the export */
+      }
+    }),
+  );
+  // Wait for the swapped data-URI images to (re)load before capturing.
+  await Promise.all(
+    imgs.map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise<void>((res) => {
+            img.addEventListener("load", () => res(), { once: true });
+            img.addEventListener("error", () => res(), { once: true });
+          }),
+    ),
+  );
+}
+
 export async function captureSlide(el: HTMLElement): Promise<HTMLCanvasElement> {
-  await loadScript(CDN.html2canvas);
-  const html2canvas = (window as AnyWin).html2canvas;
-  return html2canvas(el, {
-    useCORS: true,
-    backgroundColor: "#0a0a0c",
-    scale: 2,
+  await loadScript(CDN.htmlToImage);
+  await inlineImages(el); // convert cross-origin images to data URIs first (prevents taint)
+  const htmlToImage = (window as AnyWin).htmlToImage;
+  return htmlToImage.toCanvas(el, {
+    pixelRatio: 2,
     width: SLIDE_W,
     height: SLIDE_H,
-    windowWidth: SLIDE_W,
-    windowHeight: SLIDE_H,
+    backgroundColor: "#0a0a0c",
+    cacheBust: true,
+    // Custom display fonts (e.g. Canela) 404 in dev; don't let a font fetch abort the whole capture.
+    skipFonts: false,
   });
 }
 

@@ -193,15 +193,35 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
 
 function SlideCard({ slide }: { slide: Slide }) {
   const { projectId, designDirection, replaceDraftSlide } = useSetupWizard();
+  // Which slide the chat's "this slide" resolves to — clicking a card makes it active.
+  const { slides: wsSlides, slide: activeSlide, setIndex } = useWorkshop();
+  const isActive = activeSlide?.id === slide.id;
+  const markActive = () => {
+    const i = wsSlides.findIndex((s) => s.id === slide.id);
+    if (i >= 0) setIndex(i);
+  };
   const [imagePrompt, setImagePrompt] = useState(
     slide.prompts?.imagePrompt ?? slide.content.imagePrompt ?? "",
   );
   const [busy, setBusy] = useState<null | "slide" | "image">(null);
   const [err, setErr] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState(false);
+  const [zoom, setZoom] = useState<string | null>(null); // full-size preview of one option
   const [uploading, setUploading] = useState(false);
   const [tweakOpen, setTweakOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Download an option. The backend serves ?download=1 with a Content-Disposition attachment
+  // header, so the browser saves the file (works cross-origin, no CORS fetch needed).
+  const downloadImage = (url: string) => {
+    const href = url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `slide-${slide.slideNumber}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const onContentChange = useCallback(
     (patch: Partial<SlideContent>) => {
@@ -219,10 +239,20 @@ function SlideCard({ slide }: { slide: Slide }) {
     setErr(null);
     try {
       const job = await apiRegenerateSlide(slide.id, {
-        // No per-slide content prompt — the deck is generated as one coherent whole,
-        // so the writer composes from the shared brief/design automatically.
         imagePrompt: imagePrompt.trim() || undefined,
-        withImage: !slide.content.imageUrl,
+        // Always regenerate the image too — an explicit "Regenerate slide" click should
+        // visibly redo the whole slide.
+        withImage: true,
+        // On a RE-generate (slide already exists), force a genuinely fresh take: this
+        // instruction bypasses the writer's content cache AND asks for a new angle/phrasing,
+        // so the text changes too — not just the image.
+        ...(slide.generated
+          ? {
+              instructions:
+                "Rewrite this slide completely fresh — a distinctly different angle, new phrasing, "
+                + "and a new headline. Do NOT repeat the previous version's wording.",
+            }
+          : {}),
       });
       const final = await pollJob(job);
       if (final.status === "failed") throw new Error(final.error ?? "Generation failed");
@@ -284,21 +314,26 @@ function SlideCard({ slide }: { slide: Slide }) {
 
   const approved = slide.status === "approved";
   const imageUrl = slide.content.imageUrl;
-  const candidates = slide.content.imageCandidates?.length
-    ? slide.content.imageCandidates
-    : imageUrl
-      ? [imageUrl]
-      : [];
+  // Always keep the CURRENT image in the options so it never disappears when new options
+  // are generated — the new ones are added alongside it, not in place of it.
+  const candidates = (() => {
+    const fromBackend = slide.content.imageCandidates ?? [];
+    if (!fromBackend.length) return imageUrl ? [imageUrl] : [];
+    return imageUrl && !fromBackend.includes(imageUrl) ? [imageUrl, ...fromBackend] : fromBackend;
+  })();
 
-  // Open the full-screen gallery; if we don't yet have a few options, generate them
-  // so the gallery shows multiple choices instead of a single oversized image.
-  const openGallery = () => {
-    setLightbox(true);
-    if (candidates.length < 3 && !busy) void genVariants();
-  };
+  // Just open the gallery to browse the EXISTING image/options — never auto-generate.
+  // New options are created only when the director clicks "Generate 3 options".
+  const openGallery = () => setLightbox(true);
 
   return (
-    <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border-glass bg-surface-1/30 p-4 lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden">
+    <div
+      onMouseDown={markActive}
+      title={isActive ? "The chat's edits apply to this slide" : "Click to edit this slide via chat"}
+      className={`grid grid-cols-1 gap-4 rounded-2xl border bg-surface-1/30 p-4 transition-colors lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden ${
+        isActive ? "border-accent-neon/60 ring-1 ring-accent-neon/30" : "border-border-glass"
+      }`}
+    >
       {/* LEFT — a clean control rail (no per-slide prompt; the deck writes as one whole) */}
       <div className="flex min-w-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
         <input
@@ -443,6 +478,24 @@ function SlideCard({ slide }: { slide: Slide }) {
         </div>
       </div>
 
+      {/* Full-size preview of a single option (above the gallery) */}
+      {zoom && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 p-8" onClick={() => setZoom(null)}>
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={zoom} alt="" className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" />
+            <div className="absolute right-2 top-2 flex gap-2">
+              <button type="button" onClick={() => void downloadImage(zoom)} title="Download"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur hover:bg-black/80">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+              </button>
+              <button type="button" onClick={() => setZoom(null)} aria-label="Close"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-lg text-white backdrop-blur hover:bg-black/80">×</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Full-screen image gallery — browse the options and pick one */}
       {lightbox && (
         <div
@@ -485,26 +538,40 @@ function SlideCard({ slide }: { slide: Slide }) {
             {candidates.map((u, i) => {
               const selected = u === imageUrl;
               return (
-                <button
+                <div
                   key={i}
-                  type="button"
-                  onClick={() => onContentChange({ imageUrl: u })}
                   className={`group relative h-fit overflow-hidden rounded-xl border-2 transition-colors ${
                     selected ? "border-accent-neon" : "border-transparent hover:border-white/40"
                   }`}
                 >
+                  {/* Click places it in the slide */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={u} alt="" className="aspect-video w-full object-cover" />
+                  <img
+                    src={u}
+                    alt=""
+                    onClick={() => onContentChange({ imageUrl: u })}
+                    className="aspect-video w-full cursor-pointer object-cover"
+                    title="Click to use this image"
+                  />
+                  {/* Enlarge + download (don't select) */}
+                  <div className="absolute left-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button type="button" onClick={() => setZoom(u)} title="Enlarge"
+                      className="flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/80">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                    </button>
+                    <button type="button" onClick={() => void downloadImage(u)} title="Download"
+                      className="flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/80">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+                    </button>
+                  </div>
                   <span
                     className={`absolute right-2 top-2 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                      selected
-                        ? "bg-accent-neon text-zinc-950"
-                        : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
+                      selected ? "bg-accent-neon text-zinc-950" : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
                     }`}
                   >
-                    {selected ? "✓ Selected" : "Use this"}
+                    {selected ? "✓ In deck" : "Use this"}
                   </span>
-                </button>
+                </div>
               );
             })}
             {busy === "image" &&

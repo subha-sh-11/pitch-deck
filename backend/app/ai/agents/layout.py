@@ -12,6 +12,8 @@ override everything per slide in the editor.
 """
 from __future__ import annotations
 
+import random
+
 # slide_type → default layoutType (template defaults to the slide_type)
 _LAYOUT_TYPE: dict[str, str] = {
     "cover": "full_bleed",
@@ -114,4 +116,28 @@ def appearance_for(slide_type: str, design: dict | None = None) -> dict:
     comp = _COMPOSITION_BY_TYPE.get(slide_type)
     if comp:
         appearance["composition"], appearance["imageSide"] = comp
+    return appearance
+
+
+# Composition variants each template can render (grids/heroes keep their own layout).
+_COMP_OPTIONS = ["split", "framed", "full"]
+_STYLE_OPTIONS = ["standard", "bold", "minimal", "cinematic"]
+# Types whose template actually reflows with composition/imageSide.
+_COMPOSABLE = set(_COMPOSITION_BY_TYPE) | {"synopsis", "story_world", "visual_aesthetic"}
+
+
+def varied_appearance(slide_type: str, design: dict | None = None, current: dict | None = None) -> dict:
+    """A DELIBERATELY DIFFERENT appearance than ``current`` — so an explicit 'Regenerate slide'
+    also changes the LAYOUT (composition / image side / style pacing), not just text + image."""
+    cur = current or {}
+    appearance = appearance_for(slide_type, design)
+
+    styles = [s for s in _STYLE_OPTIONS if s != cur.get("styleVariant")] or _STYLE_OPTIONS
+    appearance["styleVariant"] = random.choice(styles)
+
+    if slide_type in _COMPOSABLE:
+        comps = [c for c in _COMP_OPTIONS if c != cur.get("composition")] or _COMP_OPTIONS
+        appearance["composition"] = random.choice(comps)
+        # Flip the image side from whatever it was.
+        appearance["imageSide"] = "left" if cur.get("imageSide") == "right" else "right"
     return appearance
