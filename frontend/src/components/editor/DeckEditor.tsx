@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import type { DesignDirection } from "@/types/design";
+import type { ColorToken, DesignDirection } from "@/types/design";
 import type { Slide, SlideAppearance, SlideType } from "@/types/slide";
 import { SLIDE_STATUS_LABELS, SLIDE_TYPE_LABELS } from "@/types/slide";
 import {
@@ -43,6 +43,12 @@ interface DeckEditorProps {
     > & { appearance?: Partial<SlideAppearance> },
   ) => void;
   onAddComment: (id: string, text: string) => void;
+  /** Image-only regeneration for the AI assistant (falls back to full regen if absent). */
+  onGenerateImage?: (id: string, imagePrompt?: string) => Promise<void>;
+  /** Instant, regen-free deck-wide design changes for the AI assistant. */
+  onSetAccent?: (hex: string) => void;
+  onSetTheme?: (palette: ColorToken[]) => void;
+  onSetFont?: (font: string) => void;
 }
 
 const SAVE_STATUS_LABELS: Record<string, string> = {
@@ -64,6 +70,10 @@ export function DeckEditor({
   onUpdateSlide,
   onUpdateSlideMeta,
   onAddComment,
+  onGenerateImage,
+  onSetAccent,
+  onSetTheme,
+  onSetFont,
 }: DeckEditorProps) {
   const [projectTitle, setProjectTitle] = useState("Project");
   const [aiOpen, setAiOpen] = useState(false);
@@ -278,6 +288,7 @@ export function DeckEditor({
       <EditorFlyout title="AI assistant" open={aiOpen} onClose={() => setAiOpen(false)}>
         <AiCommandPanel
           projectId={projectId}
+          selectedSlideId={slide?.id}
           handlers={{
             slides,
             onUpdateSlide,
@@ -285,6 +296,11 @@ export function DeckEditor({
             onInsertAfter,
             onDeleteSlide,
             onRegenerateSlide,
+            onGenerateImage,
+            onSetAppearance: (id, patch) => onUpdateSlideMeta(id, { appearance: patch }),
+            onSetAccent,
+            onSetTheme,
+            onSetFont,
           }}
         />
       </EditorFlyout>

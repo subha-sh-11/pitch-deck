@@ -118,7 +118,7 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Run DB migrations (creates tables incl. the auth columns)
+# Run DB migrations (creates all tables)
 alembic upgrade head
 
 # Start the API

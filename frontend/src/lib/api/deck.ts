@@ -97,6 +97,35 @@ export type DeckAction =
 export interface DeckCommandResult {
   message: string;
   actions: DeckAction[];
+  /** Actions the agent emitted that the backend discarded as invalid — when > 0 and
+   *  `actions` is empty, the agent's message may claim a change that never applied. */
+  discarded?: number;
+}
+
+/** Example commands shown when the agent needs direction — so the user always knows what
+ *  kind of instruction works (the way Claude/ChatGPT suggest next steps). */
+const COMMAND_EXAMPLES =
+  'For example: “make slide 2’s text white”, “add an image to the cover”, or “move the budget slide up”.';
+
+/** Honest chat text for a deck-command result: echo the agent's message only when its
+ *  changes actually applied; otherwise say so instead of relaying a fabricated "Done". */
+export function honestDeckCommandText(res: DeckCommandResult): string {
+  if (res.actions.length > 0) return res.message;
+  if ((res.discarded ?? 0) > 0) {
+    return (
+      "I tried to make that change but it didn't apply cleanly — tell me the exact slide (or rephrase) and I'll do it.\n" +
+      COMMAND_EXAMPLES
+    );
+  }
+  if (!res.message) {
+    return `I didn't change anything — tell me which slide and what to change and I'll do it.\n${COMMAND_EXAMPLES}`;
+  }
+  // Zero actions and none discarded: a clarification question or an honest "can't do that".
+  // A question gets example commands so the user knows how to answer; a success-sounding
+  // claim gets corrected with an explicit "nothing applied" note.
+  return res.message.includes("?")
+    ? `${res.message}\n${COMMAND_EXAMPLES}`
+    : `${res.message}\n(No changes were applied to the deck.)`;
 }
 
 export interface DeckCommandTurn {

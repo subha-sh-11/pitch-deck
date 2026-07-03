@@ -17,8 +17,8 @@ import {
   type InterviewPillars,
   type InterviewResult,
 } from "@/lib/api";
-import { deckCommand, type DeckCommandImage } from "@/lib/api/deck";
-import { applyDeckActions, type DeckActionHandlers } from "@/lib/apply-deck-actions";
+import { deckCommand, honestDeckCommandText, type DeckCommandImage } from "@/lib/api/deck";
+import { applyDeckActions, describeDeckAction, type DeckActionHandlers } from "@/lib/apply-deck-actions";
 import { EMPTY_INTAKE_FORM, type GenerationStatus } from "@/types/setup";
 import type { IntakeFormData } from "@/types/workflow";
 import type { Slide } from "@/types/slide";
@@ -477,14 +477,39 @@ export function useInterview(projectId: string): Interview {
           onSetTheme: applyThemePalette,
           onSetFont: applyDisplayFont,
         };
-        await applyDeckActions(res.actions, handlers);
-        // Report honestly: only echo the agent's confirmation when it actually did something;
-        // otherwise say nothing changed instead of a fabricated "Done".
-        const text =
-          res.actions.length > 0
-            ? res.message
-            : res.message ||
-              "I didn't change anything — tell me which slide and what to change and I'll do it.";
+        // Narrate the work as live tool steps (the way Claude/ChatGPT show their tool use):
+        // each action appears in the chat, ticks over while running, and ✓s when done.
+        if (res.actions.length > 0) {
+          const labels = res.actions.map((a) => describeDeckAction(a, draftSlides));
+          const toolId = nextId();
+          const renderDetail = (upTo: number, runningIdx: number | null) =>
+            labels.map((l, j) =>
+              j < upTo ? `✓ ${l}` : j === runningIdx ? `⏳ ${l}…` : `• ${l}`,
+            );
+          setMessages((m) => [
+            ...m,
+            {
+              id: toolId,
+              role: "tool",
+              label: `Editing the deck — ${labels.length} ${labels.length === 1 ? "step" : "steps"}`,
+              detail: renderDetail(0, 0),
+            },
+          ]);
+          const patchTool = (patch: { label?: string; detail: string[] }) =>
+            setMessages((m) =>
+              m.map((msg) => (msg.id === toolId && msg.role === "tool" ? { ...msg, ...patch } : msg)),
+            );
+          await applyDeckActions(res.actions, handlers, (i, phase) =>
+            patchTool({ detail: phase === "start" ? renderDetail(i, i) : renderDetail(i + 1, null) }),
+          );
+          patchTool({
+            label: `Edited the deck — ${labels.length} ${labels.length === 1 ? "change" : "changes"} applied`,
+            detail: labels.map((l) => `✓ ${l}`),
+          });
+        }
+        // Report honestly: only echo the agent's confirmation when its changes actually
+        // applied; otherwise say so instead of relaying a fabricated "Done".
+        const text = honestDeckCommandText(res);
         setMessages((m) => [...m, { id: nextId(), role: "assistant", text }]);
         history.current = [...history.current, { role: "assistant", text }];
       } catch {

@@ -5,16 +5,20 @@ slide up", "rewrite the logline punchier", "add a team slide", "regenerate the l
 plus the current deck, this returns a short conversational `message` and a list of structured
 `actions` the frontend applies to the live deck via its existing slide-mutation functions.
 
-Contract mirrors the other agents: `run()` calls `llm.complete_json` with a deterministic
-fallback, so a no-key / offline environment degrades gracefully instead of erroring.
+Actions are emitted via NATIVE tool calling (`llm.complete_tools`): each edit op is a tool with
+a JSON schema, so the model produces validated calls instead of a free-form JSON blob — far
+better adherence, and the confirmation message can be checked against the calls that actually
+survived validation (no more "Done!" for changes that never applied).
+
+Contract mirrors the other agents: a deterministic fallback means a no-key / offline
+environment degrades gracefully instead of erroring.
 """
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
-from app.ai.llm import complete_json
+from app.ai.llm import complete_tools
 
 # Action ops the frontend knows how to apply (→ editor mutation functions):
 #   edit_slide       {slideId, title?, heading?, subheading?, body?, bullets?[]}  → onUpdateSlide
@@ -27,14 +31,15 @@ from app.ai.llm import complete_json
 #   set_accent       {hex}                                                        → onSetAccent (deck-wide)
 #   set_theme        {palette[]}                                                  → onSetTheme  (deck-wide)
 #   set_font         {font}                                                       → onSetFont   (deck-wide)
+# Each op is exposed to the model as a NATIVE TOOL (schemas in _TOOLS below).
 _SYSTEM = """\
 You are the deck editor for a cinematic film pitch deck. The director tells you, in plain language,
-how to change the deck; you translate that into precise EDIT ACTIONS on the existing slides and a
-short, in-character confirmation of what you did.
+how to change the deck; you carry it out by CALLING THE EDIT TOOLS on the existing slides, and you
+write ONE short, in-character line describing what you did.
 
 You are given the current slides (id, number, type, title, and a little content). Reason about which
 slide(s) the instruction refers to — by name, type, position ("the cover", "slide 3", "the comps
-slide", "the protagonist") — and emit ONLY the actions needed. Never invent slide ids; use the ids
+slide", "the protagonist") — and call ONLY the tools needed. Never invent slide ids; use the ids
 you were given. Ground any new copy in the existing deck — don't invent unrelated plot.
 
 CONVERSATION CONTINUITY — you are mid-conversation, not answering in isolation:
@@ -52,13 +57,13 @@ CONVERSATION CONTINUITY — you are mid-conversation, not answering in isolation
 
 IMAGERY — putting pictures on slides (DO IT, don't suggest it):
 - When the director asks for an image ("put an image on this slide", "add character art", "give me a
-  visual", "make a relevant image"), EMIT a generate_image action — never reply "you can add one in
+  visual", "make a relevant image"), CALL generate_image — never reply "you can add one in
   the editor". You are an agent; perform the action.
-- generate_image redraws ONE slide's image per action. If no imagePrompt is given, leave it out and
+- generate_image redraws ONE slide's image per call. If no imagePrompt is given, leave it out and
   the system composes a real prompt from the slide + script + design. Only set imagePrompt when the
   director described what they want to see; ground it in the actual story.
 - For "images for the 6 characters", you cannot render several separate portraits inside one slide —
-  instead emit a generate_image for the main-character slide AND one for the supporting-characters
+  instead call generate_image for the main-character slide AND for the supporting-characters
   slide (and say so). Never claim you produced images you didn't.
 - GENRE-BLEND is the exception: a generate_image on the genre_blend slide automatically renders ONE
   image PER genre tile. So you CAN give each genre (comedy, crime, drama, …) its own image — emit a
@@ -123,7 +128,7 @@ Rules:
 - DEFAULT TARGET: if the director doesn't name a slide ("add an image", "make this minimal"), act on
   the CURRENTLY SELECTED SLIDE shown below. Only ask which slide if there is no selected slide AND the
   reference is genuinely ambiguous.
-- "Apply to every slide / the whole deck" (layout or look) → emit one action per slide in the deck
+- "Apply to every slide / the whole deck" (layout or look) → one tool call per slide in the deck
   (for colour, prefer a single set_accent / set_theme).
 - FONT changes ("change the font", "use a serif", "make it Times", "bolder type") → set_font. Only
   these display fonts are available; map the request to the NEAREST one:
@@ -131,20 +136,171 @@ Rules:
     bold / poster / impact / heavy / condensed         → "anton" (or "oswald")
     clean / modern / sans / minimal                    → "poppins"
   Say which font you applied (and that it's the closest available match if they named a specific one).
-- Be an agent: when the instruction is a clear edit, DO IT (emit the action) and confirm.
+- Be an agent: when the instruction is a clear edit, DO IT (call the tool) and confirm.
 
 NEVER FABRICATE — this is critical:
-- Only claim you changed something if you emitted a matching action for it. Do NOT say "Changed the
-  font / colour / image" unless you actually emitted set_font / set_accent / generate_image, etc.
-- If you genuinely cannot do what's asked (no matching action exists), say so plainly and emit NO
-  action — never report a success you didn't perform.
-- Return actions: [] and ask ONE short clarification only when the instruction is genuinely unclear
+- Only claim you changed something if you made a matching tool call for it. Do NOT say "Changed the
+  font / colour / image" unless you actually called set_font / set_accent / generate_image, etc.
+- If you genuinely cannot do what's asked (no matching tool exists), say so plainly and call NO
+  tool — never report a success you didn't perform.
+- Call no tools and ask ONE short clarification only when the instruction is genuinely unclear
   or not about editing the deck.
 
-OUTPUT — return ONLY this JSON object:
-{ "message": "<one short, in-character line describing what you changed or what you need>",
-  "actions": [ <zero or more action objects above> ] }
+OUTPUT: make the tool calls for the edits, and ALWAYS also write one short, in-character line of
+plain text describing what you changed (or what you need). Text only — no JSON, no markdown.
 """
+
+
+# ── Native tool schemas (translated per provider by llm.complete_tools) ──
+
+_SLIDE_TYPES = [
+    "cover", "logline", "genre_blend", "synopsis", "story_world", "character",
+    "supporting_characters", "usp", "show_cross", "visual_aesthetic", "target_audience",
+    "budget", "market_potential", "directors_vision", "team", "contact", "generic",
+]
+
+_HEX_DESC = "6-digit hex colour like #C9A227"
+
+_TOOLS: list[dict] = [
+    {
+        "name": "edit_slide",
+        "description": "Rewrite copy on one slide. Include ONLY the fields you are changing.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slideId": {"type": "string", "description": "id of an existing slide (from CURRENT DECK)"},
+                "title": {"type": "string"},
+                "heading": {"type": "string"},
+                "subheading": {"type": "string"},
+                "body": {"type": "string"},
+                "bullets": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["slideId"],
+        },
+    },
+    {
+        "name": "move_slide",
+        "description": "Move a slide up or down in the deck order.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slideId": {"type": "string"},
+                "direction": {"type": "string", "enum": ["up", "down"]},
+                "steps": {"type": "integer", "minimum": 1, "description": "positions to move (default 1)"},
+            },
+            "required": ["slideId", "direction"],
+        },
+    },
+    {
+        "name": "add_slide",
+        "description": "Insert a new slide after the given slide number.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "afterSlideNumber": {"type": "integer"},
+                "slideType": {"type": "string", "enum": _SLIDE_TYPES},
+            },
+            "required": ["afterSlideNumber", "slideType"],
+        },
+    },
+    {
+        "name": "delete_slide",
+        "description": "Remove a slide from the deck.",
+        "parameters": {
+            "type": "object",
+            "properties": {"slideId": {"type": "string"}},
+            "required": ["slideId"],
+        },
+    },
+    {
+        "name": "regenerate_slide",
+        "description": "Regenerate the WHOLE slide — rewrites its copy AND its imagery.",
+        "parameters": {
+            "type": "object",
+            "properties": {"slideId": {"type": "string"}},
+            "required": ["slideId"],
+        },
+    },
+    {
+        "name": "generate_image",
+        "description": ("Draw or replace JUST the image on one slide. Omit imagePrompt to let the "
+                        "system compose one from the slide + script + design; set it only when the "
+                        "director described what they want to see."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slideId": {"type": "string"},
+                "imagePrompt": {"type": "string"},
+            },
+            "required": ["slideId"],
+        },
+    },
+    {
+        "name": "set_appearance",
+        "description": ("Per-slide layout / look. Include only the keys you're changing. "
+                        "textColor overrides the deck theme on JUST this slide."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slideId": {"type": "string"},
+                "styleVariant": {"type": "string", "enum": ["cinematic", "minimal", "bold"]},
+                "accentColor": {"type": "string", "description": _HEX_DESC},
+                "textColor": {"type": "string", "description": _HEX_DESC},
+                "backgroundKey": {"type": "string",
+                                  "enum": ["default", "warm-portrait", "concrete", "water", "dark-gradient"]},
+                "composition": {"type": "string", "enum": ["full", "split", "framed"]},
+                "imageSide": {"type": "string", "enum": ["left", "right"]},
+            },
+            "required": ["slideId"],
+        },
+    },
+    {
+        "name": "set_accent",
+        "description": "Instant accent recolour of the WHOLE deck (no regeneration).",
+        "parameters": {
+            "type": "object",
+            "properties": {"hex": {"type": "string", "description": _HEX_DESC}},
+            "required": ["hex"],
+        },
+    },
+    {
+        "name": "set_theme",
+        "description": ("Set the WHOLE deck's colour theme. Provide a full palette: a base colour "
+                        "with usage 'background', a CONTRASTING colour with usage 'text', and a "
+                        "sensible 'accent'."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "palette": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "hex": {"type": "string", "description": _HEX_DESC},
+                            "usage": {"type": "string", "enum": ["background", "accent", "text"]},
+                        },
+                        "required": ["hex", "usage"],
+                    },
+                },
+            },
+            "required": ["palette"],
+        },
+    },
+    {
+        "name": "set_font",
+        "description": ("Deck-wide display font. Only these five are loaded: cormorant, playfair, "
+                        "oswald, poppins, anton — map any request to the nearest one."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "font": {"type": "string",
+                         "description": "one of: cormorant | playfair | oswald | poppins | anton"},
+            },
+            "required": ["font"],
+        },
+    },
+]
 
 
 def _slides_digest(slides: list[dict]) -> str:
@@ -206,14 +362,36 @@ def _build_prompt(instruction: str, slides: list[dict], history: list[dict] | No
         f'DIRECTOR\'S LATEST INSTRUCTION:\n  "{instruction}"\n\n'
         "Use the conversation for context — if your previous line asked a question, this instruction"
         " is the answer to it (a bare number/ordinal means that slide number, never a move). If no"
-        " slide is named, act on the CURRENTLY SELECTED SLIDE. Translate the instruction into edit"
-        " actions on the slides above and confirm what you did. Return ONLY the JSON."
+        " slide is named, act on the CURRENTLY SELECTED SLIDE. Carry out the instruction by calling"
+        " the edit tools on the slides above, and write one short line confirming what you did."
     )
+
+
+def _describe_actions(actions: list[dict]) -> str:
+    """Deterministic one-line confirmation when the model gave tool calls but no text."""
+    if not actions:
+        return "Done."
+    ops = {}
+    for a in actions:
+        ops[a["op"]] = ops.get(a["op"], 0) + 1
+    labels = {
+        "edit_slide": "rewrote copy", "move_slide": "reordered slides", "add_slide": "added a slide",
+        "delete_slide": "removed a slide", "regenerate_slide": "regenerated a slide",
+        "generate_image": "generated imagery", "set_appearance": "restyled a slide",
+        "set_accent": "recoloured the accent", "set_theme": "set a new theme",
+        "set_font": "changed the display font",
+    }
+    parts = [labels.get(op, op) for op in ops]
+    return ("Done — " + ", ".join(parts) + ".").capitalize()
 
 
 def run(instruction: str, slides: list[dict], history: list[dict] | None = None,
         selected_slide_id: str | None = None, images: list[dict] | None = None) -> dict:
-    """Turn a natural-language instruction into {message, actions[]}.
+    """Turn a natural-language instruction into {message, actions[], discarded}.
+
+    Uses NATIVE tool calling: the model emits schema-validated edit calls, we validate them
+    against the real deck, and the confirmation the director sees is grounded in the calls
+    that actually survived — so "Done" is never claimed for edits that didn't happen.
 
     ``history``: recent [{"role": "user"|"assistant", "text": str}] turns so the agent can
     resolve follow-ups like a bare "9th" against its own previous question.
@@ -222,16 +400,41 @@ def run(instruction: str, slides: list[dict], history: list[dict] | None = None,
     vision model to analyse and adapt the deck to.
     """
     image_names = [img.get("name", "reference") for img in images] if images else None
-    return complete_json(
+    result = complete_tools(
         system=_SYSTEM,
         prompt=_build_prompt(instruction, slides, history, selected_slide_id, image_names),
-        cache_prefix="slide_edit",
-        max_tokens=1200,
+        tools=_TOOLS,
+        log_prefix="slide_edit",
+        max_tokens=1600,
         temperature=0.3,
-        use_cache=False,
         images=images,
         fallback=lambda: _fallback(instruction, slides),
     )
+    if not isinstance(result, dict):
+        return _fallback(instruction, slides)
+    if "actions" in result:  # deterministic fallback already in the public shape
+        return result
+
+    raw_actions = [
+        {"op": tc.get("name"), **(tc.get("arguments") or {})}
+        for tc in result.get("tool_calls", []) or []
+        if isinstance(tc, dict)
+    ]
+    validated = sanitize({"message": result.get("text") or "", "actions": raw_actions}, slides)
+    actions, discarded = validated["actions"], validated["discarded"]
+
+    # Ground the confirmation in what actually survived validation.
+    text = (result.get("text") or "").strip()
+    if actions:
+        message = text or _describe_actions(actions)
+        if discarded:
+            message += " (Part of the request didn't apply cleanly — tell me the exact slide for the rest.)"
+    elif discarded:
+        message = ("I tried to make that change but it didn't apply cleanly — "
+                   "tell me the exact slide (or rephrase) and I'll do it.")
+    else:
+        message = text or "Tell me which slide to change and what you'd like different, and I'll do it."
+    return {"message": message, "actions": actions, "discarded": discarded}
 
 
 def _fallback(instruction: str, slides: list[dict]) -> dict:
@@ -303,10 +506,16 @@ def _normalize_font(value: Any) -> str | None:
 
 def sanitize(result: dict, slides: list[dict]) -> dict:
     """Drop malformed actions or ones referencing unknown slide ids, so the client only ever
-    receives actions it can safely apply."""
+    receives actions it can safely apply.
+
+    Also reports ``discarded`` — how many actions the model emitted that were dropped here —
+    so the client can tell "the agent chose to do nothing" apart from "the agent tried but its
+    actions were invalid", and avoid echoing a success message for changes that never applied.
+    """
     ids = {s.get("id") for s in (slides or [])}
+    raw_actions = [a for a in ((result or {}).get("actions", []) or []) if isinstance(a, dict)]
     clean: list[dict[str, Any]] = []
-    for a in (result or {}).get("actions", []) or []:
+    for a in raw_actions:
         if not isinstance(a, dict):
             continue
         op = a.get("op")
@@ -406,4 +615,12 @@ def sanitize(result: dict, slides: list[dict]) -> dict:
             clean.append({"op": "set_font", "font": font})
         else:  # delete_slide / regenerate_slide
             clean.append({"op": op, "slideId": a["slideId"]})
-    return {"message": (result or {}).get("message") or "Done.", "actions": clean}
+    prior = (result or {}).get("discarded")
+    return {
+        "message": (result or {}).get("message") or "Done.",
+        "actions": clean,
+        # Accumulate: re-sanitizing an already-validated result (the router does this as a
+        # final safety net) must not reset the count of what was dropped earlier.
+        "discarded": (prior if isinstance(prior, int) and prior > 0 else 0)
+                     + (len(raw_actions) - len(clean)),
+    }

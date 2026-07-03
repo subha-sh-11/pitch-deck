@@ -22,17 +22,57 @@ export interface DeckActionHandlers {
   onSetFont?: (font: string) => void;
 }
 
+/** Human-readable one-liner for an action — what the agent is DOING, shown to the user in
+ *  the chat as a live tool step (the way Claude/ChatGPT narrate their tool use). */
+export function describeDeckAction(a: DeckAction, slides: Pick<Slide, "id" | "slideNumber" | "title">[]): string {
+  const name = (id: string) => {
+    const s = slides.find((x) => x.id === id);
+    return s ? `“${s.title}” (slide ${s.slideNumber})` : "a slide";
+  };
+  switch (a.op) {
+    case "edit_slide": {
+      const fields = Object.keys(a).filter((k) => k !== "op" && k !== "slideId");
+      return `Rewriting ${fields.join(", ") || "copy"} on ${name(a.slideId)}`;
+    }
+    case "move_slide":
+      return `Moving ${name(a.slideId)} ${a.direction}${a.steps && a.steps > 1 ? ` ${a.steps} places` : ""}`;
+    case "add_slide":
+      return `Adding a ${String(a.slideType).replace(/_/g, " ")} slide after slide ${a.afterSlideNumber}`;
+    case "delete_slide":
+      return `Removing ${name(a.slideId)}`;
+    case "regenerate_slide":
+      return `Regenerating ${name(a.slideId)} — copy and image`;
+    case "generate_image":
+      return `Generating an image for ${name(a.slideId)}`;
+    case "set_appearance": {
+      const fields = Object.keys(a).filter((k) => k !== "op" && k !== "slideId");
+      return `Restyling ${name(a.slideId)} (${fields.join(", ")})`;
+    }
+    case "set_accent":
+      return `Recolouring the deck accent to ${a.hex}`;
+    case "set_theme":
+      return "Applying a new colour theme to the whole deck";
+    case "set_font":
+      return `Switching the display font to ${a.font}`;
+  }
+}
+
 /**
  * Apply the agent's structured edit actions to the live deck via the editor's existing
  * mutation functions. Index math is tracked locally so multi-step moves compose correctly.
+ *
+ * ``onProgress(index, phase)`` fires before ("start") and after ("done") each action, so the
+ * chat can narrate slow steps (image generation, slide regeneration) while they run.
  */
 export async function applyDeckActions(
   actions: DeckAction[],
   h: DeckActionHandlers,
+  onProgress?: (index: number, phase: "start" | "done") => void,
 ): Promise<void> {
   const order = h.slides.map((s) => s.id); // working order, kept in sync with mutations
 
-  for (const a of actions) {
+  for (const [idx, a] of actions.entries()) {
+    onProgress?.(idx, "start");
     switch (a.op) {
       case "edit_slide": {
         const { op: _op, slideId, ...patch } = a;
@@ -69,8 +109,8 @@ export async function applyDeckActions(
         break;
       }
       case "add_slide": {
-        const idx = Math.min(Math.max((a.afterSlideNumber ?? order.length) - 1, 0), Math.max(order.length - 1, 0));
-        h.onInsertAfter(idx, a.slideType as SlideType);
+        const idx2 = Math.min(Math.max((a.afterSlideNumber ?? order.length) - 1, 0), Math.max(order.length - 1, 0));
+        h.onInsertAfter(idx2, a.slideType as SlideType);
         break;
       }
       case "move_slide": {
@@ -99,5 +139,6 @@ export async function applyDeckActions(
         break;
       }
     }
+    onProgress?.(idx, "done");
   }
 }
