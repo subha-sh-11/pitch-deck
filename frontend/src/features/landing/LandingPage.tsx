@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { HeroSection } from "@/features/landing/HeroSection";
+import { LandingBackground } from "@/features/landing/LandingBackground";
+import { SmoothScroll } from "@/features/landing/SmoothScroll";
 import { projectRoutes } from "@/lib/routes";
 
 const features = [
@@ -33,10 +35,15 @@ const workflowSteps = [
 
 export function LandingPage() {
   return (
-    <>
+    <div className="landing-page min-h-screen bg-surface-0">
+      <SmoothScroll />
       <HeroSection />
 
-      <section className="relative border-t border-white/[0.04] py-24 lg:py-32">
+      {/* Sections below the hero keep the original ambient background. */}
+      <div className="relative">
+        <LandingBackground />
+        <div className="relative z-10">
+      <section id="features" className="relative border-t border-white/[0.04] py-24 lg:py-32">
         <div className="mx-auto max-w-7xl px-6">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-neon/90">
@@ -73,7 +80,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="relative border-t border-white/[0.04] py-24 lg:py-28">
+      <section id="how-it-works" className="relative border-t border-white/[0.04] py-24 lg:py-28">
         <div className="mx-auto max-w-7xl px-6">
           <div className="mb-12 text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-lime/90">
@@ -156,6 +163,8 @@ export function LandingPage() {
           <span>© {new Date().getFullYear()} · Built for filmmakers</span>
         </div>
       </footer>
-    </>
+        </div>
+      </div>
+    </div>
   );
 }
