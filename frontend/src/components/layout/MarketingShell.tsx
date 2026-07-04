@@ -25,6 +25,12 @@ export function MarketingShell({ children }: MarketingShellProps) {
           </Link>
           <nav className="flex items-center gap-3">
             <Link
+              href="/landing-page"
+              className="hidden rounded-lg px-3 py-2 text-sm text-text-muted transition-colors hover:bg-white/[0.05] hover:text-text-primary sm:block"
+            >
+              Landing Page
+            </Link>
+            <Link
               href={projectRoutes.dashboard()}
               className="hidden rounded-lg px-3 py-2 text-sm text-text-muted transition-colors hover:bg-white/[0.05] hover:text-text-primary sm:block"
             >

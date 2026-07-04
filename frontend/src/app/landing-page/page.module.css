@@ -1,0 +1,342 @@
+/* ============================================================
+   Landing page — "Unfold." creative-agency hero
+   Recreated from a reference composition. The orange motion-blur
+   subway scene is drawn purely with CSS gradients (no photo).
+   ============================================================ */
+
+.page {
+  --cream: #08080a;
+  --ink: #f7f6f2;
+  --accent: #e6531f;
+
+  min-height: 100vh;
+  width: 100%;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-poppins), "Helvetica Neue", Arial, sans-serif;
+  display: flex;
+}
+
+/* Content region — flush to the browser edges, no outline */
+.frame {
+  flex: 1;
+  padding: 0 0 clamp(20px, 1.5vw, 30px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* -------------------- Navigation -------------------- */
+.nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(36px, 4.5vw, 80px);
+  height: 70px;
+  margin: 0 96px;
+  padding: 20px 40px;
+}
+
+.navGroup {
+  display: flex;
+  align-items: center;
+  gap: clamp(26px, 2.6vw, 46px);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: clamp(0.9rem, 1vw, 1.1rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.navLink {
+  color: var(--ink);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* per-letter hover wave: each letter rises, vanishes, and returns in place */
+.navLink .char {
+  display: inline-block;
+  white-space: pre;
+}
+
+.navLink:hover .char {
+  animation: navLetterRise 0.6s ease-in-out both;
+}
+
+@keyframes navLetterRise {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  32% {
+    transform: translateY(-0.72em);
+    opacity: 0;
+  }
+  52% {
+    transform: translateY(0.55em);
+    opacity: 0;
+  }
+  78%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.logo {
+  font-size: clamp(1.4rem, 1.9vw, 1.95rem);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.logo span {
+  color: var(--accent);
+}
+
+/* -------------------- Hero image card -------------------- */
+.hero {
+  position: relative;
+  flex: 1;
+  margin: 0 clamp(20px, 1.7vw, 34px);
+  border-radius: 18px;
+  overflow: hidden;
+  min-height: 620px;
+  isolation: isolate;
+
+  /* fallback shown only until the first slide paints */
+  background: linear-gradient(180deg, #1a0f08 0%, #6e3411 45%, #130c07 100%);
+}
+
+/* full-quality cross-fading background slides */
+.heroSlide {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+  will-change: opacity;
+}
+
+.heroSlide.active {
+  opacity: 1;
+}
+
+/* subtle scrim so the white headline & paragraph stay readable over the photo */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0) 28%,
+    rgba(0, 0, 0, 0) 62%,
+    rgba(0, 0, 0, 0.32) 100%
+  );
+  pointer-events: none;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: clamp(28px, 3vw, 60px) clamp(32px, 7.5vw, 150px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* -------------------- Headline -------------------- */
+.headline {
+  color: #fff;
+  line-height: 0.92;
+  margin: 0;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.25);
+}
+
+.headlineTop {
+  display: block;
+  font-weight: 600;
+  font-size: clamp(3rem, 7.7vw, 9.4rem);
+  letter-spacing: -0.02em;
+}
+
+.headlineScript {
+  display: block;
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(3rem, 7.4vw, 9rem);
+  margin-top: clamp(6px, 0.6vw, 14px);
+  padding-left: 0.04em;
+}
+
+/* each letter rises and vanishes, one after another, left to right */
+.letter {
+  display: inline-block;
+  animation: letterRise 3.4s ease-in-out infinite;
+}
+
+@keyframes letterRise {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  8% {
+    transform: translateY(-0.75em);
+    opacity: 0;
+  }
+  16% {
+    transform: translateY(0.5em);
+    opacity: 0;
+  }
+  26% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter,
+  .navLink:hover .char {
+    animation: none;
+  }
+}
+
+/* -------------------- Bottom row -------------------- */
+.bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.pitch {
+  max-width: 480px;
+}
+
+.pitchText {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(0.95rem, 1.05vw, 1.16rem);
+  line-height: 1.5;
+  margin: 0 0 clamp(20px, 2vw, 34px);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 42px;
+  background: #08080a;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 20px 26px 20px 34px;
+  font-size: clamp(0.95rem, 1vw, 1.1rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.cta svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* -------------------- Right-side aside -------------------- */
+.aside {
+  text-align: right;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.asideLabel {
+  font-size: clamp(0.9rem, 1vw, 1.15rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* live mini preview of the slide currently on screen */
+.thumb {
+  width: clamp(180px, 12.5vw, 244px);
+  aspect-ratio: 244 / 132;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: #08080a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.thumbSlide {
+  position: absolute;
+  inset: 0;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+
+.thumbSlide.active {
+  opacity: 1;
+}
+
+.progress {
+  display: flex;
+  gap: 8px;
+  width: clamp(180px, 12.5vw, 244px);
+}
+
+.progressBar {
+  height: 3px;
+  flex: 1;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  transition: background 0.4s ease;
+}
+
+.progressBar.active {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* -------------------- Responsive -------------------- */
+@media (max-width: 900px) {
+  .navGroup:first-child,
+  .navGroup:last-child {
+    display: none;
+  }
+  .bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .aside {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
