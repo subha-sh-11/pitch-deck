@@ -14,48 +14,52 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Examples", href: projectRoutes.dashboard() },
 ];
 
-/** A cinematic portrait card in the hero gallery. */
+/** A cinematic portrait card in the hero gallery marquee. */
 export interface CinematicCardData {
   id: string;
   src: string;
   alt: string;
-  /** CSS object-position, tuned per composition. */
+  /** Per-image object-position for micro-framing (assets are pre-cropped to 3:4). */
   objectPosition?: string;
-  /** The visually strongest, above-the-fold card — loaded eagerly and sized up. */
-  focal?: boolean;
 }
 
+/**
+ * Curated order for the marquee's visual rhythm — alternating cool / warm and
+ * close-up / wide, with the strongest vertical character (Londuw) at the centre:
+ *   Joker (cool close-up) → Hotel California (warm graphic) → Londuw (cool focal)
+ *   → Private Eye (warm noir) → Notice Served (cool horror).
+ * Assets are portrait 3:4 WebP crops generated with sharp from the source art.
+ */
 export const CINEMATIC_CARDS: CinematicCardData[] = [
   {
-    id: "inner-cinema",
-    src: "/hero/inner-cinema.svg",
-    alt: "A filmmaker's side profile emerging from pitch black, lit by a soft burgundy glow.",
-    objectPosition: "60% center",
+    id: "joker",
+    src: "/hero/joker-phoenix.webp",
+    alt: "Joaquin Phoenix as the Joker in extreme close-up, half his face in cracked clown make-up against black.",
+    objectPosition: "50% 42%",
   },
   {
-    id: "vision-projection",
-    src: "/hero/vision-projection.svg",
-    alt: "A solitary creator standing inside a narrow projector light field as an idea becomes visible.",
-    objectPosition: "center center",
+    id: "hotel-california",
+    src: "/hero/hotel-california.webp",
+    alt: "A stark red poster: a rope descending to a lone pine tree, evoking Hotel California.",
+    objectPosition: "50% 46%",
   },
   {
-    id: "hero-focal",
-    src: "/hero/hero-focal.svg",
-    alt: "A cinematic portrait split by petrol-teal and deep-red light against black.",
-    objectPosition: "center 40%",
-    focal: true,
+    id: "londuw",
+    src: "/hero/londuw-witch.webp",
+    alt: "A pale, rune-tattooed sorceress with long white braids standing in a cold, misty teal forest.",
+    objectPosition: "50% 30%",
   },
   {
-    id: "script-to-screen",
-    src: "/hero/script-to-screen.svg",
-    alt: "A dark character silhouette with a crimson rim light and abstract story fragments.",
-    objectPosition: "50% center",
+    id: "private-eye",
+    src: "/hero/private-eye-detective.webp",
+    alt: "A film-noir detective in a trench coat and fedora raising a vintage camera, in warm sepia light.",
+    objectPosition: "50% 38%",
   },
   {
-    id: "story-awakening",
-    src: "/hero/story-awakening.svg",
-    alt: "A profile looking upward into soft burgundy atmospheric light.",
-    objectPosition: "45% center",
+    id: "notice-served",
+    src: "/hero/notice-served-swamp.webp",
+    alt: "A green-eyed old woman rising from a misty swamp at dusk as birds scatter overhead.",
+    objectPosition: "50% 48%",
   },
 ];
 

@@ -12,7 +12,7 @@
   --foreground: #f7f3ee;
 }
 
-/* Smooth, water-like scrolling for anchor navigation and jumps up/down. */
+/* Native smooth scrolling — browser-driven (no JS), so it stays lag-free. */
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 24px;
@@ -104,5 +104,5 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(248, 201, 164, 0.28) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
