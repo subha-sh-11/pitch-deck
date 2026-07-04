@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     s3_key: str = "test"
     s3_secret: str = "test"
     s3_region: str = "us-east-1"
+    # "auto" (virtual-host, works for AWS/R2) or "path" (Supabase/MinIO/Filebase need this).
+    s3_addressing_style: str = "auto"
+    # When the bucket is pre-created and the credentials are SCOPED (can't list/create buckets,
+    # e.g. Supabase/Filebase/R2 tokens), set true so we skip the list/create probe and just use it.
+    s3_bucket_exists: bool = False
 
     # ─── LLM (provider-agnostic) ───
     # Which text-LLM backend to use: "auto" picks the first one with a configured key.
