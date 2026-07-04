@@ -1,5 +1,8 @@
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface ShowCrossSlideProps {
@@ -8,20 +11,33 @@ interface ShowCrossSlideProps {
 
 export function ShowCrossSlide({ content }: ShowCrossSlideProps) {
   const comps = content.comps ?? [];
+  const { patchContent } = useSlideEdit();
+  const duplicate = (i: number) => patchContent({ comps: [...comps, { ...comps[i] }] });
+  const remove = (i: number) => patchContent({ comps: comps.filter((_, j) => j !== i) });
+  const setImage = (i: number, url: string) =>
+    patchContent({ comps: comps.map((c, j) => (j === i ? { ...c, posterUrl: url } : c)) });
 
   return (
-    <SlideFrame>
-      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      <div
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Show Cross"} />
         </SlideLabel>
         <div className="mt-5 grid min-h-0 flex-1 grid-cols-3 gap-4">
           {comps.map((comp, i) => (
-            <div
+            <MovableCard
               key={i}
-              className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-white/[0.08]"
+              ck={`comp-${i}`}
+              className="group relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-white/[0.08]"
             >
+              <CardControls
+                onDuplicate={() => duplicate(i)}
+                onDelete={() => remove(i)}
+                onSetImage={(url) => setImage(i, url)}
+              />
               <div className="relative min-h-0 flex-1 bg-gradient-to-b from-[#2A2A2A] via-[#1a1a1f] to-[#3F5F4A]/20">
                 {comp.posterUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -50,7 +66,7 @@ export function ShowCrossSlide({ content }: ShowCrossSlideProps) {
                   value={comp.note}
                 />
               </div>
-            </div>
+            </MovableCard>
           ))}
         </div>
         {content.body && (

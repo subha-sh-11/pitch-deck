@@ -1,5 +1,10 @@
+"use client";
+
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 
 interface CharacterSlideProps {
@@ -8,22 +13,38 @@ interface CharacterSlideProps {
 
 export function CharacterSlide({ content }: CharacterSlideProps) {
   const characters = content.characters ?? [];
+  const { patchContent } = useSlideEdit();
+
+  const duplicate = (i: number) =>
+    patchContent({ characters: [...characters, { ...characters[i] }] });
+  const remove = (i: number) =>
+    patchContent({ characters: characters.filter((_, j) => j !== i) });
+  const setImage = (i: number, url: string) =>
+    patchContent({ characters: characters.map((c, j) => (j === i ? { ...c, imageUrl: url } : c)) });
 
   return (
-    <SlideFrame>
-      {/* A grid of per-character portraits — each character gets their OWN image; no single bg. */}
-      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      {/* A grid of per-character portraits; a slide-level background image shows behind them. */}
+      <div
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Characters"} />
         </SlideLabel>
         <div className="mt-5 grid flex-1 grid-cols-3 gap-4">
           {characters.map((char, i) => (
-            <div
+            <MovableCard
               key={i}
+              ck={`char-${i}`}
               className="group relative flex min-h-[220px] flex-col justify-end overflow-hidden rounded-lg border border-white/[0.08] p-4"
               style={char.imageUrl ? undefined : { background: "rgba(255,255,255,0.02)" }}
             >
+              <CardControls
+                onDuplicate={() => duplicate(i)}
+                onDelete={() => remove(i)}
+                onSetImage={(url) => setImage(i, url)}
+              />
               {char.imageUrl ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,7 +86,7 @@ export function CharacterSlide({ content }: CharacterSlideProps) {
                   value={`Wound: ${char.wound}`}
                 />
               )}
-            </div>
+            </MovableCard>
           ))}
         </div>
       </div>

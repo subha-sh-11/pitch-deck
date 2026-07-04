@@ -93,6 +93,14 @@ audience…) render "items": [ {"title": "<short>", "description": "<one line>"}
 change how many points show ("make it 5 points"), return the FULL new "items" list with exactly that
 many entries. Your confirmation message must never claim a change you didn't emit as an action.
 
+ADD / REMOVE POINTS ("add more points", "add another point/card", "add 2 more", "remove the last
+point") — the CURRENT deck view shows each list slide's existing points as items[N]="a; b; c" (or
+bullets[N]/comps[N]). To ADD points, emit edit_slide on THAT slide with the FULL items list = ALL
+existing points (unchanged) PLUS the new ones, each grounded in this film. Never return only the new
+points (that would delete the originals), and never claim you added points without emitting the
+edit_slide action. Default to the SELECTED slide the director is looking at — do NOT retarget the
+cover unless they named it.
+
 slideType is one of: cover, logline, genre_blend, synopsis, story_world, character,
 supporting_characters, usp, show_cross, visual_aesthetic, target_audience, budget, market_potential,
 directors_vision, team, contact, generic.
@@ -131,6 +139,21 @@ Rules:
     bold / poster / impact / heavy / condensed         → "anton" (or "oswald")
     clean / modern / sans / minimal                    → "poppins"
   Say which font you applied (and that it's the closest available match if they named a specific one).
+- DECK LENGTH ("reduce to 10 slides", "cut it down to 8", "make it 12 slides", "add 2 more",
+  "trim the deck"): change WHOLE slides — emit delete_slide / add_slide actions. NEVER shorten a
+  slide's copy to hit a number, and never leave a slide half-empty; each slide that stays keeps its
+  full content. Reach the exact target count the director asked for.
+  • REDUCING: remove the LEAST essential slides first, in this rough drop-order until the count
+    matches — team → budget → relationship_map → supporting_characters → target_audience →
+    market_potential → show_cross → usp → story_world. NEVER delete cover, logline, synopsis, main
+    characters, directors_vision, or contact — those are the spine of the pitch.
+  • INCREASING: add relevant slides (from the slideType list) that AREN'T already in the deck,
+    grounded in the story, each placed in a sensible spot (e.g. supporting_characters after
+    character, market_potential near target_audience). Keep cover first and contact last.
+  • ALWAYS finish your confirmation with the FULL resulting deck — a numbered list of EVERY slide
+    that will remain AFTER your actions apply (current deck minus deletions, plus additions, in
+    order), one per line as "N. <Title> (<type>)". This list is REQUIRED whenever you add or delete
+    slides so the director sees the final line-up. Make sure it matches the actions you emitted.
 - Be an agent: when the instruction is a clear edit, DO IT (emit the action) and confirm.
 
 NEVER FABRICATE — this is critical:
@@ -142,13 +165,34 @@ NEVER FABRICATE — this is critical:
   or not about editing the deck.
 
 OUTPUT — return ONLY this JSON object:
-{ "message": "<one short, in-character line describing what you changed or what you need>",
+{ "message": "<short, in-character confirmation of what you changed (or what you need). Normally one
+   line — but when you ADD or DELETE slides, append the full numbered resulting deck line-up, one
+   slide per line, as described in the DECK LENGTH rule>",
   "actions": [ <zero or more action objects above> ] }
 """
 
 
+def _list_summary(content: dict) -> str:
+    """A short view of a slide's LIST content (points/cards) so the agent can see what to add to."""
+    items = content.get("items")
+    if isinstance(items, list) and items:
+        pts = "; ".join(str((it or {}).get("title", "")).strip() for it in items if isinstance(it, dict))
+        return f' items[{len(items)}]="{pts[:140]}"'
+    bullets = content.get("bullets")
+    if isinstance(bullets, list) and bullets:
+        return f' bullets[{len(bullets)}]="{"; ".join(str(b)[:40] for b in bullets)[:140]}"'
+    comps = content.get("comps")
+    if isinstance(comps, list) and comps:
+        return f' comps[{len(comps)}]="{"; ".join(str((c or {}).get("title", "")) for c in comps if isinstance(c, dict))[:140]}"'
+    chars = content.get("characters")
+    if isinstance(chars, list) and chars:
+        return f' characters[{len(chars)}]="{"; ".join(str((c or {}).get("name", "")) for c in chars if isinstance(c, dict))[:140]}"'
+    return ""
+
+
 def _slides_digest(slides: list[dict]) -> str:
-    """Compact, id-anchored view of the deck for the model."""
+    """Compact, id-anchored view of the deck for the model — includes list points/cards so the
+    agent can extend them ("add more points")."""
     lines = []
     for s in slides or []:
         content = s.get("content") or {}
@@ -156,7 +200,7 @@ def _slides_digest(slides: list[dict]) -> str:
         body = (content.get("body") or "")[:120]
         lines.append(
             f'  - id={s.get("id")} #{s.get("slideNumber")} type={s.get("slideType")} '
-            f'title="{s.get("title", "")}" heading="{heading}" body="{body}"'
+            f'title="{s.get("title", "")}" heading="{heading}" body="{body}"{_list_summary(content)}'
         )
     return "\n".join(lines) or "  (no slides yet)"
 

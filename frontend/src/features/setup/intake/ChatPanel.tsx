@@ -419,7 +419,7 @@ function Assistant({ text }: { text: string }) {
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-neon/15 text-[11px] font-bold text-accent-neon">
         P
       </span>
-      <p className="max-w-[90%] text-sm leading-relaxed text-text-muted">{text}</p>
+      <p className="max-w-[90%] whitespace-pre-line text-sm leading-relaxed text-text-muted">{text}</p>
     </div>
   );
 }

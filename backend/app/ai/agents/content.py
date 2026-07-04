@@ -360,6 +360,41 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
     return "\n".join(lines)
 
 
+# Genre → three well-known comparable films (real titles, so TMDB posters attach). Used only when
+# neither the intake nor the LLM supplied comparables, so the SHOW CROSS slide is never blank.
+_COMP_BY_GENRE: list[tuple[tuple[str, ...], list[str]]] = [
+    (("post-apocalyp", "dystop", "survival", "sci"), ["Children of Men", "The Road", "Snowpiercer"]),
+    (("horror", "supernatural"), ["Hereditary", "The Witch", "It Follows"]),
+    (("crime", "noir", "gangster"), ["No Country for Old Men", "Sicario", "Prisoners"]),
+    (("thriller", "mystery", "suspense"), ["Prisoners", "Zodiac", "Wind River"]),
+    (("action", "adventure"), ["Mad Max: Fury Road", "John Wick", "Sicario"]),
+    (("fantasy", "myth"), ["Pan's Labyrinth", "The Green Knight", "Spirited Away"]),
+    (("romance", "love"), ["Before Sunrise", "In the Mood for Love", "Call Me by Your Name"]),
+    (("war",), ["1917", "Dunkirk", "Come and See"]),
+    (("comedy",), ["Jojo Rabbit", "The Grand Budapest Hotel", "Little Miss Sunshine"]),
+    (("drama", "family"), ["Manchester by the Sea", "Nomadland", "The Father"]),
+]
+_COMP_DEFAULT = ["Parasite", "Arrival", "Whiplash"]
+
+
+def _fallback_comps(intake: dict, existing: list) -> list[dict]:
+    """Guarantee three comparable films for the Show Cross slide, matched to the film's genre/tone
+    when the material didn't name any. Real titles → TMDB can still fetch their posters."""
+    seen = {str(c.get("title", "")).strip().lower() for c in existing if isinstance(c, dict)}
+    hay = " ".join([_g(intake, "genreBlend"), _g(intake, "tone"), _g(intake, "themes"),
+                    _g(intake, "logline")]).lower()
+    titles = next((t for keys, t in _COMP_BY_GENRE if any(k in hay for k in keys)), _COMP_DEFAULT)
+    note = "Tonal & thematic comparable — shared audience and positioning."
+    out = list(existing)
+    for t in titles:
+        if len(out) >= 3:
+            break
+        if t.lower() not in seen:
+            out.append({"title": t, "note": note})
+            seen.add(t.lower())
+    return out[:3]
+
+
 def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None,
         instructions: str | None = None, raw_prompt: str | None = None,
         reference_slide: dict | None = None) -> dict:
@@ -391,12 +426,17 @@ def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | 
         result["moodBlocks"] = attach_film_backdrops(result["moodBlocks"])
     result = _ensure_renderable(slide_type, result, fb)
 
-    # Show Cross: attach real comparable-film posters (TMDB) when available.
+    # Show Cross: guarantee 3 comparable films (so the slide is never blank), then attach real
+    # posters (TMDB) when available.
     if slide_type == "show_cross":
         from app.ai import tmdb
 
-        for comp in result.get("comps") or []:
-            if isinstance(comp, dict) and comp.get("title") and not comp.get("posterUrl"):
+        comps = [c for c in (result.get("comps") or []) if isinstance(c, dict) and c.get("title")]
+        if len(comps) < 3:
+            comps = _fallback_comps(intake, comps)
+        result["comps"] = comps
+        for comp in comps:
+            if comp.get("title") and not comp.get("posterUrl"):
                 poster = tmdb.poster_for(comp["title"])
                 if poster:
                     comp["posterUrl"] = poster

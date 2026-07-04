@@ -25,7 +25,7 @@ export function FreeTextLayer() {
 }
 
 function FreeTextBox({ box, editing }: { box: SlideTextBox; editing: boolean }) {
-  const { updateTextBox, removeTextBox, selectedId, selectTextBox } = useSlideEdit();
+  const { updateTextBox, duplicateTextBox, removeTextBox, selectedId, selectTextBox } = useSlideEdit();
   const selected = selectedId === box.id;
   const ref = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
@@ -198,6 +198,14 @@ function FreeTextBox({ box, editing }: { box: SlideTextBox; editing: boolean }) 
             className="h-4 w-4 cursor-pointer border-0 bg-transparent p-0"
             title="Color"
           />
+          <button
+            type="button"
+            className="px-1 leading-none hover:text-[#22d3ee]"
+            onClick={() => duplicateTextBox(box.id)}
+            title="Duplicate"
+          >
+            ⧉
+          </button>
           <button
             type="button"
             className="px-1 leading-none hover:text-red-400"

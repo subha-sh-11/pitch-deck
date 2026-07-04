@@ -1,5 +1,8 @@
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 import { SlideIcon } from "../shared/SlideIcon";
 
@@ -9,6 +12,9 @@ interface USPGridSlideProps {
 
 export function USPGridSlide({ content }: USPGridSlideProps) {
   const bullets = content.bullets ?? [];
+  const { patchContent } = useSlideEdit();
+  const duplicate = (i: number) => patchContent({ bullets: [...bullets, bullets[i]] });
+  const remove = (i: number) => patchContent({ bullets: bullets.filter((_, j) => j !== i) });
 
   return (
     <SlideFrame imageUrl={content.imageUrl}>
@@ -21,10 +27,12 @@ export function USPGridSlide({ content }: USPGridSlideProps) {
         </SlideLabel>
         <div className="mt-6 grid flex-1 grid-cols-2 gap-4 content-start">
           {bullets.map((bullet, i) => (
-            <div
+            <MovableCard
               key={i}
-              className="relative flex items-start gap-4 overflow-hidden rounded-xl border border-[var(--slide-accent,#22d3ee)]/25 bg-gradient-to-br from-white/[0.07] to-transparent p-5"
+              ck={`bullet-${i}`}
+              className="group relative flex items-start gap-4 overflow-hidden rounded-xl border border-[var(--slide-accent,#22d3ee)]/25 bg-gradient-to-br from-white/[0.07] to-transparent p-5"
             >
+              <CardControls onDuplicate={() => duplicate(i)} onDelete={() => remove(i)} />
               {/* accent rail makes each point read as a highlighted callout, not a flat row */}
               <div className="absolute left-0 top-0 h-full w-1 bg-[var(--slide-accent,#22d3ee)]" />
               {/* small thin-line marker — icons stay subtle on USP, per the design bible */}
@@ -43,7 +51,7 @@ export function USPGridSlide({ content }: USPGridSlideProps) {
                 className="whitespace-pre-line text-base font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
                 value={bullet}
               />
-            </div>
+            </MovableCard>
           ))}
         </div>
       </div>

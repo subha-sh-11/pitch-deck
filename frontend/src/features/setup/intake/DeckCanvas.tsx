@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideThumbnailPreview } from "@/components/slides/SlideThumbnailPreview";
 import { DeckExportButtons } from "@/features/export/DeckExportButtons";
+import { useSetupWizard } from "@/features/setup/SetupWizardContext";
+import { pollJob, workshopSlideImage } from "@/lib/api/generation";
+import { uploadSlideImage } from "@/lib/api/projects";
 import { buildSlideFromOutline } from "@/lib/build-slides";
 import { FALLBACK_DESIGN } from "@/lib/deck-themes";
 import { useSmoothProgress } from "@/lib/use-smooth-progress";
-import type { SlideType } from "@/types/slide";
+import type { DesignDirection } from "@/types/design";
+import type { Slide, SlideType, SlideVersion } from "@/types/slide";
 import type { Interview } from "./useInterview";
+import { useWorkshopOptional } from "./workshop";
 
 // The "presentation tab". Before Build it shows a live sketch from the brief; the moment the
 // director hits Build deck, real generation streams the actual slides in here — same page, no
@@ -19,6 +25,35 @@ const OUTLINE: { slideType: SlideType; title: string }[] = [
   { slideType: "character", title: "Characters" },
   { slideType: "visual_aesthetic", title: "Visual Aesthetic" },
 ];
+
+// Slide types that carry a generated image (mirrors backend IMAGE_SLIDES). Used to show a
+// per-slide "generating art" spinner only on slides that are actually waiting on an image —
+// so text-only slides (contact, etc.) never show a stuck loader.
+const IMAGE_SLIDE_TYPES = new Set<SlideType>([
+  "cover", "logline", "genre_blend", "synopsis", "story_world", "character",
+  "supporting_characters", "usp", "show_cross", "visual_aesthetic", "target_audience",
+  "market_potential",
+]);
+
+/** True while the deck build is running and this slide hasn't received its image yet. */
+function isSlideGenerating(slide: Slide, generating: boolean): boolean {
+  return generating && IMAGE_SLIDE_TYPES.has(slide.slideType) && !slide.content.imageUrl;
+}
+
+// Display fonts wired up in the app (mirrors SlideRenderer's FONT_VARS).
+const DECK_FONTS: { value: string; label: string }[] = [
+  { value: "cormorant", label: "Cormorant (serif)" },
+  { value: "playfair", label: "Playfair (serif)" },
+  { value: "oswald", label: "Oswald (condensed)" },
+  { value: "anton", label: "Anton (poster)" },
+  { value: "poppins", label: "Poppins (sans)" },
+];
+
+/** Current deck accent hex for the colour input's initial value. */
+function deckAccent(design: DesignDirection): string {
+  const hex = design.palette?.find((c) => (c.usage ?? "").toLowerCase().includes("accent"))?.hex;
+  return hex ?? "#22d3ee";
+}
 
 const DOT_BG: CSSProperties = {
   backgroundColor: "rgb(10 10 12)",
@@ -44,40 +79,16 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
     [form],
   );
 
-  // 1 ── Real generated deck (after Build): stream slides as they arrive.
+  // 1 ── Real generated deck (after Build): Canva-style stage — big selected slide up top,
+  // filmstrip to navigate at the bottom, image rail on the right.
   if (real.length > 0) {
     return (
-      <div className="relative h-full overflow-y-auto" style={DOT_BG}>
-        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-glass bg-black/50 px-6 py-2.5 backdrop-blur">
-          <span className="text-xs text-text-dim">
-            {generating
-              ? `Building your deck… ${buildProgress}%`
-              : `Deck ready · ${real.length} slides · ask the producer to restyle`}
-          </span>
-          {!generating && (
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              <DeckExportButtons slides={real} design={effectiveDesign} />
-            </div>
-          )}
-        </div>
-        <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-          {real.map((s, i) => (
-            <figure key={s.id} className="group">
-              <figcaption className="mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-dim">
-                <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-3 text-[9px] text-text-muted">
-                  {i + 1}
-                </span>
-                {s.title}
-              </figcaption>
-              <div className="overflow-hidden rounded-xl border border-border-glass shadow-2xl shadow-black/40 ring-1 ring-white/5 transition-transform group-hover:-translate-y-0.5">
-                <SlideThumbnailPreview slide={s} designDirection={effectiveDesign} />
-              </div>
-            </figure>
-          ))}
-          {generating && <p className="py-3 text-center text-xs text-text-dim">Adding more slides…</p>}
-          <div className="h-4" />
-        </div>
-      </div>
+      <DeckStage
+        slides={real}
+        design={effectiveDesign}
+        generating={generating}
+        buildProgress={buildProgress}
+      />
     );
   }
 
@@ -133,6 +144,433 @@ export function DeckCanvas({ iv }: { iv: Interview }) {
           <div className="h-4" />
         </div>
       )}
+    </div>
+  );
+}
+
+// Canva-style presentation editor: large selected slide, filmstrip navigator, image rail.
+function DeckStage({
+  slides,
+  design,
+  generating,
+  buildProgress,
+}: {
+  slides: Slide[];
+  design: DesignDirection;
+  generating: boolean;
+  buildProgress: number;
+}) {
+  const { projectId, updateDraftSlide, replaceDraftSlide, applyAccent, applyDisplayFont, undo, canUndo } =
+    useSetupWizard();
+
+  // Ctrl/Cmd+Z undoes the last deck edit — unless the user is mid-typing in a text field, where
+  // the browser's own text undo should win.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo]);
+  const [selectedId, setSelectedId] = useState<string>(slides[0]?.id ?? "");
+  const [busy, setBusy] = useState<null | "import" | "generate">(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const selected = slides.find((s) => s.id === selectedId) ?? slides[0];
+  const curIndex = Math.max(0, slides.findIndex((s) => s.id === selectedId));
+
+  // Step to the previous / next slide, clamped to the deck bounds.
+  const goTo = (delta: number) => {
+    const next = slides[Math.min(slides.length - 1, Math.max(0, curIndex + delta))];
+    if (next) setSelectedId(next.id);
+  };
+
+  // Keep the shared workshop "current slide" in sync with the slide open here, so the chat agent
+  // targets THE SLIDE THE DIRECTOR IS LOOKING AT ("this slide") instead of defaulting to slide 1.
+  const setWorkshopIndex = useWorkshopOptional()?.setIndex;
+  useEffect(() => {
+    const idx = slides.findIndex((s) => s.id === selectedId);
+    if (idx >= 0) setWorkshopIndex?.(idx);
+  }, [selectedId, slides, setWorkshopIndex]);
+
+  // Arrow keys navigate slides — but not while typing/editing text on a slide.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      const idx = slides.findIndex((s) => s.id === selectedId);
+      const next = slides[Math.min(slides.length - 1, Math.max(0, idx + (e.key === "ArrowRight" ? 1 : -1)))];
+      if (next) setSelectedId(next.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, slides]);
+
+  // Every image available for this slide: its generated options + the current one.
+  const images = (() => {
+    const c = (selected?.content.imageCandidates ?? []).filter(Boolean);
+    const url = selected?.content.imageUrl;
+    if (!c.length) return url ? [url] : [];
+    return url && !c.includes(url) ? [url, ...c] : c;
+  })();
+
+  const versions = selected?.content.versions ?? [];
+
+  // Snapshot the slide's CURRENT state into its history before a change replaces it, so any
+  // earlier version (text + image) can be restored. Newest kept last; capped so it can't grow
+  // without bound. `versions` itself is stripped from the snapshot to avoid nesting.
+  const snapshot = (s: Slide, label: string) => {
+    const { versions: _drop, ...content } = s.content;
+    const prev = s.content.versions ?? [];
+    const entry: SlideVersion = { ts: Date.now(), label, imageUrl: s.content.imageUrl, content };
+    updateDraftSlide(s.id, { versions: [...prev, entry].slice(-20) });
+  };
+
+  const restoreVersion = (v: SlideVersion) => {
+    if (!selected) return;
+    // Keep current history (plus a snapshot of NOW) so restore is itself undoable.
+    snapshot(selected, "before restore");
+
+    const keep = selected.content.versions ?? [];
+    updateDraftSlide(selected.id, { ...v.content, versions: keep });
+  };
+
+  // Click a thumbnail: set it on the slide. Click the CURRENT one again: unselect (remove it).
+  const useImage = (u: string) => {
+    if (!selected) return;
+    snapshot(selected, u === selected.content.imageUrl ? "remove image" : "image change");
+    updateDraftSlide(selected.id, { imageUrl: u === selected.content.imageUrl ? undefined : u });
+  };
+
+  // Remove an image from the slide's gallery entirely (and clear it off the slide if it was current).
+  const removeImage = (u: string) => {
+    if (!selected) return;
+    snapshot(selected, "remove image");
+    const nextCandidates = (selected.content.imageCandidates ?? []).filter((c) => c !== u);
+    updateDraftSlide(selected.id, {
+      imageCandidates: nextCandidates,
+      ...(selected.content.imageUrl === u ? { imageUrl: undefined } : {}),
+    });
+  };
+
+  const importImage = async (file: File) => {
+    if (!selected) return;
+    setBusy("import");
+    try {
+      const url = await uploadSlideImage(projectId, file);
+      snapshot(selected, "image import");
+      // Keep the uploaded image in the gallery so it persists (doesn't "go off") after switching.
+      const existing = selected.content.imageCandidates ?? [];
+      updateDraftSlide(selected.id, {
+        imageUrl: url,
+        imageCandidates: existing.includes(url) ? existing : [...existing, url],
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const generateImage = async () => {
+    if (!selected) return;
+    setBusy("generate");
+    try {
+      const job = await workshopSlideImage(selected.id);
+      const final = await pollJob(job);
+      const res = final.result as { slide?: Slide } | undefined;
+      if (res?.slide?.id) {
+        snapshot(selected, "before regenerate");
+        // Carry the (now updated) history onto the fresh slide so it isn't lost on replace.
+        const history = (slides.find((s) => s.id === selected.id)?.content.versions) ?? [];
+        replaceDraftSlide({
+          ...res.slide,
+          content: { ...res.slide.content, versions: history },
+        });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Image actions wired into the slide itself, so the on-slide "Replace image" / per-card image
+  // controls actually upload + regenerate (previously they were dead — no handlers were passed).
+  const imageActions = {
+    upload: (file: File) => uploadSlideImage(projectId, file),
+    regenerate: async () => {
+      if (!selected) return null;
+      const job = await workshopSlideImage(selected.id);
+      const final = await pollJob(job);
+      const res = final.result as { slide?: Slide } | undefined;
+      return res?.slide?.content.imageUrl ?? null;
+    },
+  };
+
+  return (
+    <div className="flex h-full min-h-0" style={DOT_BG}>
+      {/* Centre column — top bar, big slide, filmstrip */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-3 border-b border-border-glass bg-black/50 px-6 py-2 backdrop-blur">
+          <span className="shrink-0 text-xs text-text-dim">
+            {generating ? `Building your deck… ${buildProgress}%` : `Deck ready · ${slides.length} slides`}
+          </span>
+
+          {/* Deck-wide editing toolbar — font + accent apply live to every slide. Per-element
+              edits (text, size, colour, move, duplicate) happen directly on the slide below. */}
+          {!generating && (
+            <div className="mx-auto flex min-w-0 items-center justify-center gap-2 overflow-x-auto">
+              <span className="shrink-0 text-[10px] uppercase tracking-wider text-accent-neon/70">Whole deck ·</span>
+              <div className="flex items-center gap-1.5 rounded-lg border border-border-glass bg-surface-1/50 px-2 py-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-dim">Font</span>
+                <select
+                  value={design.fonts?.display ?? ""}
+                  onChange={(e) => applyDisplayFont(e.target.value)}
+                  className="bg-transparent text-xs text-text-primary outline-none"
+                  title="Deck display font"
+                >
+                  {DECK_FONTS.map((f) => (
+                    <option key={f.value} value={f.value} className="bg-surface-1 text-text-primary">
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label
+                className="flex items-center gap-1.5 rounded-lg border border-border-glass bg-surface-1/50 px-2 py-1 text-[10px] uppercase tracking-wider text-text-dim"
+                title="Deck accent colour"
+              >
+                Accent
+                <input
+                  type="color"
+                  defaultValue={deckAccent(design)}
+                  onChange={(e) => applyAccent(e.target.value)}
+                  className="h-4 w-5 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+              </label>
+              <span className="hidden text-[10px] text-text-dim lg:inline">
+                Per-slide: click text to select (top toolbar: size / colour / blur / duplicate) · drag to move · drag a card to reposition · ＋ Text to add
+              </span>
+            </div>
+          )}
+
+          {!generating && (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => undo()}
+                disabled={!canUndo}
+                title="Undo last change (Ctrl+Z)"
+                className="rounded-lg border border-border-glass px-2 py-1 text-xs text-text-muted transition-colors hover:text-text-primary disabled:opacity-40"
+              >
+                ⟲ Undo
+              </button>
+              <DeckExportButtons slides={slides} design={design} />
+            </div>
+          )}
+        </div>
+
+        {/* Big selected slide — 16:9, centered, flanked by prev/next arrows. */}
+        <div className="flex min-h-0 flex-1 items-center justify-center gap-3 overflow-hidden p-6">
+          <button
+            type="button"
+            onClick={() => goTo(-1)}
+            disabled={curIndex <= 0}
+            title="Previous slide (←)"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-glass bg-black/50 text-lg text-text-muted transition-colors hover:text-text-primary disabled:opacity-25"
+          >
+            ‹
+          </button>
+          {selected && (
+            <div className="relative aspect-video w-full max-w-[min(64%,calc((100vh-300px)*16/9))] overflow-hidden rounded-xl border border-border-glass shadow-2xl shadow-black/50 ring-1 ring-white/5">
+              {/* PPT-style editing: click any text to edit it; use "＋ Text" (top of slide) to add a
+                  text box, and use each box's toolbar to duplicate / delete. Persists to the deck. */}
+              <SlideRenderer
+                slide={selected}
+                designDirection={design}
+                editing
+                imageActions={imageActions}
+                onContentChange={(patch) => updateDraftSlide(selected.id, patch)}
+              />
+              {isSlideGenerating(selected, generating) && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black/55 backdrop-blur-sm">
+                  <span className="h-9 w-9 animate-spin rounded-full border-2 border-accent-neon/30 border-t-accent-neon" />
+                  <span className="text-xs font-medium uppercase tracking-wider text-white/80">Generating art…</span>
+                </div>
+              )}
+              <span className="pointer-events-none absolute bottom-2 right-3 z-30 rounded bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white/80">
+                {curIndex + 1} / {slides.length}
+              </span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => goTo(1)}
+            disabled={curIndex >= slides.length - 1}
+            title="Next slide (→)"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-glass bg-black/50 text-lg text-text-muted transition-colors hover:text-text-primary disabled:opacity-25"
+          >
+            ›
+          </button>
+        </div>
+
+        {/* Filmstrip — centered */}
+        <div className="flex shrink-0 justify-center gap-2 overflow-x-auto border-t border-border-glass bg-black/40 px-4 py-3">
+          {slides.map((s, i) => {
+            const active = s.id === selectedId;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedId(s.id)}
+                title={s.title}
+                className={`group relative w-32 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${active ? "border-accent-neon" : "border-transparent hover:border-white/30"
+                  }`}
+              >
+                <SlideThumbnailPreview slide={s} designDirection={design} />
+                {isSlideGenerating(s, generating) && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-neon/40 border-t-accent-neon" />
+                  </span>
+                )}
+                <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-[10px] font-medium text-white/80">
+                  {i + 1}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Right rail — image list + add */}
+      <aside className="flex w-72 shrink-0 flex-col border-l border-border-glass bg-surface-1/40">
+        <div className="relative flex items-center justify-between gap-2 border-b border-border-glass px-4 py-3">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">Images</h3>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importImage(f);
+              e.currentTarget.value = "";
+            }}
+          />
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={!!busy}
+              className="flex items-center gap-1 rounded-lg border border-border-glass px-2 py-1 text-xs font-semibold text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+              title="Upload an image from your computer"
+            >
+              ⬆ Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => void generateImage()}
+              disabled={!!busy}
+              className="flex items-center gap-1 rounded-lg bg-accent-neon px-2.5 py-1 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:opacity-50"
+              title="Generate one new image for this slide"
+            >
+              ✨ Generate
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {busy && (
+            <p className="mb-3 flex items-center gap-2 text-xs text-text-dim">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent-neon border-t-transparent" />
+              {busy === "import" ? "Uploading…" : "Generating…"}
+            </p>
+          )}
+          {images.length === 0 && !busy && (
+            <p className="px-1 text-xs text-text-dim">No images yet — use Upload or Generate.</p>
+          )}
+          {/* Images stacked one below the other. Click to use · click the current one to unselect ·
+              ✕ removes it from the gallery. */}
+          <div className="flex flex-col gap-2">
+            {images.map((u, i) => {
+              const current = u === selected?.content.imageUrl;
+              return (
+                <div
+                  key={i}
+                  className={`group relative overflow-hidden rounded-lg border-2 transition-colors ${current ? "border-accent-neon" : "border-transparent hover:border-white/40"
+                    }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => useImage(u)}
+                    title={current ? "Click to unselect (remove from slide)" : "Use on this slide"}
+                    className="block w-full"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u} alt="" className="aspect-video w-full object-cover" />
+                  </button>
+                  {current && (
+                    <span className="pointer-events-none absolute left-1 top-1 rounded bg-accent-neon px-1.5 text-[9px] font-semibold text-zinc-950">
+                      ✓ In slide
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(u)}
+                    title="Remove this image from the gallery"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded bg-black/70 text-[11px] text-white opacity-0 transition-opacity hover:bg-red-500/80 group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Version history — every previous state of THIS slide (text + image), newest first. */}
+          {versions.length > 0 && (
+            <div className="mt-5 border-t border-border-glass pt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+                History · {versions.length}
+              </h3>
+              <div className="flex flex-col gap-2">
+                {[...versions].reverse().map((v) => (
+                  <button
+                    key={v.ts}
+                    type="button"
+                    onClick={() => restoreVersion(v)}
+                    title="Restore this version"
+                    className="group flex items-center gap-2 overflow-hidden rounded-lg border border-transparent p-1 text-left transition-colors hover:border-white/30 hover:bg-white/[0.03]"
+                  >
+                    <span className="relative block h-11 w-20 shrink-0 overflow-hidden rounded bg-surface-2">
+                      {v.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={v.imageUrl} alt="" className="h-full w-full object-cover" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] text-text-muted">{v.label}</span>
+                      <span className="block text-[10px] text-text-dim">
+                        {new Date(v.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-accent-neon opacity-0 transition-opacity group-hover:opacity-100">
+                      Restore
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }
