@@ -18,6 +18,9 @@
   --accent-neon-dim: #eaae83;
   --accent-lime: #f8c9a4;
   --accent-lime-dim: #eaae83;
+  /* RGB channels of the accent, so alpha variants can be expressed with a
+     single token (rgba(var(--accent-rgb), a)). Overridden per-surface. */
+  --accent-rgb: 248, 201, 164;
 
   --accent-orange: #f8c9a4;
   --accent-rust: #6b5d50;

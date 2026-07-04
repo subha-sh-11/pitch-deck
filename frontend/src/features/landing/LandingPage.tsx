@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LandingBackground } from "@/features/landing/LandingBackground";
-import { SmoothScroll } from "@/features/landing/SmoothScroll";
-import { projectRoutes } from "@/lib/routes";
 
 const features = [
   {
@@ -35,8 +32,7 @@ const workflowSteps = [
 
 export function LandingPage() {
   return (
-    <div className="landing-page min-h-screen bg-surface-0">
-      <SmoothScroll />
+    <div className="landing-page landing-home min-h-screen bg-surface-0">
       <HeroSection />
 
       {/* Sections below the hero keep the original ambient background. */}
@@ -94,63 +90,37 @@ export function LandingPage() {
             </p>
           </div>
 
-          <div className="landing-glass-strong relative overflow-hidden rounded-3xl p-8 md:p-10">
-            <div className="landing-workflow-line absolute left-8 right-8 top-[4.5rem] hidden h-px md:block" />
-
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="workflow-panel">
+            <ol className="workflow-flow">
               {workflowSteps.map((item, i) => (
-                <div
-                  key={item.step}
-                  className="relative flex flex-col items-center text-center"
-                >
-                  <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-neon/30 bg-accent-neon/10 font-display text-lg font-semibold text-accent-neon shadow-[0_0_24px_rgba(34,211,238,0.15)]">
-                    {item.step}
-                  </div>
-                  <h3 className="mt-4 text-sm font-semibold text-text-primary">
-                    {item.label}
-                  </h3>
-                  <p className="mt-1 text-xs text-text-dim">{item.detail}</p>
+                <li key={item.step} className="workflow-step">
+                  <span className="workflow-node">{item.step}</span>
                   {i < workflowSteps.length - 1 && (
-                    <span className="absolute -right-3 top-7 hidden text-accent-neon/40 lg:inline">
-                      →
+                    <span className="workflow-connector" aria-hidden>
+                      <span className="wf-line" />
+                      <svg
+                        className="wf-arrow"
+                        width="17"
+                        height="12"
+                        viewBox="0 0 17 12"
+                        fill="none"
+                        aria-hidden
+                      >
+                        <path
+                          d="M0 6h14M11 1.5 15.5 6 11 10.5"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </span>
                   )}
-                </div>
+                  <h3 className="workflow-step-title">{item.label}</h3>
+                  <p className="workflow-step-detail">{item.detail}</p>
+                </li>
               ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative py-24 lg:py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="landing-glass-strong relative overflow-hidden rounded-[2rem] px-8 py-14 text-center md:px-16 md:py-20">
-            <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.1)_0%,transparent_65%)]"
-              aria-hidden
-            />
-
-            <h2 className="relative font-display text-3xl font-semibold text-text-primary md:text-4xl">
-              Ready to pitch your next film?
-            </h2>
-            <p className="relative mx-auto mt-4 max-w-md text-base text-text-muted">
-              Start with story intake. End with a producer-ready deck your investors
-              will remember.
-            </p>
-            <div className="relative mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href={projectRoutes.newProject()}
-                className="landing-btn-primary inline-flex rounded-xl px-8 py-3.5 text-sm font-semibold text-zinc-950"
-              >
-                Get started free
-              </Link>
-              <Link
-                href={projectRoutes.setupIdentity("mock-project")}
-                className="landing-btn-glass inline-flex rounded-xl px-8 py-3.5 text-sm font-medium text-text-primary"
-              >
-                Explore demo project
-              </Link>
-            </div>
+            </ol>
           </div>
         </div>
       </section>

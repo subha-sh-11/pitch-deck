@@ -386,60 +386,83 @@
   margin-top: clamp(36px, 4.5vw, 64px);
 }
 
-.hero-gallery {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: clamp(16px, 1.8vw, 26px);
+/* Seamless left-to-right marquee.
+   Two identical groups sit side by side; the track animates from -50% to 0,
+   so at the loop boundary the visible content is pixel-identical — no jump.
+   The inter-card gap lives on each card (margin-inline-end) rather than as a
+   flex `gap`, so the -50% shift lands exactly on the pattern with no half-gap. */
+.hero-marquee {
+  --marquee-duration: 40s;
+  position: relative;
   width: 100%;
+  overflow: hidden;
+  /* feather the left/right edges so cards dissolve in and out of the black */
+  -webkit-mask-image: linear-gradient(
+    to right, transparent 0, #000 6%, #000 94%, transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right, transparent 0, #000 6%, #000 94%, transparent 100%
+  );
+}
+
+.hero-marquee-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  animation: hero-marquee-ltr var(--marquee-duration) linear infinite;
+  will-change: transform;
+}
+
+.hero-marquee-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .hero-card {
   position: relative;
-  flex: 0 0 auto;
-  width: clamp(150px, 15.5vw, 238px);
-  aspect-ratio: 236 / 336;
+  flex: 0 0 clamp(190px, 15vw, 238px);
+  margin-inline-end: clamp(16px, 1.6vw, 24px);
+  aspect-ratio: 3 / 4;
   border-radius: 22px;
   overflow: hidden;
-  background: #0b0908;
-  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9);
-  transition:
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
+  background: #080808;
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.hero-card--focal {
-  width: clamp(160px, 16.6vw, 252px);
-  transform: translateY(-14px);
-  z-index: 1;
-}
-
+/* next/image fill sets width/height/positioning; we only tune the fit. */
 .hero-card__img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  display: block;
 }
 
-/* Soft dark overlay so cards dissolve into the page's bottom fade. */
+/* Per-card bottom fade — begins gently, darkest only near the very bottom,
+   so the card dissolves into the page background without hiding the subject. */
 .hero-card__scrim {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0) 45%,
-    rgba(7, 7, 7, 0.45) 74%,
+    rgba(7, 7, 7, 0) 48%,
+    rgba(7, 7, 7, 0.16) 66%,
+    rgba(7, 7, 7, 0.62) 84%,
     rgba(7, 7, 7, 0.98) 100%
   );
 }
 
+@keyframes hero-marquee-ltr {
+  from { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
 @media (hover: hover) {
+  /* Marquee keeps running on hover; only the individual card lifts. */
   .hero-card:hover {
     transform: translateY(-6px) scale(1.015);
-  }
-  .hero-card--focal:hover {
-    transform: translateY(-20px) scale(1.015);
+    z-index: 2;
   }
 }
 
@@ -502,23 +525,25 @@
 .hero-copy > *:nth-child(2) { animation-delay: 220ms; }
 .hero-copy > *:nth-child(3) { animation-delay: 320ms; }
 
-.hero-card {
+/* The marquee fades in with the copy; individual cards are NOT animated
+   (their transform is owned by the marquee track). */
+.hero-gallery-wrap {
   animation: hero-fade-up 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 300ms;
 }
-.hero-card:nth-child(1) { animation-delay: 260ms; }
-.hero-card:nth-child(2) { animation-delay: 340ms; }
-.hero-card:nth-child(3) { animation-delay: 420ms; }
-.hero-card:nth-child(4) { animation-delay: 500ms; }
-.hero-card:nth-child(5) { animation-delay: 580ms; }
 
 /* ============================================================
    Responsive
    ============================================================ */
 
-/* Laptop — tighten gallery, keep five cards (outer cards clip) */
+/* Laptop — slightly smaller cards + a touch faster cycle. */
 @media (max-width: 1200px) {
-  .hero-gallery {
-    gap: 18px;
+  .hero-marquee {
+    --marquee-duration: 34s;
+  }
+  .hero-card {
+    flex-basis: clamp(185px, 18vw, 220px);
+    margin-inline-end: 20px;
   }
 }
 
@@ -539,30 +564,12 @@
   .hero-mobile-controls {
     display: flex;
   }
-  .hero-gallery-wrap {
-    overflow: hidden;
-  }
-  .hero-gallery {
-    justify-content: flex-start;
-    gap: 18px;
-    padding: 0 max(20px, 4vw);
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .hero-gallery::-webkit-scrollbar {
-    display: none;
+  .hero-marquee {
+    --marquee-duration: 30s;
   }
   .hero-card {
-    scroll-snap-align: center;
-    width: clamp(200px, 34vw, 250px);
-  }
-  .hero-card--focal {
-    transform: none;
-  }
-  .hero-card--focal:hover {
-    transform: translateY(-6px) scale(1.015);
+    flex-basis: clamp(190px, 26vw, 210px);
+    margin-inline-end: 18px;
   }
 }
 
@@ -588,13 +595,12 @@
   .hero-cta-secondary {
     width: 100%;
   }
-  .hero-gallery {
-    gap: 14px;
-    padding: 0 20px;
+  .hero-marquee {
+    --marquee-duration: 26s;
   }
   .hero-card {
-    width: 78vw;
-    max-width: 300px;
+    flex-basis: clamp(165px, 44vw, 185px);
+    margin-inline-end: 14px;
   }
   .hero-partners {
     gap: 20px 28px;
@@ -604,15 +610,20 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-header,
   .hero-copy > *,
-  .hero-card {
+  .hero-gallery-wrap {
     animation: none;
+  }
+  /* Stop the auto-scroll; expose the cards as a normal scrollable row. */
+  .hero-marquee-track {
+    animation: none;
+  }
+  .hero-marquee {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .hero-card,
   .hero-card:hover,
-  .hero-card--focal,
-  .hero-card--focal:hover,
   .hero-cta-primary:hover,
-  .hero-cta-secondary:hover,
   .hero-btn-primary:hover {
     transform: none;
   }
