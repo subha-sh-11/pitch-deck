@@ -18,10 +18,10 @@ from app.core.logging import get_logger
 _log = get_logger("ocr")
 
 # Cost/latency/memory guard: a feature script is ~90-130 pages, but a brief only needs the first
-# pages. Configurable (OCR_MAX_PAGES) — turn it DOWN on a small/free-tier host to avoid OOM.
+# pages. Configurable (OCR_MAX_PAGES / OCR_RENDER_SCALE) — turn DOWN on a small/free-tier host.
 MAX_PAGES = settings.ocr_max_pages
-PAGES_PER_BATCH = 5
-RENDER_SCALE = 2.0  # ~144 dpi — plenty for typewritten screenplay text
+PAGES_PER_BATCH = 4
+RENDER_SCALE = settings.ocr_render_scale  # ~144 dpi at 2.0; drop to 1.0 to quarter the memory
 JPEG_QUALITY = 80
 
 _SYSTEM = (
@@ -33,63 +33,73 @@ _SYSTEM = (
 )
 
 
-def render_pdf_pages(data: bytes) -> list[dict]:
-    """PDF bytes → [{mediaType, data(base64 jpeg)}], capped at MAX_PAGES."""
-    import pypdfium2 as pdfium  # lazy
-    from PIL import Image  # noqa: F401  # lazy — pypdfium2 renders to PIL
+def _render_range(pdf, start: int, end: int) -> list[dict]:
+    """Render pages [start, end) to base64 JPEGs. Only these pages are held in memory at once."""
+    out: list[dict] = []
+    for i in range(start, end):
+        page = pdf[i]
+        bitmap = page.render(scale=RENDER_SCALE)
+        pil = bitmap.to_pil().convert("RGB")
+        buf = io.BytesIO()
+        pil.save(buf, format="JPEG", quality=JPEG_QUALITY)
+        out.append({"mediaType": "image/jpeg",
+                    "data": base64.b64encode(buf.getvalue()).decode("ascii")})
+        page.close()
+        del bitmap, pil, buf
+    return out
 
+
+def render_pdf_pages(data: bytes) -> list[dict]:
+    """PDF bytes → [{mediaType, data}], capped at MAX_PAGES. (Loads all at once — prefer ocr_pdf,
+    which streams. Kept for callers that need every page image.)"""
+    import pypdfium2 as pdfium  # lazy
     pdf = pdfium.PdfDocument(io.BytesIO(data))
-    images: list[dict] = []
     try:
-        for i, page in enumerate(pdf):
-            if i >= MAX_PAGES:
-                break
-            bitmap = page.render(scale=RENDER_SCALE)
-            pil = bitmap.to_pil().convert("RGB")
-            buf = io.BytesIO()
-            pil.save(buf, format="JPEG", quality=JPEG_QUALITY)
-            images.append({
-                "mediaType": "image/jpeg",
-                "data": base64.b64encode(buf.getvalue()).decode("ascii"),
-            })
-            page.close()
+        return _render_range(pdf, 0, min(len(pdf), MAX_PAGES))
     finally:
         pdf.close()
-    return images
 
 
 def ocr_pdf(data: bytes, filename: str = "") -> str:
-    """Transcribe a scanned PDF via the vision model. Returns "" when impossible."""
+    """Transcribe a scanned PDF via the vision model, STREAMING a few pages at a time so peak
+    memory stays small (safe on a 512 MB host). Returns "" when disabled or impossible."""
+    if not settings.enable_ocr:
+        _log.info("ocr: disabled (ENABLE_OCR=false) — skipping %s", filename)
+        return ""
     if resolve_provider() is None:
         _log.info("ocr: no LLM provider — skipping OCR for %s", filename)
         return ""
+    import pypdfium2 as pdfium  # lazy
     try:
-        pages = render_pdf_pages(data)
-    except Exception as exc:  # noqa: BLE001 — missing dep / corrupt PDF → no OCR
-        _log.warning("ocr: could not render %s to images: %s", filename, exc)
+        pdf = pdfium.PdfDocument(io.BytesIO(data))
+    except Exception as exc:  # noqa: BLE001 — corrupt / unsupported PDF
+        _log.warning("ocr: could not open %s: %s", filename, exc)
         return ""
-    if not pages:
-        return ""
-
-    _log.info("ocr: transcribing %d page(s) of %s via vision model", len(pages), filename)
     chunks: list[str] = []
-    for start in range(0, len(pages), PAGES_PER_BATCH):
-        batch = pages[start:start + PAGES_PER_BATCH]
-        result = complete_json(
-            system=_SYSTEM,
-            prompt=(
-                f"Transcribe these {len(batch)} page(s) (pages {start + 1}-"
-                f"{start + len(batch)} of the document), in order."
-            ),
-            images=batch,
-            fallback=lambda: {"text": ""},
-            cache_prefix="ocr",
-            max_tokens=8000,
-            temperature=0.0,
-        )
-        text = result.get("text", "") if isinstance(result, dict) else ""
-        if text.strip():
-            chunks.append(text.strip())
+    try:
+        n = min(len(pdf), MAX_PAGES)
+        for start in range(0, n, PAGES_PER_BATCH):
+            end = min(n, start + PAGES_PER_BATCH)
+            try:
+                batch = _render_range(pdf, start, end)  # only these pages in memory
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("ocr: render failed pages %d-%d of %s: %s", start, end, filename, exc)
+                break
+            result = complete_json(
+                system=_SYSTEM,
+                prompt=f"Transcribe these page(s) (pages {start + 1}-{end} of the document), in order.",
+                images=batch,
+                fallback=lambda: {"text": ""},
+                cache_prefix="ocr",
+                max_tokens=8000,
+                temperature=0.0,
+            )
+            text = result.get("text", "") if isinstance(result, dict) else ""
+            if text.strip():
+                chunks.append(text.strip())
+            del batch  # free the page images before the next batch
+    finally:
+        pdf.close()
     out = "\n\n".join(chunks)
-    _log.info("ocr: %s -> %d chars from %d page(s)", filename, len(out), len(pages))
+    _log.info("ocr: %s -> %d chars", filename, len(out))
     return out

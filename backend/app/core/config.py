@@ -64,9 +64,15 @@ class Settings(BaseSettings):
     # Generate slide images during the deck BUILD. Set false on a tiny worker so the build is
     # text-only (fast, low-memory); images are then generated per-slide on demand in the workshop.
     build_with_images: bool = True
-    # Max PDF pages rendered to images for vision-OCR of scanned scripts. 120 pages at 2x scale
-    # OOMs a 512 MB box — lower this (e.g. 12) on free tier. A brief only needs the first pages.
+    # Vision-OCR of SCANNED PDFs (renders pages to images — memory heavy). Turn OFF on a 512 MB
+    # host; text-based PDFs still parse fine, scanned ones just yield no text (paste instead).
+    enable_ocr: bool = True
+    # Max PDF pages OCR'd. Rendered a few at a time (streaming), so peak memory is small — but a
+    # brief only needs the first pages anyway. Lower on free tier (e.g. 8).
     ocr_max_pages: int = 120
+    # Render scale for OCR page images. 2.0 ≈ 144dpi. Drop to 1.0 on a small host — a quarter the
+    # pixels/memory, still readable for typed screenplay text.
+    ocr_render_scale: float = 2.0
 
     # ─── LLM (provider-agnostic) ───
     # Which text-LLM backend to use: "auto" picks the first one with a configured key.
