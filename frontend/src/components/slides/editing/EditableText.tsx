@@ -46,12 +46,16 @@ export function EditableText({
   // not `1em` (which is parent-relative and collapsed every element to the same size — so only
   // headings appeared to change). Captured once, before any scale is applied.
   const [baseFont, setBaseFont] = useState<number | null>(null);
-  // Live font scale during a corner-drag resize (committed once on release, so it doesn't flood
-  // the undo stack). null → use the stored edit.fontScale.
+  // Live font scale / width during a drag-resize (committed once on release, so it doesn't flood
+  // the undo stack). null → use the stored edit value.
   const [liveScale, setLiveScale] = useState<number | null>(null);
-  // Bounding rect of the selected element, so the drag-resize handle can sit at its corner.
-  const [handleRect, setHandleRect] = useState<DOMRect | null>(null);
-  const rz = useRef<{ x: number; y: number; base: number } | null>(null);
+  const [liveWidth, setLiveWidth] = useState<number | null>(null);
+  // The selected element's box, in coordinates RELATIVE TO THE SLIDE ROOT. The slide frame uses
+  // `container-type: size`, which makes `position: fixed` resolve against the slide (not the
+  // viewport) — so the handles must be positioned in slide-root space, not viewport space.
+  const [handleRect, setHandleRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  // dir: "e" (width), "s" (font/height), "se" (both).
+  const rz = useRef<{ dir: string; x: number; y: number; baseScale: number; baseWidth: number; rootW: number } | null>(null);
   // Live drag offset (delta from the committed position) — kept local so dragging
   // doesn't write to state/backend on every pointer move; we commit once on release.
   const [live, setLive] = useState<{ x: number; y: number } | null>(null);
@@ -89,57 +93,94 @@ export function EditableText({
     }
   }, [baseFont]);
 
-  // Keep the drag-resize handle pinned to the selected element's bottom-right corner (follows it
-  // as the text grows/shrinks/moves).
+  // Keep the drag-resize handles pinned to the selected element's box, in SLIDE-ROOT coordinates
+  // (see handleRect note) so they sit exactly on the element regardless of where the slide is.
   useLayoutEffect(() => {
-    setHandleRect(selected && ref.current ? ref.current.getBoundingClientRect() : null);
+    const el = ref.current;
+    const root = el?.closest("[data-slide-root]") as HTMLElement | null;
+    if (selected && el && root) {
+      const er = el.getBoundingClientRect();
+      const rr = root.getBoundingClientRect();
+      setHandleRect({ left: er.left - rr.left, top: er.top - rr.top, width: er.width, height: er.height });
+    } else {
+      setHandleRect(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, edit.fontScale, liveScale, edit.dxPct, edit.dyPct, edit.color, edit.scrim, resolved, active]);
+  }, [selected, edit.fontScale, liveScale, edit.widthPct, liveWidth, edit.dxPct, edit.dyPct, edit.color, edit.scrim, resolved, active]);
 
   if (edit.hidden) return null;
 
-  // ── Mouse resize: drag the corner handle to scale the font (diagonal drag = grow/shrink) ──
-  const onRzDown = (e: ReactPointerEvent) => {
+  // ── Directional mouse resize ──
+  //   • right edge (e)   → drag horizontally to widen/narrow (text rewraps)
+  //   • bottom edge (s)  → drag vertically to grow/shrink the font (taller/shorter)
+  //   • corner (se)      → both at once
+  const slideRootWidth = () => {
+    const root = ref.current?.closest("[data-slide-root]") as HTMLElement | null;
+    return root?.getBoundingClientRect().width || 0;
+  };
+  const onRzDown = (dir: string) => (e: ReactPointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    rz.current = { x: e.clientX, y: e.clientY, base: edit.fontScale ?? 1 };
-    setLiveScale(edit.fontScale ?? 1);
+    const rootW = slideRootWidth();
+    const curW = handleRect && rootW ? (handleRect.width / rootW) * 100 : 40;
+    rz.current = {
+      dir, x: e.clientX, y: e.clientY,
+      baseScale: edit.fontScale ?? 1,
+      baseWidth: edit.widthPct ?? curW,
+      rootW,
+    };
+    if (dir.includes("s")) setLiveScale(edit.fontScale ?? 1);
+    if (dir.includes("e")) setLiveWidth(edit.widthPct ?? curW);
   };
   const onRzMove = (e: ReactPointerEvent) => {
     const r = rz.current;
     if (!r) return;
-    const delta = (e.clientX - r.x + (e.clientY - r.y)) / 2; // px, down-right = bigger
-    setLiveScale(Math.max(0.4, Math.min(4, +(r.base + delta / 160).toFixed(2))));
+    if (r.dir.includes("e") && r.rootW) {
+      const w = r.baseWidth + ((e.clientX - r.x) / r.rootW) * 100;
+      setLiveWidth(Math.max(12, Math.min(100, +w.toFixed(1))));
+    }
+    if (r.dir.includes("s")) {
+      const sc = r.baseScale + (e.clientY - r.y) / 160; // drag down = bigger
+      setLiveScale(Math.max(0.4, Math.min(4, +sc.toFixed(2))));
+    }
   };
   const onRzUp = (e: ReactPointerEvent) => {
     const r = rz.current;
     rz.current = null;
     (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    if (r && liveScale != null) setEdit(k, { fontScale: liveScale });
+    if (r) {
+      const patch: { fontScale?: number; widthPct?: number } = {};
+      if (r.dir.includes("s") && liveScale != null) patch.fontScale = liveScale;
+      if (r.dir.includes("e") && liveWidth != null) patch.widthPct = liveWidth;
+      if (Object.keys(patch).length) setEdit(k, patch);
+    }
     setLiveScale(null);
+    setLiveWidth(null);
   };
 
-  // Fixed-position handle at the selected element's bottom-right corner (a sibling, never a child
-  // of the contentEditable Tag). Shown whenever this element is selected.
+  // Fixed-position resize handles on the selected element's right edge, bottom edge, and corner
+  // (siblings, never children of the contentEditable Tag).
+  const HANDLE = "absolute rounded-sm border border-white/70 bg-accent-neon shadow";
   const resizeHandle =
     selected && handleRect ? (
-      <div
-        data-slide-toolbar
-        title="Drag to resize the text"
-        onPointerDown={onRzDown}
-        onPointerMove={onRzMove}
-        onPointerUp={onRzUp}
-        style={{
-          position: "fixed",
-          left: handleRect.right - 6,
-          top: handleRect.bottom - 6,
-          width: 14,
-          height: 14,
-          zIndex: 50,
-          cursor: "se-resize",
-        }}
-        className="rounded-sm border border-white/70 bg-accent-neon shadow"
-      />
+      <div data-slide-toolbar style={{ position: "fixed", left: handleRect.left, top: handleRect.top,
+             width: handleRect.width, height: handleRect.height, zIndex: 50, pointerEvents: "none" }}>
+        {/* right edge — horizontal resize */}
+        <div onPointerDown={onRzDown("e")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+          title="Drag to widen (text rewraps)"
+          className={HANDLE}
+          style={{ pointerEvents: "auto", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 22, cursor: "ew-resize" }} />
+        {/* bottom edge — vertical resize (font size) */}
+        <div onPointerDown={onRzDown("s")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+          title="Drag to grow taller"
+          className={HANDLE}
+          style={{ pointerEvents: "auto", bottom: -5, left: "50%", transform: "translateX(-50%)", width: 22, height: 10, cursor: "ns-resize" }} />
+        {/* corner — both */}
+        <div onPointerDown={onRzDown("se")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+          title="Drag to resize"
+          className={HANDLE}
+          style={{ pointerEvents: "auto", right: -5, bottom: -5, width: 12, height: 12, cursor: "se-resize" }} />
+      </div>
     ) : null;
 
   const dx = edit.dxPct ?? 0;
@@ -161,6 +202,10 @@ export function EditableText({
     // we leave font-size to the class (so the first paint is correct and we can read the true base).
     ...((liveScale ?? edit.fontScale) && baseFont
       ? { fontSize: `${(baseFont * (liveScale ?? edit.fontScale ?? 1)).toFixed(2)}px` }
+      : {}),
+    // Width from the right-edge handle → text rewraps to this width (% of the slide).
+    ...((liveWidth ?? edit.widthPct)
+      ? { maxWidth: `${liveWidth ?? edit.widthPct}cqw`, width: `${liveWidth ?? edit.widthPct}cqw` }
       : {}),
     // Frosted panel behind the text so it stays readable over a busy image.
     ...(edit.scrim

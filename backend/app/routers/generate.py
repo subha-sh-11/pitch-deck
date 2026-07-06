@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import ai_generate_limit, image_generate_limit
 from app.models import Deck, GenerationJob, Project, Slide
@@ -54,9 +55,12 @@ async def generate_deck(
     project: Project = Depends(get_owned_project),
     db: AsyncSession = Depends(get_db),
 ):
+    # A small/free-tier host can set BUILD_WITH_IMAGES=false so the build is text-only (fast); the
+    # images are then generated per-slide on demand. The request can still opt out of images too.
+    effective_images = with_images and settings.build_with_images
     job = await _create_job(db, project.id, "full_deck", {"templateId": template_id})
     mode = await dispatch("generate_deck", generation_service.run_full_deck,
-                          [str(project.id), template_id, str(job.id), with_images],
+                          [str(project.id), template_id, str(job.id), effective_images],
                           background_tasks)
     return _job_payload(job, mode)
 

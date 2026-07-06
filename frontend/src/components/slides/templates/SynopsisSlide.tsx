@@ -54,7 +54,7 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
                         k={`item-${i}-desc`}
                         as="p"
                         multiline
-                        className="mt-1 whitespace-pre-line text-[clamp(0.6rem,0.95vw,0.8rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
+                        className="mt-1 whitespace-pre-line text-[clamp(0.6rem,0.95cqw,0.8rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                         value={act.description}
                       />
                     )}
@@ -89,7 +89,7 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
             <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
           </SlideLabel>
           <div
-            className="mt-6 gap-10 text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)] [column-fill:balance]"
+            className="mt-6 gap-10 text-[clamp(0.65rem,1cqw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)] [column-fill:balance]"
             style={{ columns: 2 }}
           >
             {paragraphs.map((para) => (
@@ -120,7 +120,7 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
             k="body"
             as="div"
             multiline
-            className="mt-5 whitespace-pre-line text-[clamp(0.65rem,1vw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
+            className="mt-5 whitespace-pre-line text-[clamp(0.65rem,1cqw,0.85rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
             value={content.body ?? ""}
           />
         </div>

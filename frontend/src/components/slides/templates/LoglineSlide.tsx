@@ -26,7 +26,7 @@ export function LoglineSlide({ content, layout, appearance }: LoglineSlideProps)
             k="body"
             as="p"
             multiline
-            className="mt-5 whitespace-pre-line font-display text-[clamp(1.1rem,2.4vw,2rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
+            className="mt-5 whitespace-pre-line font-display text-[clamp(1.1rem,2.4cqw,2rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
             value={content.body ?? ""}
           />
         </SplitLayout>
@@ -57,7 +57,7 @@ export function LoglineSlide({ content, layout, appearance }: LoglineSlideProps)
               k="body"
               as="p"
               multiline
-              className="mt-6 whitespace-pre-line font-display text-[clamp(1.25rem,2.8vw,2.25rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
+              className="mt-6 whitespace-pre-line font-display text-[clamp(1.25rem,2.8cqw,2.25rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
               value={content.body ?? ""}
             />
           </div>
@@ -72,7 +72,7 @@ export function LoglineSlide({ content, layout, appearance }: LoglineSlideProps)
             k="body"
             as="p"
             multiline
-            className="mt-7 max-w-4xl whitespace-pre-line font-display text-[clamp(1.4rem,3.2vw,2.6rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
+            className="mt-7 max-w-4xl whitespace-pre-line font-display text-[clamp(1.4rem,3.2cqw,2.6rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]"
             value={content.body ?? ""}
           />
           <div

@@ -48,14 +48,14 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
           <EditableText
             k="heading"
             as="h1"
-            className="max-w-[80%] font-display text-[clamp(2.2rem,5.5vw,5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
+            className="max-w-[80%] font-display text-[clamp(2.2rem,5.5cqw,5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
             value={content.heading}
           />
           {content.subheading && (
             <EditableText
               k="subheading"
               as="p"
-              className="mt-4 font-display text-[clamp(1rem,2vw,1.6rem)] italic"
+              className="mt-4 font-display text-[clamp(1rem,2cqw,1.6rem)] italic"
               style={{ color: "var(--slide-accent)" }}
               value={content.subheading}
             />
@@ -65,7 +65,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
               k="body"
               as="p"
               multiline
-              className="mt-5 max-w-xl whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
+              className="mt-5 max-w-xl whitespace-pre-line text-[clamp(0.65rem,1.1cqw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
               value={content.body}
             />
           )}
@@ -86,14 +86,14 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
               <EditableText
                 k="heading"
                 as="h1"
-                className="font-display text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
+                className="font-display text-[clamp(2rem,5cqw,4.5rem)] font-bold leading-[0.95] tracking-tight text-[var(--slide-text,#F5F1E8)]"
                 value={content.heading}
               />
               {content.subheading && (
                 <EditableText
                   k="subheading"
                   as="p"
-                  className="mt-3 font-display text-[clamp(1rem,2vw,1.75rem)] italic"
+                  className="mt-3 font-display text-[clamp(1rem,2cqw,1.75rem)] italic"
                   style={{ color: "var(--slide-accent)" }}
                   value={content.subheading}
                 />
@@ -103,7 +103,7 @@ export function CoverSlide({ content, layout }: CoverSlideProps) {
                   k="body"
                   as="p"
                   multiline
-                  className="mt-4 max-w-lg whitespace-pre-line text-[clamp(0.65rem,1.1vw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
+                  className="mt-4 max-w-lg whitespace-pre-line text-[clamp(0.65rem,1.1cqw,0.95rem)] leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                   value={content.body}
                 />
               )}

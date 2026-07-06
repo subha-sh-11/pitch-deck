@@ -131,7 +131,9 @@ export interface PollOptions {
  */
 export async function pollJob(
   job: GenerationJob,
-  { onProgress, intervalMs = 1200, timeoutMs = 300_000 }: PollOptions = {},
+  // 10 min: a full deck build (LLM + ~20 image generations) can run several minutes on a small
+  // (free-tier) worker; 5 min was cutting off builds that were still finishing.
+  { onProgress, intervalMs = 1200, timeoutMs = 600_000 }: PollOptions = {},
 ): Promise<GenerationJob> {
   let current = job;
   const start = Date.now();

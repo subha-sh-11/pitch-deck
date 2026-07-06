@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     # e.g. Supabase/Filebase/R2 tokens), set true so we skip the list/create probe and just use it.
     s3_bucket_exists: bool = False
 
+    # ─── Resource limits (turn DOWN on small / free-tier hosts) ───
+    # Generate slide images during the deck BUILD. Set false on a tiny worker so the build is
+    # text-only (fast, low-memory); images are then generated per-slide on demand in the workshop.
+    build_with_images: bool = True
+    # Max PDF pages rendered to images for vision-OCR of scanned scripts. 120 pages at 2x scale
+    # OOMs a 512 MB box — lower this (e.g. 12) on free tier. A brief only needs the first pages.
+    ocr_max_pages: int = 120
+
     # ─── LLM (provider-agnostic) ───
     # Which text-LLM backend to use: "auto" picks the first one with a configured key.
     # Supported: auto | anthropic | openai | none

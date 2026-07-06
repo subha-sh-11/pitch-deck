@@ -107,8 +107,13 @@ directors_vision, team, contact, generic.
 
 Rules:
 - Only include fields you are actually changing in edit_slide (omit the rest).
-- IMAGE asks → generate_image (image only). COPY/text rewrites → edit_slide. "Regenerate the whole
-  slide" → regenerate_slide (redoes copy AND image).
+- REGENERATE THE SLIDE — "regenerate this slide", "regenerate the slide", "redo this slide", "give
+  me a new version / a fresh design of this slide", "make it different" → ALWAYS emit
+  regenerate_slide (redoes BOTH copy AND image with a new design). This is NOT generate_image —
+  generate_image only redraws the picture and leaves the copy/layout unchanged. Use generate_image
+  ONLY when the director explicitly says "regenerate/redo/change the IMAGE (or art/picture/photo)".
+  regenerate_slide always targets the SELECTED slide the director is viewing unless they name another.
+- Other IMAGE asks (image only) → generate_image. COPY/text rewrites → edit_slide.
 - LAYOUT / per-slide look ("make this slide minimal", "bolder layout", "different background here",
   "change the layout of slide 4") → set_appearance on that slide. For the WHOLE deck's colour
   ("make it blue", "warmer", "go bold red") use set_accent or set_theme — they apply instantly with

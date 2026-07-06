@@ -397,23 +397,31 @@ def _fallback_comps(intake: dict, existing: list) -> list[dict]:
 
 def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None,
         instructions: str | None = None, raw_prompt: str | None = None,
-        reference_slide: dict | None = None) -> dict:
+        reference_slide: dict | None = None, fresh: bool = False) -> dict:
     """``raw_prompt``: a director-edited prompt from the workshop — used VERBATIM as
     the user prompt (the system prompt stays), bypassing composition and cache.
-    ``reference_slide``: the matching slide of an uploaded reference deck to emulate."""
+    ``reference_slide``: the matching slide of an uploaded reference deck to emulate.
+    ``fresh``: a "regenerate this slide" ask — bypass the cache and push the model to write a
+    DISTINCTLY different take (new wording/structure), so regeneration yields something new."""
     fb = content_fallback(slide_type, intake, design)
     edited = bool(raw_prompt and raw_prompt.strip())
     prompt = raw_prompt.strip() if edited else compose_prompt(
         slide_type, title, purpose, intake, design, instructions, reference_slide
     )
+    if fresh and not edited:
+        prompt += ("\n\nFRESH TAKE: produce a NOTICEABLY DIFFERENT version — rework the wording, "
+                   "structure, ordering and emphasis so it doesn't read like the previous one. "
+                   "Stay true to the film, but make it feel new.")
     result = complete_json(
         system=_SYSTEM,
         prompt=prompt,
         fallback=lambda: fb,
         # A reference-grounded slide must not collide with the cached generic one.
         cache_prefix=f"content:ref:{slide_type}" if reference_slide else f"content:{slide_type}",
-        # Director-touched prompts must be fresh, never a cache hit of the old copy.
-        use_cache=not (edited or (instructions and instructions.strip())),
+        # Director-touched prompts (and explicit "regenerate") must be fresh, never a cache hit.
+        use_cache=not (edited or fresh or (instructions and instructions.strip())),
+        # Higher temperature on a fresh regenerate so the wording actually varies.
+        **({"temperature": 0.9} if fresh else {}),
     )
     if not isinstance(result, dict):
         result = fb

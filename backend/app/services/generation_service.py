@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -622,9 +623,13 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         # overrides, free-form text boxes, and the existing image (so a failed image
         # generation never wipes good art).
         old = dict(slide.content or {})
+        # A plain "regenerate this slide" (no verbatim edited prompt) is a request for a genuinely
+        # NEW take — fresh copy + a rotated layout + new art — not a re-run of the cached version.
+        is_full_regen = not (content_prompt and content_prompt.strip())
         new_content = content_agent.run(
             slide.slide_type, slide.title or "", slide.purpose or "", intake, design,
             instructions=instructions, raw_prompt=content_prompt, reference_slide=ref_slide,
+            fresh=is_full_regen,
         )
         for key in ("edits", "textBoxes", "imageUrl", "imagePrompt"):
             if old.get(key) is not None:
@@ -667,6 +672,8 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
                 aspect_ratio=image_prompt_agent.aspect_for(slide.slide_type),
                 palette=design.get("palette"),
                 reference_images=references,
+                # A fresh random seed on a full regenerate so the art comes back visibly different.
+                seed=random.randint(1, 2_000_000_000) if is_full_regen else None,
             )
             had_image = bool((slide.content or {}).get("imageUrl"))
             if img.meta.get("provider") == "placeholder" and had_image:
@@ -688,9 +695,9 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
             **({"imagePrompt": used_image_prompt} if used_image_prompt else {}),
         }
         meta["generated"] = True
-        # An explicit "Regenerate slide" (carries a fresh-take instruction) should also change
-        # the LAYOUT — rotate the composition / image side / style pacing to a new look.
-        if instructions and instructions.strip():
+        # A full "Regenerate slide" (or one carrying a fresh-take instruction) also changes the
+        # LAYOUT — rotate the composition / image side / style pacing to a genuinely new look.
+        if is_full_regen or (instructions and instructions.strip()):
             meta["appearance"] = layout_agent.varied_appearance(
                 slide.slide_type, design, meta.get("appearance")
             )

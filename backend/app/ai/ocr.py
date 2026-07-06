@@ -12,12 +12,14 @@ import base64
 import io
 
 from app.ai.llm import complete_json, resolve_provider
+from app.core.config import settings
 from app.core.logging import get_logger
 
 _log = get_logger("ocr")
 
-# Cost/latency guards: a feature script is ~90-130 pages; cap pathological inputs.
-MAX_PAGES = 120
+# Cost/latency/memory guard: a feature script is ~90-130 pages, but a brief only needs the first
+# pages. Configurable (OCR_MAX_PAGES) — turn it DOWN on a small/free-tier host to avoid OOM.
+MAX_PAGES = settings.ocr_max_pages
 PAGES_PER_BATCH = 5
 RENDER_SCALE = 2.0  # ~144 dpi — plenty for typewritten screenplay text
 JPEG_QUALITY = 80

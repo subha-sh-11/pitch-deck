@@ -9,6 +9,7 @@ import { pollJob, workshopSlideImage } from "@/lib/api/generation";
 import { uploadSlideImage } from "@/lib/api/projects";
 import { buildSlideFromOutline } from "@/lib/build-slides";
 import { FALLBACK_DESIGN } from "@/lib/deck-themes";
+import { FONT_OPTIONS, loadFont, type FontOption } from "@/lib/fonts";
 import { useSmoothProgress } from "@/lib/use-smooth-progress";
 import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideType, SlideVersion } from "@/types/slide";
@@ -40,14 +41,11 @@ function isSlideGenerating(slide: Slide, generating: boolean): boolean {
   return generating && IMAGE_SLIDE_TYPES.has(slide.slideType) && !slide.content.imageUrl;
 }
 
-// Display fonts wired up in the app (mirrors SlideRenderer's FONT_VARS).
-const DECK_FONTS: { value: string; label: string }[] = [
-  { value: "cormorant", label: "Cormorant (serif)" },
-  { value: "playfair", label: "Playfair (serif)" },
-  { value: "oswald", label: "Oswald (condensed)" },
-  { value: "anton", label: "Anton (poster)" },
-  { value: "poppins", label: "Poppins (sans)" },
-];
+// Fonts grouped by genre for the <optgroup> picker.
+const FONT_GROUPS = FONT_OPTIONS.reduce<Record<string, FontOption[]>>((acc, f) => {
+  (acc[f.genre] ??= []).push(f);
+  return acc;
+}, {});
 
 /** Current deck accent hex for the colour input's initial value. */
 function deckAccent(design: DesignDirection): string {
@@ -177,6 +175,17 @@ function DeckStage({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [undo]);
+
+  // Set the deck's display font: load the webfont (if not bundled) then apply it deck-wide.
+  const setDeckFont = (value: string) => {
+    loadFont(value);
+    applyDisplayFont(value);
+  };
+  // Ensure the current (possibly custom / persisted) deck font is loaded so it renders on open.
+  useEffect(() => {
+    loadFont(design.fonts?.display);
+  }, [design.fonts?.display]);
+
   const [selectedId, setSelectedId] = useState<string>(slides[0]?.id ?? "");
   const [busy, setBusy] = useState<null | "import" | "generate">(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -241,11 +250,17 @@ function DeckStage({
     updateDraftSlide(selected.id, { ...v.content, versions: keep });
   };
 
-  // Click a thumbnail: set it on the slide. Click the CURRENT one again: unselect (remove it).
+  // Click a thumbnail: set it on the slide. Click the CURRENT one again: unselect it — but KEEP it
+  // in the gallery (add to candidates) so deselecting never makes the image disappear from the rail.
   const useImage = (u: string) => {
     if (!selected) return;
-    snapshot(selected, u === selected.content.imageUrl ? "remove image" : "image change");
-    updateDraftSlide(selected.id, { imageUrl: u === selected.content.imageUrl ? undefined : u });
+    const isCurrent = u === selected.content.imageUrl;
+    snapshot(selected, isCurrent ? "unselect image" : "image change");
+    const cands = selected.content.imageCandidates ?? [];
+    updateDraftSlide(selected.id, {
+      imageUrl: isCurrent ? undefined : u,
+      imageCandidates: cands.includes(u) ? cands : [...cands, u],
+    });
   };
 
   // Remove an image from the slide's gallery entirely (and clear it off the slide if it was current).
@@ -332,17 +347,35 @@ function DeckStage({
                 <span className="text-[10px] uppercase tracking-wider text-text-dim">Font</span>
                 <select
                   value={design.fonts?.display ?? ""}
-                  onChange={(e) => applyDisplayFont(e.target.value)}
-                  className="bg-transparent text-xs text-text-primary outline-none"
-                  title="Deck display font"
+                  onChange={(e) => setDeckFont(e.target.value)}
+                  className="max-w-[150px] bg-transparent text-xs text-text-primary outline-none"
+                  title="Deck display font — grouped by genre"
                 >
-                  {DECK_FONTS.map((f) => (
-                    <option key={f.value} value={f.value} className="bg-surface-1 text-text-primary">
-                      {f.label}
-                    </option>
+                  {Object.entries(FONT_GROUPS).map(([genre, fonts]) => (
+                    <optgroup key={genre} label={genre} className="bg-surface-1">
+                      {fonts.map((f) => (
+                        <option key={f.value} value={f.value} className="bg-surface-1 text-text-primary">
+                          {f.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
+              {/* Import any Google font by name → loads + applies it. */}
+              <button
+                type="button"
+                onClick={() => {
+                  const name = window.prompt(
+                    "Import a font by its Google Fonts name (e.g. \"Rubik Glitch\", \"Lobster\", \"Cinzel Decorative\"):",
+                  )?.trim();
+                  if (name) setDeckFont(name);
+                }}
+                title="Import a custom font by name (any Google font)"
+                className="shrink-0 rounded-lg border border-border-glass bg-surface-1/50 px-2 py-1 text-[10px] uppercase tracking-wider text-text-dim transition-colors hover:text-text-primary"
+              >
+                ＋ Import font
+              </button>
               <label
                 className="flex items-center gap-1.5 rounded-lg border border-border-glass bg-surface-1/50 px-2 py-1 text-[10px] uppercase tracking-wider text-text-dim"
                 title="Deck accent colour"
