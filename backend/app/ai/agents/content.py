@@ -360,25 +360,68 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
     return "\n".join(lines)
 
 
+# Genre → three well-known comparable films (real titles, so TMDB posters attach). Used only when
+# neither the intake nor the LLM supplied comparables, so the SHOW CROSS slide is never blank.
+_COMP_BY_GENRE: list[tuple[tuple[str, ...], list[str]]] = [
+    (("post-apocalyp", "dystop", "survival", "sci"), ["Children of Men", "The Road", "Snowpiercer"]),
+    (("horror", "supernatural"), ["Hereditary", "The Witch", "It Follows"]),
+    (("crime", "noir", "gangster"), ["No Country for Old Men", "Sicario", "Prisoners"]),
+    (("thriller", "mystery", "suspense"), ["Prisoners", "Zodiac", "Wind River"]),
+    (("action", "adventure"), ["Mad Max: Fury Road", "John Wick", "Sicario"]),
+    (("fantasy", "myth"), ["Pan's Labyrinth", "The Green Knight", "Spirited Away"]),
+    (("romance", "love"), ["Before Sunrise", "In the Mood for Love", "Call Me by Your Name"]),
+    (("war",), ["1917", "Dunkirk", "Come and See"]),
+    (("comedy",), ["Jojo Rabbit", "The Grand Budapest Hotel", "Little Miss Sunshine"]),
+    (("drama", "family"), ["Manchester by the Sea", "Nomadland", "The Father"]),
+]
+_COMP_DEFAULT = ["Parasite", "Arrival", "Whiplash"]
+
+
+def _fallback_comps(intake: dict, existing: list) -> list[dict]:
+    """Guarantee three comparable films for the Show Cross slide, matched to the film's genre/tone
+    when the material didn't name any. Real titles → TMDB can still fetch their posters."""
+    seen = {str(c.get("title", "")).strip().lower() for c in existing if isinstance(c, dict)}
+    hay = " ".join([_g(intake, "genreBlend"), _g(intake, "tone"), _g(intake, "themes"),
+                    _g(intake, "logline")]).lower()
+    titles = next((t for keys, t in _COMP_BY_GENRE if any(k in hay for k in keys)), _COMP_DEFAULT)
+    note = "Tonal & thematic comparable — shared audience and positioning."
+    out = list(existing)
+    for t in titles:
+        if len(out) >= 3:
+            break
+        if t.lower() not in seen:
+            out.append({"title": t, "note": note})
+            seen.add(t.lower())
+    return out[:3]
+
+
 def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | None,
         instructions: str | None = None, raw_prompt: str | None = None,
-        reference_slide: dict | None = None) -> dict:
+        reference_slide: dict | None = None, fresh: bool = False) -> dict:
     """``raw_prompt``: a director-edited prompt from the workshop — used VERBATIM as
     the user prompt (the system prompt stays), bypassing composition and cache.
-    ``reference_slide``: the matching slide of an uploaded reference deck to emulate."""
+    ``reference_slide``: the matching slide of an uploaded reference deck to emulate.
+    ``fresh``: a "regenerate this slide" ask — bypass the cache and push the model to write a
+    DISTINCTLY different take (new wording/structure), so regeneration yields something new."""
     fb = content_fallback(slide_type, intake, design)
     edited = bool(raw_prompt and raw_prompt.strip())
     prompt = raw_prompt.strip() if edited else compose_prompt(
         slide_type, title, purpose, intake, design, instructions, reference_slide
     )
+    if fresh and not edited:
+        prompt += ("\n\nFRESH TAKE: produce a NOTICEABLY DIFFERENT version — rework the wording, "
+                   "structure, ordering and emphasis so it doesn't read like the previous one. "
+                   "Stay true to the film, but make it feel new.")
     result = complete_json(
         system=_SYSTEM,
         prompt=prompt,
         fallback=lambda: fb,
         # A reference-grounded slide must not collide with the cached generic one.
         cache_prefix=f"content:ref:{slide_type}" if reference_slide else f"content:{slide_type}",
-        # Director-touched prompts must be fresh, never a cache hit of the old copy.
-        use_cache=not (edited or (instructions and instructions.strip())),
+        # Director-touched prompts (and explicit "regenerate") must be fresh, never a cache hit.
+        use_cache=not (edited or fresh or (instructions and instructions.strip())),
+        # Higher temperature on a fresh regenerate so the wording actually varies.
+        **({"temperature": 0.9} if fresh else {}),
     )
     if not isinstance(result, dict):
         result = fb
@@ -391,12 +434,17 @@ def run(slide_type: str, title: str, purpose: str, intake: dict, design: dict | 
         result["moodBlocks"] = attach_film_backdrops(result["moodBlocks"])
     result = _ensure_renderable(slide_type, result, fb)
 
-    # Show Cross: attach real comparable-film posters (TMDB) when available.
+    # Show Cross: guarantee 3 comparable films (so the slide is never blank), then attach real
+    # posters (TMDB) when available.
     if slide_type == "show_cross":
         from app.ai import tmdb
 
-        for comp in result.get("comps") or []:
-            if isinstance(comp, dict) and comp.get("title") and not comp.get("posterUrl"):
+        comps = [c for c in (result.get("comps") or []) if isinstance(c, dict) and c.get("title")]
+        if len(comps) < 3:
+            comps = _fallback_comps(intake, comps)
+        result["comps"] = comps
+        for comp in comps:
+            if comp.get("title") and not comp.get("posterUrl"):
                 poster = tmdb.poster_for(comp["title"])
                 if poster:
                     comp["posterUrl"] = poster

@@ -23,7 +23,7 @@ export function ContactSlide({ content }: ContactSlideProps) {
         <EditableText
           k="heading"
           as="h2"
-          className="font-display text-[clamp(1.75rem,3.5vw,3rem)] font-semibold text-[var(--slide-text,#F5F1E8)]"
+          className="font-display text-[clamp(1.75rem,3.5cqw,3rem)] font-semibold text-[var(--slide-text,#F5F1E8)]"
           value={content.heading}
         />
         {content.subheading && (

@@ -13,3 +13,5 @@ docs/
 
 # Reference PDFs (binary)
 *.pdf
+# local-only cloud sync credentials
+scripts/cloud.env

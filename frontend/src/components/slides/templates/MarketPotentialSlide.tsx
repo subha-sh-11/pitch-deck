@@ -1,5 +1,8 @@
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
@@ -12,6 +15,9 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
     content.items ??
     content.bullets?.map((b) => ({ title: b, description: "" })) ??
     [];
+  const { patchContent } = useSlideEdit();
+  const duplicate = (i: number) => patchContent({ items: [...items, { ...items[i] }] });
+  const remove = (i: number) => patchContent({ items: items.filter((_, j) => j !== i) });
 
   return (
     <SlideFrame imageUrl={content.imageUrl}>
@@ -25,10 +31,12 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
         {items.length > 0 ? (
           <div className="mt-6 grid flex-1 grid-cols-2 gap-4">
             {items.map((item, i) => (
-              <div
+              <MovableCard
                 key={i}
-                className="flex flex-col justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] p-5"
+                ck={`item-${i}`}
+                className="group relative flex flex-col justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] p-5"
               >
+                <CardControls onDuplicate={() => duplicate(i)} onDelete={() => remove(i)} />
                 <SlideIcon
                   name={iconForLabel(item.title, "market")}
                   size={20}
@@ -49,7 +57,7 @@ export function MarketPotentialSlide({ content }: MarketPotentialSlideProps) {
                     value={item.description}
                   />
                 )}
-              </div>
+              </MovableCard>
             ))}
           </div>
         ) : (

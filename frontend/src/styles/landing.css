@@ -82,6 +82,21 @@
   overflow-x: hidden;
 }
 
+/* Marketing home only: re-map the accent tokens to the hero's cinematic red so
+   the lower sections + cursor spotlight match the hero. Scoped to `.landing-home`
+   so the shared MarketingShell pages (dashboard, new project) keep their palette.
+   The hero itself uses its own --hero-accent and is unaffected. */
+.landing-home {
+  --accent-neon: #e74727;
+  --accent-neon-dim: #dc3b21;
+  --accent-lime: #e74727;
+  --accent-lime-dim: #dc3b21;
+  --accent-orange: #e74727;
+  --accent-rgb: 231, 71, 39;
+  --glow-neon: rgba(231, 71, 39, 0.3);
+  --glow-lime: rgba(231, 71, 39, 0.22);
+}
+
 .landing-mesh {
   position: fixed;
   inset: 0;
@@ -90,7 +105,7 @@
   overflow: hidden;
 }
 
-/* Cursor-following warm peach spotlight (replaces fixed corner orbs) */
+/* Cursor-following atmospheric spotlight (accent-tinted, restrained) */
 .landing-cursor-spotlight {
   position: absolute;
   inset: 0;
@@ -98,8 +113,8 @@
   --my: 35%;
   background: radial-gradient(
     circle  min(42vw, 420px) at var(--mx) var(--my),
-    rgba(248, 201, 164, 0.16) 0%,
-    rgba(248, 201, 164, 0.05) 38%,
+    rgba(var(--accent-rgb), 0.12) 0%,
+    rgba(var(--accent-rgb), 0.04) 38%,
     transparent 68%
   );
 }
@@ -110,7 +125,7 @@
   inset: 0;
   background: radial-gradient(
     ellipse 80% 50% at 50% -10%,
-    rgba(248, 201, 164, 0.04),
+    rgba(var(--accent-rgb), 0.04),
     transparent 55%
   );
   pointer-events: none;
@@ -207,9 +222,9 @@
   background: linear-gradient(
     105deg,
     #e4e4e7 0%,
-    #f8c9a4 25%,
+    var(--accent-neon) 25%,
     #fafafa 50%,
-    #eaae83 75%,
+    var(--accent-neon-dim) 75%,
     #e4e4e7 100%
   );
   background-size: 200% auto;
@@ -220,16 +235,16 @@
 }
 
 .landing-badge-pill {
-  background: rgba(248, 201, 164, 0.08);
-  border: 1px solid rgba(248, 201, 164, 0.28);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
   backdrop-filter: blur(8px);
 }
 
 .landing-btn-primary {
   cursor: pointer;
-  background: linear-gradient(135deg, #f8c9a4 0%, #eaae83 100%);
+  background: linear-gradient(135deg, var(--accent-neon) 0%, var(--accent-neon-dim) 100%);
   box-shadow:
-    0 4px 24px rgba(248, 201, 164, 0.4),
+    0 4px 24px rgba(var(--accent-rgb), 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   transition:
     transform 0.25s ease,
@@ -239,8 +254,8 @@
 .landing-btn-primary:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 8px 36px rgba(248, 201, 164, 0.55),
-    0 0 40px rgba(248, 201, 164, 0.15),
+    0 8px 36px rgba(var(--accent-rgb), 0.55),
+    0 0 40px rgba(var(--accent-rgb), 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
@@ -257,8 +272,8 @@
 
 .landing-btn-glass:hover {
   background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(248, 201, 164, 0.4);
-  box-shadow: 0 0 24px rgba(248, 201, 164, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.12);
   transform: translateY(-2px);
 }
 
@@ -271,18 +286,18 @@
 
 .landing-feature-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(248, 201, 164, 0.3);
+  border-color: rgba(var(--accent-rgb), 0.3);
   box-shadow:
     0 20px 48px rgba(0, 0, 0, 0.45),
-    0 0 32px rgba(248, 201, 164, 0.08);
+    0 0 32px rgba(var(--accent-rgb), 0.08);
 }
 
 .landing-workflow-line {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(248, 201, 164, 0.45),
-    rgba(248, 201, 164, 0.25),
+    rgba(var(--accent-rgb), 0.45),
+    rgba(var(--accent-rgb), 0.25),
     transparent
   );
   animation: landing-gradient-shift 3s ease-in-out infinite;
@@ -301,8 +316,168 @@
   .landing-cursor-spotlight {
     background: radial-gradient(
       circle  min(42vw, 420px) at 50% 35%,
-      rgba(248, 201, 164, 0.1) 0%,
+      rgba(var(--accent-rgb), 0.1) 0%,
       transparent 68%
     );
+  }
+}
+
+/* ============================================================
+   Workflow flow — premium red pipeline (01 → 05)
+   Red resolves via --accent-rgb (red inside .landing-home).
+   ============================================================ */
+.workflow-panel {
+  position: relative;
+  border-radius: 28px;
+  padding: 2.5rem 1.75rem;
+  border: 1px solid transparent;
+  /* dark fill (padding-box) + red-at-top gradient ring (border-box) */
+  background:
+    linear-gradient(180deg, rgba(20, 14, 12, 0.55), rgba(9, 8, 8, 0.5)) padding-box,
+    linear-gradient(
+      180deg,
+      rgba(var(--accent-rgb), 0.55) 0%,
+      rgba(var(--accent-rgb), 0.1) 34%,
+      rgba(255, 255, 255, 0.05) 100%
+    ) border-box;
+  box-shadow:
+    0 40px 90px -50px rgba(0, 0, 0, 0.9),
+    0 0 70px -34px rgba(var(--accent-rgb), 0.22);
+  overflow: hidden;
+}
+
+/* Faint technical grid, fading in from the top edge. */
+.workflow-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(130% 100% at 50% 0%, #000 28%, transparent 82%);
+  mask-image: radial-gradient(130% 100% at 50% 0%, #000 28%, transparent 82%);
+}
+
+/* Soft red glow pooling at the bottom. */
+.workflow-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    58% 42% at 50% 116%,
+    rgba(var(--accent-rgb), 0.16),
+    transparent 70%
+  );
+}
+
+.workflow-flow {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 640px) {
+  .workflow-flow {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2.5rem 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .workflow-panel {
+    padding: 3rem 2.75rem;
+  }
+  .workflow-flow {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+  }
+}
+
+.workflow-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.workflow-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  /* Match the landing's display font (used by all section + card headings). */
+  font-family: var(--slide-font-display, var(--font-cormorant)), Georgia, serif;
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: 0;
+  color: var(--accent-neon);
+  background: linear-gradient(
+    160deg,
+    rgba(var(--accent-rgb), 0.16),
+    rgba(var(--accent-rgb), 0.03)
+  );
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  box-shadow:
+    0 0 22px rgba(var(--accent-rgb), 0.28),
+    0 0 54px rgba(var(--accent-rgb), 0.14),
+    inset 0 0 18px rgba(var(--accent-rgb), 0.08);
+}
+
+.workflow-step-title {
+  margin-top: 1.25rem;
+  /* Same display serif as the feature-card headings above. */
+  font-family: var(--slide-font-display, var(--font-cormorant)), Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-primary);
+}
+
+.workflow-step-detail {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-dim);
+}
+
+/* Connector line + arrowhead at node-centre height — desktop row only. */
+.workflow-connector {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .workflow-connector {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    left: 84px;
+    right: 8px;
+    top: 36px;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .workflow-connector .wf-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(var(--accent-rgb), 0.1),
+      rgba(var(--accent-rgb), 0.5)
+    );
+  }
+  .workflow-connector .wf-arrow {
+    flex: 0 0 auto;
+    margin-left: 3px;
+    color: var(--accent-neon);
+    filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.4));
   }
 }

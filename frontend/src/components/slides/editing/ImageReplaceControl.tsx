@@ -1,16 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSlideEdit } from "./SlideEditContext";
 
 /** Floating control (top-right of the slide, edit mode only) to replace the slide image. */
 export function ImageReplaceControl() {
-  const { editing, imageUrl, imageActions, setImageUrl } = useSlideEdit();
+  const { editing, imageUrl, imageActions, setImageUrl, imageEffects, patchContent } = useSlideEdit();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Close the popup when clicking anywhere outside it (or pressing Escape).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    // Fires on the file dialog too, but the file input lives inside rootRef, so picking a file
+    // (which briefly blurs) won't close it.
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   if (!editing) return null;
 
@@ -47,7 +67,7 @@ export function ImageReplaceControl() {
   }
 
   return (
-    <div className="absolute right-2 top-2 z-40" onPointerDown={(e) => e.stopPropagation()}>
+    <div ref={rootRef} className="absolute right-2 top-2 z-40" onPointerDown={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -109,6 +129,51 @@ export function ImageReplaceControl() {
             >
               ✨ Regenerate with AI
             </button>
+          )}
+
+          {/* Non-destructive adjustments to the CURRENT background image (blur / darken). */}
+          {imageUrl && (
+            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+              <label className="block text-[11px] text-white/80">
+                <span className="mb-1 flex justify-between">
+                  <span>Blur background</span>
+                  <span className="text-white/50">{imageEffects?.blur ?? 0}px</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={16}
+                  step={1}
+                  value={imageEffects?.blur ?? 0}
+                  onChange={(e) => patchContent({ imageBlur: Number(e.target.value) })}
+                  className="w-full accent-[#22d3ee]"
+                />
+              </label>
+              <label className="block text-[11px] text-white/80">
+                <span className="mb-1 flex justify-between">
+                  <span>Darken background</span>
+                  <span className="text-white/50">{Math.round((imageEffects?.dim ?? 0) * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.85}
+                  step={0.05}
+                  value={imageEffects?.dim ?? 0}
+                  onChange={(e) => patchContent({ imageDim: Number(e.target.value) })}
+                  className="w-full accent-[#22d3ee]"
+                />
+              </label>
+              {(imageEffects?.blur || imageEffects?.dim) ? (
+                <button
+                  type="button"
+                  onClick={() => patchContent({ imageBlur: 0, imageDim: 0 })}
+                  className="text-[11px] text-white/50 underline hover:text-white/80"
+                >
+                  Reset image adjustments
+                </button>
+              ) : null}
+            </div>
           )}
 
           {error && <p className="mt-2 text-[11px] leading-snug text-red-400">{error}</p>}

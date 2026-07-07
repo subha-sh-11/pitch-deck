@@ -3,12 +3,12 @@
 import type {
   CSSProperties,
   ReactNode,
-  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { ElementToolbar } from "../editing/ElementToolbar";
 import { FreeTextLayer } from "../editing/FreeTextLayer";
 import { ImageReplaceControl } from "../editing/ImageReplaceControl";
-import { clientPointToPct, useSlideEdit } from "../editing/SlideEditContext";
+import { useSlideEdit } from "../editing/SlideEditContext";
 
 interface SlideFrameProps {
   children: ReactNode;
@@ -18,7 +18,8 @@ interface SlideFrameProps {
 }
 
 export function SlideFrame({ children, className = "", imageUrl }: SlideFrameProps) {
-  const { editing, imageUrl: editedImageUrl, imageEffects, addTextBox, selectTextBox } = useSlideEdit();
+  const { editing, imageUrl: editedImageUrl, imageEffects, addTextBox, selectTextBox, selectEl } =
+    useSlideEdit();
   // The provider holds the live (possibly user-replaced) image URL.
   const resolvedImage = editedImageUrl ?? imageUrl;
   // Non-destructive background adjustments set via chat ("blur the image", "darken it", "zoom").
@@ -26,26 +27,25 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
   const dim = imageEffects?.dim ?? 0;
   const scale = imageEffects?.scale ?? 1;
 
-  function onDoubleClick(e: ReactMouseEvent<HTMLDivElement>) {
-    if (!editing) return;
-    if ((e.target as HTMLElement).closest("[data-slide-text]")) return; // editing existing text
-    const { xPct, yPct } = clientPointToPct(e.currentTarget, e.clientX, e.clientY);
-    addTextBox(xPct, yPct);
-  }
-
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (!editing) return;
     const t = e.target as HTMLElement;
-    // Clicking empty slide area deselects any selected text box.
+    // Clicking empty slide area deselects any selected text box / element.
     if (t.closest("[data-slide-text]") || t.closest("[data-slide-toolbar]")) return;
     selectTextBox(null);
+    selectEl(null);
+  }
+
+  // Add a free text box in the slide's upper-left (deliberate button — NOT double-click, which
+  // used to fire accidentally over the full-bleed image and spawn stray "New text" boxes).
+  function addText() {
+    addTextBox(10, 12);
   }
 
   return (
     <div
       data-slide-root
       onPointerDown={onPointerDown}
-      onDoubleClick={onDoubleClick}
       className={`relative h-full w-full overflow-hidden ${className}`}
       // Background/text follow the deck palette (via CSS vars) and fall back to the dark
       // cinematic default — so changing the theme's base/text colour recolours every slide.
@@ -81,6 +81,22 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
       {children}
       <FreeTextLayer />
       <ImageReplaceControl />
+      {/* Persistent top toolbar for the selected template element. */}
+      <ElementToolbar />
+      {/* Deliberate "add text" control (top-left) — replaces accidental double-click adds. */}
+      {editing && (
+        <button
+          type="button"
+          data-slide-toolbar
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={addText}
+          title="Add a text box"
+          className="absolute left-[3%] top-[3%] z-40 flex items-center gap-1 rounded-full bg-black/80 px-2.5 py-1 text-white shadow-lg ring-1 ring-white/10 hover:bg-black"
+          style={{ fontSize: "min(2.2cqw, 12px)" }}
+        >
+          ＋ Text
+        </button>
+      )}
     </div>
   );
 }

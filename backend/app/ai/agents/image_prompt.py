@@ -407,7 +407,7 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
     default dark theme (which previously overrode warm/bright references)."""
     design = design or {}
     if not use_llm:
-        return _deterministic_prompt(slide_type, intake, design, has_references)
+        return _single_frame(_deterministic_prompt(slide_type, intake, design, has_references))
 
     kind = image_kind(slide_type)
     if has_references:
@@ -459,7 +459,21 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
         # Lead with the medium so the diffusion model weights it heavily (overrides any
         # photoreal wording the writer may have slipped in).
         final = f"{medium[1]}. {final}"
-    return final
+    return _single_frame(final)
+
+
+# Diffusion models (esp. at wide 16:9 with "anamorphic/ultra-wide" wording) love to split the
+# canvas into two side-by-side scenes — a diptych with a hard seam down the middle. FLUX ignores
+# negative prompts, so we enforce a single unbroken frame in the POSITIVE prompt instead.
+_SINGLE_FRAME_GUARD = (
+    "one single continuous cinematic frame, one unified scene edge to edge, "
+    "no split-screen, no diptych, no collage, no side-by-side panels, no mirrored halves, "
+    "no vertical seam or divider down the middle"
+)
+
+
+def _single_frame(prompt: str) -> str:
+    return f"{prompt.rstrip(' ,.')}, {_SINGLE_FRAME_GUARD}"
 
 
 # Per-genre VISUAL character, so each genre tile on the genre-blend slide actually looks like THAT

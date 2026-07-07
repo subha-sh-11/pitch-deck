@@ -1,5 +1,8 @@
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
@@ -9,19 +12,27 @@ interface GenreBlendSlideProps {
 
 export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
   const items = content.items ?? [];
+  const { patchContent } = useSlideEdit();
+  const duplicate = (i: number) => patchContent({ items: [...items, { ...items[i] }] });
+  const remove = (i: number) => patchContent({ items: items.filter((_, j) => j !== i) });
+  const setImage = (i: number, url: string) =>
+    patchContent({ items: items.map((it, j) => (j === i ? { ...it, imageUrl: url } : it)) });
 
   return (
-    <SlideFrame>
-      {/* A grid of per-genre tiles — each genre gets its OWN image; no single shared background. */}
-      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+    <SlideFrame imageUrl={content.imageUrl}>
+      {/* A grid of per-genre tiles; a slide-level background image shows behind them. */}
+      <div
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
+      />
       <div className="relative flex h-full flex-col p-[7%]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Genre Blend"} />
         </SlideLabel>
         <div className="mt-6 grid flex-1 grid-cols-3 gap-4">
           {items.map((item, i) => (
-            <div
+            <MovableCard
               key={i}
+              ck={`item-${i}`}
               className="group relative flex flex-col justify-end overflow-hidden rounded-lg border border-white/[0.08] p-5 transition-colors hover:border-[var(--slide-accent,#22d3ee)]/30"
               style={
                 item.imageUrl
@@ -29,6 +40,11 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
                   : { background: `linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.4) 100%)` }
               }
             >
+              <CardControls
+                onDuplicate={() => duplicate(i)}
+                onDelete={() => remove(i)}
+                onSetImage={(url) => setImage(i, url)}
+              />
               {item.imageUrl ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,7 +81,7 @@ export function GenreBlendSlide({ content }: GenreBlendSlideProps) {
                 className="relative mt-2 whitespace-pre-line text-xs leading-relaxed text-[var(--slide-text-muted,#9CA3AF)]"
                 value={item.description}
               />
-            </div>
+            </MovableCard>
           ))}
         </div>
       </div>

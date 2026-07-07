@@ -177,6 +177,17 @@ def _sanitize(result: dict, fallback: list[dict], target: int) -> list[dict]:
     contacts = [s for s in out if s["slide_type"] == "contact"]
     if contacts and out[-1]["slide_type"] != "contact":
         out = [s for s in out if s["slide_type"] != "contact"] + [contacts[0]]
+    # Required slides the LLM omitted (e.g. Show Cross / comparable films) are re-inserted so a
+    # required beat can never silently vanish from the deck. They land before the closing contact.
+    present = {s["slide_type"] for s in out}
+    missing_required = [s for s in fallback
+                        if s.get("required") and s["slide_type"] not in present]
+    if missing_required:
+        insert_at = len(out) - 1 if out and out[-1]["slide_type"] == "contact" else len(out)
+        for s in missing_required:
+            out.insert(insert_at, {"slide_type": s["slide_type"], "title": s["title"],
+                                   "purpose": s["purpose"], "required": True})
+            insert_at += 1
     # The director chose the count — accept at most ±1 from the LLM, and only keep its
     # version when it lands at least as close to the target as the deterministic outline.
     if not (_MIN_SLIDES <= len(out) <= _MAX_SLIDES):

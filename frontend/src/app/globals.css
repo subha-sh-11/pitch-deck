@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "../styles/cinematic.css";
 @import "../styles/landing.css";
+@import "../styles/hero.css";
 @import "../styles/preview-studio.css";
 @import "../styles/setup-progress.css";
 @import "../styles/templates-page.css";
@@ -9,6 +10,18 @@
 :root {
   --background: #0c0a09;
   --foreground: #f7f3ee;
+}
+
+/* Native smooth scrolling — browser-driven (no JS), so it stays lag-free. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
@@ -91,5 +104,5 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(248, 201, 164, 0.28) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }

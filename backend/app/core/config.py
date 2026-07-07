@@ -54,6 +54,25 @@ class Settings(BaseSettings):
     s3_key: str = "test"
     s3_secret: str = "test"
     s3_region: str = "us-east-1"
+    # "auto" (virtual-host, works for AWS/R2) or "path" (Supabase/MinIO/Filebase need this).
+    s3_addressing_style: str = "auto"
+    # When the bucket is pre-created and the credentials are SCOPED (can't list/create buckets,
+    # e.g. Supabase/Filebase/R2 tokens), set true so we skip the list/create probe and just use it.
+    s3_bucket_exists: bool = False
+
+    # ─── Resource limits (turn DOWN on small / free-tier hosts) ───
+    # Generate slide images during the deck BUILD. Set false on a tiny worker so the build is
+    # text-only (fast, low-memory); images are then generated per-slide on demand in the workshop.
+    build_with_images: bool = True
+    # Vision-OCR of SCANNED PDFs (renders pages to images — memory heavy). Turn OFF on a 512 MB
+    # host; text-based PDFs still parse fine, scanned ones just yield no text (paste instead).
+    enable_ocr: bool = True
+    # Max PDF pages OCR'd. Rendered a few at a time (streaming), so peak memory is small — but a
+    # brief only needs the first pages anyway. Lower on free tier (e.g. 8).
+    ocr_max_pages: int = 120
+    # Render scale for OCR page images. 2.0 ≈ 144dpi. Drop to 1.0 on a small host — a quarter the
+    # pixels/memory, still readable for typed screenplay text.
+    ocr_render_scale: float = 2.0
 
     # ─── LLM (provider-agnostic) ───
     # Which text-LLM backend to use: "auto" picks the first one with a configured key.

@@ -146,11 +146,16 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
               disabled={genAll.running || allGenerated}
               className="rounded-full bg-accent-neon px-4 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60"
             >
-              {genAll.running
-                ? `Generating ${genAll.done}/${genAll.total}…`
-                : allGenerated
-                  ? "✓ All generated"
-                  : "✦ Generate all slides"}
+              {genAll.running ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-950/40 border-t-zinc-950" />
+                  Generating {genAll.done}/{genAll.total}…
+                </span>
+              ) : allGenerated ? (
+                "✓ All generated"
+              ) : (
+                "✦ Generate all slides"
+              )}
             </button>
             <button
               type="button"
@@ -170,13 +175,18 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
             </button>
           </div>
         </div>
-        {/* Live progress while generating all */}
+        {/* Live progress while generating all. At 0% we show an indeterminate shimmer so the
+            bar is always visibly "working"; once slides land it becomes a real progress fill. */}
         {genAll.running && (
-          <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2/70">
-            <div
-              className="h-full rounded-full bg-accent-neon transition-[width] duration-300"
-              style={{ width: `${genAll.total ? (genAll.done / genAll.total) * 100 : 0}%` }}
-            />
+          <div className="relative h-1 w-full overflow-hidden rounded-full bg-surface-2/70">
+            {genAll.done === 0 ? (
+              <div className="h-full w-2/5 animate-pulse rounded-full bg-accent-neon" />
+            ) : (
+              <div
+                className="h-full rounded-full bg-accent-neon transition-[width] duration-300"
+                style={{ width: `${genAll.total ? (genAll.done / genAll.total) * 100 : 0}%` }}
+              />
+            )}
           </div>
         )}
       </div>
@@ -184,14 +194,14 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
       {/* Vertical card list */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 [scrollbar-width:thin]">
         {slides.map((s) => (
-          <SlideCard key={s.id} slide={s} />
+          <SlideCard key={s.id} slide={s} deckGenerating={genAll.running} />
         ))}
       </div>
     </div>
   );
 }
 
-function SlideCard({ slide }: { slide: Slide }) {
+function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenerating?: boolean }) {
   const { projectId, designDirection, replaceDraftSlide } = useSetupWizard();
   // Which slide the chat's "this slide" resolves to — clicking a card makes it active.
   const { slides: wsSlides, slide: activeSlide, setIndex } = useWorkshop();
@@ -363,7 +373,7 @@ function SlideCard({ slide }: { slide: Slide }) {
           </span>
         </div>
 
-        {/* Primary actions — write/rewrite the slide and generate image options, side by side */}
+        {/* Primary action — write / regenerate the whole slide (copy + imagery). */}
         <div className="flex items-stretch gap-2">
           <button
             type="button"
@@ -376,15 +386,6 @@ function SlideCard({ slide }: { slide: Slide }) {
               : slide.generated
                 ? "↻ Regenerate slide"
                 : "✦ Generate slide"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void genVariants()}
-            disabled={!!busy}
-            className="flex-1 rounded-xl border border-accent-neon/40 bg-accent-neon/5 px-3 py-2 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy === "image" ? "Generating images…" : "✨ Generate 3 image options"}
           </button>
         </div>
 
@@ -460,11 +461,16 @@ function SlideCard({ slide }: { slide: Slide }) {
             <ScaledSlide slide={slide} designDirection={designDirection ?? undefined} />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
+              {deckGenerating && (
+                <span className="mb-1 h-6 w-6 animate-spin rounded-full border-2 border-accent-neon/40 border-t-accent-neon" />
+              )}
               <h4 className="font-display text-xl font-semibold text-text-primary">{slide.title}</h4>
               {slide.purpose && (
                 <p className="max-w-[70%] text-xs leading-relaxed text-text-muted">{slide.purpose}</p>
               )}
-              {/* Generate control lives in the left panel — no duplicate button here. */}
+              {deckGenerating && (
+                <p className="mt-1 text-[11px] uppercase tracking-wider text-accent-neon/80">Preparing this slide…</p>
+              )}
             </div>
           )}
           {busy && (

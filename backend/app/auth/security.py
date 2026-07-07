@@ -8,24 +8,23 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-# bcrypt operates on at most 72 bytes and (since 5.0) RAISES on longer input
-# instead of silently truncating — so we truncate here, matching bcrypt's classic
-# behaviour. We use the `bcrypt` library directly rather than passlib, whose 1.7.x
-# bcrypt backend is unmaintained and crashes against bcrypt>=4.1.
-def _to_bytes(password: str) -> bytes:
+
+def _bcrypt_bytes(password: str) -> bytes:
+    """bcrypt hashes at most the first 72 bytes and modern bcrypt raises on
+    longer input, so truncate on a UTF-8 boundary ourselves."""
     return password.encode("utf-8")[:72]
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(_to_bytes(password), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
     try:
-        return bcrypt.checkpw(_to_bytes(password), password_hash.encode("utf-8"))
-    except ValueError:
+        return bcrypt.checkpw(_bcrypt_bytes(password), password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
         return False
 
 

@@ -64,7 +64,7 @@ export function GenericSlide({ content, layout, appearance }: GenericSlideProps)
         <div className="relative flex h-full flex-col items-center justify-center p-[10%] text-center">
           <SlideLabel>{content.heading}</SlideLabel>
           {content.body && (
-            <p className="mt-6 max-w-3xl font-display text-[clamp(1.2rem,2.6vw,2.1rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]">
+            <p className="mt-6 max-w-3xl font-display text-[clamp(1.2rem,2.6cqw,2.1rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]">
               {content.body}
             </p>
           )}

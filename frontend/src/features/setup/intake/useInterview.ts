@@ -419,19 +419,9 @@ export function useInterview(projectId: string): Interview {
       if (raw) {
         const sv = JSON.parse(raw);
         if (sv.messages?.length) {
-          const tail = (sv.messages as ChatMessage[]).slice(-12);
-          const resumed =
-            (sv.messages as ChatMessage[]).length > tail.length
-              ? [
-                  {
-                    id: nextId(),
-                    role: "assistant" as const,
-                    text: "— picking up where we left off —",
-                  },
-                  ...tail,
-                ]
-              : tail;
-          setMessages(resumed);
+          // Restore the ENTIRE saved conversation from the start of the project — no
+          // truncation, no "picking up where we left off" marker.
+          setMessages(sv.messages as ChatMessage[]);
           setSections(sv.sections ?? []);
           setAssumptions(sv.assumptions ?? []);
           setReady(!!sv.ready);

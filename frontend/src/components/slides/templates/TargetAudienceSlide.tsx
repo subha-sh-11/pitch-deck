@@ -1,5 +1,8 @@
 import type { SlideContent } from "@/types/slide";
+import { CardControls } from "../editing/CardControls";
 import { EditableText } from "../editing/EditableText";
+import { MovableCard } from "../editing/MovableCard";
+import { useSlideEdit } from "../editing/SlideEditContext";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
 import { SlideIcon, iconForLabel } from "../shared/SlideIcon";
 
@@ -10,6 +13,9 @@ interface TargetAudienceSlideProps {
 export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
   const items =
     content.items ?? content.bullets?.map((b) => ({ title: b, description: "" })) ?? [];
+  const { patchContent } = useSlideEdit();
+  const duplicate = (i: number) => patchContent({ items: [...items, { ...items[i] }] });
+  const remove = (i: number) => patchContent({ items: items.filter((_, j) => j !== i) });
 
   return (
     <SlideFrame imageUrl={content.imageUrl}>
@@ -25,14 +31,16 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
         {items.length > 0 ? (
           <div className="mt-6 grid flex-1 grid-cols-2 gap-3 content-start">
             {items.map((item, i) => (
-              <div
+              <MovableCard
                 key={i}
-                className="rounded-lg border p-4"
+                ck={`item-${i}`}
+                className="group relative rounded-lg border p-4"
                 style={{
                   borderColor: "color-mix(in srgb, var(--slide-accent) 20%, transparent)",
                   background: "color-mix(in srgb, var(--slide-accent) 6%, transparent)",
                 }}
               >
+                <CardControls onDuplicate={() => duplicate(i)} onDelete={() => remove(i)} />
                 <div className="flex items-center gap-2" style={{ color: "var(--slide-accent)" }}>
                   <SlideIcon name={iconForLabel(item.title, "audience")} size={18} />
                   <EditableText
@@ -51,7 +59,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
                     value={item.description}
                   />
                 )}
-              </div>
+              </MovableCard>
             ))}
           </div>
         ) : (

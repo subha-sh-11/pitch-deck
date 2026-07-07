@@ -87,6 +87,9 @@ interface SetupWizardContextValue extends SetupWizardState {
   prepareDraftSlides: () => Promise<void>;
   replaceDraftSlide: (slide: Slide) => void;
   updateDraftSlide: (id: string, patch: Partial<SlideContent> & { title?: string }) => void;
+  /** Undo the last slide-editing change (Ctrl+Z). */
+  undo: () => void;
+  canUndo: boolean;
   updateDraftSlideMeta: (
     id: string,
     patch: Partial<Pick<Slide, "speakerNotes" | "comments" | "transition" | "title">> & {
@@ -161,6 +164,23 @@ export function SetupWizardProvider({
   useEffect(() => {
     stateRef.current = state;
   });
+
+  // ── Undo stack (Ctrl+Z) — snapshots of draftSlides taken BEFORE each slide-editing mutation. ──
+  const undoStackRef = useRef<Slide[][]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const pushUndo = useCallback(() => {
+    const cur = stateRef.current.draftSlides;
+    const stack = undoStackRef.current;
+    if (stack[stack.length - 1] === cur) return; // this exact state is already on top
+    stack.push(cur);
+    if (stack.length > 80) stack.shift();
+    setCanUndo(true);
+  }, []);
+  const undo = useCallback(() => {
+    const prev = undoStackRef.current.pop();
+    setCanUndo(undoStackRef.current.length > 0);
+    if (prev) setState((s) => ({ ...s, draftSlides: prev }));
+  }, []);
 
   // ── Save tracking: every backend write goes through trackSave so the UI can
   // show saving / saved / error instead of silently losing edits. ──
@@ -382,11 +402,12 @@ export function SetupWizardProvider({
 
   /** Workshop: adopt a freshly (re)generated slide from the backend (local merge only). */
   const replaceDraftSlide = useCallback((slide: Slide) => {
+    pushUndo();
     setState((prev) => ({
       ...prev,
       draftSlides: prev.draftSlides.map((s) => (s.id === slide.id ? { ...s, ...slide } : s)),
     }));
-  }, []);
+  }, [pushUndo]);
 
   const regenerateAllDraftSlides = useCallback(async () => {
     setState((prev) => ({ ...prev, draftSlides: [] }));
@@ -395,6 +416,8 @@ export function SetupWizardProvider({
 
   const updateDraftSlide = useCallback(
     (id: string, patch: Partial<SlideContent> & { title?: string }) => {
+      // Don't snapshot the internal version-history write itself (avoids a useless undo step).
+      if (!("versions" in patch)) pushUndo();
       const { title, ...contentPatch } = patch;
       setState((prev) => ({
         ...prev,
@@ -413,7 +436,7 @@ export function SetupWizardProvider({
         );
       }
     },
-    [trackSave],
+    [trackSave, pushUndo],
   );
 
   const updateDraftSlideMeta = useCallback(
@@ -653,6 +676,8 @@ export function SetupWizardProvider({
       prepareDraftSlides,
       replaceDraftSlide,
       updateDraftSlide,
+      undo,
+      canUndo,
       updateDraftSlideMeta,
       addSlideComment,
       deleteDraftSlide,
@@ -673,7 +698,7 @@ export function SetupWizardProvider({
       state, projectId, designDirection, generationProgress, generationError, saveStatus,
       updateForm, completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary,
       setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
-      updateDraftSlide, updateDraftSlideMeta,
+      updateDraftSlide, undo, canUndo, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
       regenerateDraftSlide, regenerateAllDraftSlides, applyAccent, applyThemePalette,
       applyDisplayFont, chooseDesign, setGenerationStatus, approveContent,

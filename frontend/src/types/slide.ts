@@ -59,6 +59,29 @@ export interface SlideContent {
   edits?: Record<string, SlideElementEdit>;
   /** PPT-style editing: free-form text boxes the user added anywhere on the slide. */
   textBoxes?: SlideTextBox[];
+  /** Free-canvas card geometry: cards the user has dragged/resized out of the default grid,
+   * keyed by a stable card key (e.g. "char-0"). Absent → the card renders in its grid slot. */
+  cardLayout?: Record<string, CardGeom>;
+  /** Version history: snapshots of this slide's prior states (newest last), for restore. */
+  versions?: SlideVersion[];
+}
+
+/** Absolute geometry for a freely moved/resized card, as % of the slide (container-query units). */
+export interface CardGeom {
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+}
+
+/** A restorable snapshot of a slide's content at a point in time. */
+export interface SlideVersion {
+  ts: number;
+  label: string;
+  /** Thumbnail image for the version card (the slide's image at snapshot time). */
+  imageUrl?: string;
+  /** The content fields to restore (excludes nested `versions`). */
+  content: Omit<SlideContent, "versions">;
 }
 
 /** Override applied to a built-in template text element (inline editing + drag + restyle). */
@@ -72,6 +95,10 @@ export interface SlideElementEdit {
   color?: string;
   /** Multiplier on the element's font size (0.5–2). */
   fontScale?: number;
+  /** Max width of the text box as a % of the slide (drag the right edge) — makes text rewrap. */
+  widthPct?: number;
+  /** Frosted backdrop behind the text (blurs + darkens whatever is behind it) for legibility. */
+  scrim?: boolean;
   /** Hide this element. */
   hidden?: boolean;
 }

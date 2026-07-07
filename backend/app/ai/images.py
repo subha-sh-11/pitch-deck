@@ -110,6 +110,23 @@ def _gemini_parts(prompt: str, reference_images: list[dict] | None) -> list[dict
     return parts
 
 
+# Diffusion models love to split a wide canvas into two side-by-side scenes (a diptych with a hard
+# seam down the middle), and FLUX ignores negative prompts — so we enforce a single unbroken frame
+# in the POSITIVE prompt for EVERY image, whatever path built it (fresh, cached, edited, workshop).
+# Idempotent: a prompt that already carries the guard isn't appended to twice.
+_SINGLE_FRAME_GUARD = (
+    "one single continuous cinematic frame, one unified scene edge to edge, "
+    "no split-screen, no diptych, no collage, no side-by-side panels, no mirrored halves, "
+    "no vertical seam or divider down the middle"
+)
+
+
+def _enforce_single_frame(prompt: str) -> str:
+    if not prompt or "no diptych" in prompt.lower():
+        return prompt
+    return f"{prompt.rstrip(' ,.')}, {_SINGLE_FRAME_GUARD}"
+
+
 def generate_image(
     prompt: str,
     *,
@@ -125,6 +142,7 @@ def generate_image(
     director's visual references; on Gemini image models they condition the output (style/palette/
     grade). Providers without image-input support ignore them gracefully and stay text-only."""
     provider = _resolve_image_provider()
+    prompt = _enforce_single_frame(prompt)
     w, h = ASPECT_DIMENSIONS.get(aspect_ratio, ASPECT_DIMENSIONS["16:9"])
     reason = "" if provider != "placeholder" else "no_image_provider_configured"
     try:
