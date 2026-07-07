@@ -33,23 +33,6 @@ const STYLE_KWS = STYLE_OPTIONS.map((o) => o.kw).filter(Boolean);
 
 type FormShape = Record<string, string>;
 
-// One-tap starters for the empty state — teach the user what to type by example.
-const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
-  { label: "Telugu survival thriller", prompt: "A Telugu survival thriller" },
-  { label: "Indie coming-of-age drama", prompt: "An indie coming-of-age drama" },
-  { label: "Sci-fi short film", prompt: "A sci-fi short film" },
-  { label: "Mythological action film", prompt: "A mythological action film" },
-];
-
-// What the generated brief delivers — shown before any input so the value is tangible.
-const BRIEF_INCLUDES = [
-  "Story world",
-  "Visual tone",
-  "Character mood",
-  "Reference direction",
-  "Pitch-deck structure",
-];
-
 // Ordered, human-labelled brief fields shown in the "Captured so far" summary.
 const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["title", "Title"],
@@ -257,55 +240,21 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
   // Empty + not skipped → "still to add"; skipped → its own group.
   const pending = CAPTURED_FIELDS.filter(
     ([f]) => !(form[f] ?? "").trim().length && !skipped.has(f),
-  ).map(([, label]) => label);
+  ).map(([field, label]) => ({ field, label }));
   const skippedList = CAPTURED_FIELDS.filter(([f]) => skipped.has(f)).map(([, label]) => label);
 
-  // Truly empty: nothing captured and no open questions yet.
+  // Truly empty: nothing captured and no open questions yet. The placeholder was removed —
+  // show the "thinking" state while the agent works, otherwise render nothing.
   if (!visibleSections.length && !captured.length) {
+    if (!iv.thinking) return null;
     return (
       <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-8 text-center">
         {/* Signature warm halo — the one branded flourish on the empty canvas. */}
         <div className="intake-halo pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
-        {iv.thinking ? (
-          <div className="relative flex flex-col items-center gap-3">
-            <SparklesIcon />
-            <p className="text-sm text-text-muted">Thinking through your story…</p>
-          </div>
-        ) : (
-          <div className="animate-intake-fade-in relative flex w-full max-w-md flex-col items-center gap-3">
-            <SparklesIcon />
-            <p className="font-display text-3xl text-text-primary">Your design brief appears here</p>
-
-            {/* Example prompts — one tap starts the conversation. */}
-            <div className="mt-1 flex flex-wrap justify-center gap-2">
-              {EXAMPLE_PROMPTS.map((ex) => (
-                <button
-                  key={ex.label}
-                  type="button"
-                  onClick={() => iv.sendText(ex.prompt)}
-                  className="rounded-full border border-border-glass bg-surface-2/60 px-3.5 py-1.5 text-sm text-text-muted transition-all hover:-translate-y-px hover:border-accent-neon/50 hover:text-text-primary active:scale-95"
-                >
-                  {ex.label}
-                </button>
-              ))}
-            </div>
-
-            {/* What the director gets — makes the value tangible before any input. */}
-            <div className="mt-6 w-full rounded-2xl border border-border-glass bg-surface-1/40 px-5 py-4 text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-                Your brief will include
-              </p>
-              <ul className="mt-3 space-y-2">
-                {BRIEF_INCLUDES.map((item) => (
-                  <li key={item} className="flex items-center gap-2.5 text-sm text-text-muted">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-neon" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
+        <div className="relative flex flex-col items-center gap-3">
+          <SparklesIcon />
+          <p className="text-sm text-text-muted">Thinking through your story…</p>
+        </div>
       </div>
     );
   }
@@ -460,17 +409,25 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
               Still to add (optional)
             </h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {pending.map((label) => (
-                <span
-                  key={label}
-                  className="rounded-full border border-border-glass bg-surface-2/40 px-2.5 py-1 text-xs text-text-dim"
+              {pending.map(({ field, label }) => (
+                <button
+                  key={field}
+                  type="button"
+                  disabled={iv.thinking}
+                  title={`Ask the producer to suggest ${label.toLowerCase()} for your story`}
+                  onClick={() =>
+                    iv.sendText(
+                      `Let's fill in the ${label.toLowerCase()} — suggest options grounded in my story and I'll pick.`,
+                    )
+                  }
+                  className="rounded-full border border-border-glass bg-surface-2/40 px-2.5 py-1 text-xs text-text-dim transition-colors hover:border-accent-neon/50 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {label}
-                </span>
+                  + {label}
+                </button>
               ))}
             </div>
             <p className="mt-2 text-xs text-text-muted">
-              Tell me any of these on the left and I’ll fold them in — or just build with what you have.
+              Tap one and I’ll suggest options — or tell me in the chat, or just build with what you have.
             </p>
           </div>
         )}

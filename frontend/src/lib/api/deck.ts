@@ -10,7 +10,7 @@ import type {
   SlideStyleVariant,
   SlideType,
 } from "@/types/slide";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 
 /** A candidate visual system the director can choose from (a complete "template"). */
 export interface DesignCandidate {
@@ -107,6 +107,21 @@ export interface DeckCommandResult {
 const COMMAND_EXAMPLES =
   'For example: “make slide 2’s text white”, “add an image to the cover”, or “move the budget slide up”.';
 
+/** Human-readable chat line for a FAILED deck-command request — name the actual cause
+ *  (backend down / session expired / server error) instead of vaguely blaming "the model". */
+export function deckCommandErrorText(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 0) {
+      return "I can't reach the backend server — make sure it's running (uvicorn on :8000), then try again.";
+    }
+    if (err.status === 401 || err.status === 403) {
+      return "Your session has expired — log in again and I'll pick up right where we left off.";
+    }
+    return `The editing request failed (${err.status}: ${err.message}) — try again in a moment.`;
+  }
+  return "Something went wrong applying that change — try again in a moment.";
+}
+
 /** Honest chat text for a deck-command result: echo the agent's message only when its
  *  changes actually applied; otherwise say so instead of relaying a fabricated "Done". */
 export function honestDeckCommandText(res: DeckCommandResult): string {
@@ -120,9 +135,12 @@ export function honestDeckCommandText(res: DeckCommandResult): string {
   if (!res.message) {
     return `I didn't change anything — tell me which slide and what to change and I'll do it.\n${COMMAND_EXAMPLES}`;
   }
-  // Zero actions and none discarded: a clarification question or an honest "can't do that".
-  // A question gets example commands so the user knows how to answer; a success-sounding
-  // claim gets corrected with an explicit "nothing applied" note.
+  // Zero actions and none discarded: a clarification question, an informational answer
+  // (slide read-back, suggested options to pick from), or a fabricated success claim.
+  // Multi-line / list-shaped replies are informational by design — relay them untouched;
+  // the corrective notes are for terse one-liners only.
+  const informational = res.message.includes("\n") || /(^|\n)\s*(\d+[.)]|[-•])\s/.test(res.message);
+  if (informational) return res.message;
   return res.message.includes("?")
     ? `${res.message}\n${COMMAND_EXAMPLES}`
     : `${res.message}\n(No changes were applied to the deck.)`;

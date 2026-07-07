@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -46,6 +47,31 @@ _ITEM_IMAGE_COLLECTIONS = {
     "supporting_characters": ("characters", "3:4"),
     "visual_aesthetic": ("moodBlocks", "1:1"),
 }
+
+
+# Phrases in the director's notes that mean "FOLLOW my reference template" rather than
+# "take inspiration from it" — they switch generation to template-faithful (uniform) layout.
+_MATCH_PHRASES = (
+    "match exact", "follow this template", "follow the template", "follow it exactly",
+    "same template", "same design exactly", "replicate", "mirror the reference",
+    "copy the reference", "template-faithful", "exact same style",
+)
+
+
+def _wants_exact_match(intake: dict | None, design: dict | None = None) -> bool:
+    """Did the director ask the deck to FOLLOW their reference exactly (vs inspiration)?
+
+    Reads the intake notes the interview agent records (designDirection carries the stated
+    usage intent) and the design agent's own layoutStyle verdict ('uniform, template-faithful').
+    """
+    text = " ".join(
+        str((intake or {}).get(k) or "")
+        for k in ("designDirection", "visualAesthetic", "visualReferences")
+    ).lower()
+    layout_style = str((design or {}).get("layoutStyle") or "").lower()
+    return (any(p in text for p in _MATCH_PHRASES)
+            or "template-faithful" in layout_style
+            or ("uniform" in layout_style and "template" in layout_style))
 
 
 def _element_prompt(slide_type, element, intake, design, has_references):
@@ -407,6 +433,16 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             _set_job(session, job_id, progress=80)
 
             # 7. Persist slides + images (main thread / single session)
+            # Whole-deck visual rhythm, seeded by this deck's id: every build paces
+            # differently (per-film identity), while one build stays reproducible.
+            # If the director asked to FOLLOW their reference exactly, switch to the
+            # uniform, template-faithful scheme instead (consistent across all slides).
+            exact = _wants_exact_match(intake, design_clean)
+            appearances = layout_agent.plan_appearances(
+                [it["slide_type"] for it in outline], design_clean,
+                seed=str(deck.id), uniform=exact,
+            )
+            layout_rng = None if exact else random.Random(f"{deck.id}:layout")
             for i, item in enumerate(outline):
                 slide = Slide(
                     deck_id=deck.id,
@@ -416,10 +452,11 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                     purpose=item["purpose"],
                     content=contents[i],
                     layout=layout_agent.run(item["slide_type"], design_clean,
-                                            contents[i], has_image=i in img_map),
-                    # Initial visual rhythm (bold/minimal/standard) — rendered via the
-                    # appearance channel; the director can override it in the editor.
-                    meta={"appearance": layout_agent.appearance_for(item["slide_type"], design_clean)},
+                                            contents[i], has_image=i in img_map,
+                                            rng=layout_rng),
+                    # Initial visual rhythm — rendered via the appearance channel;
+                    # the director can override it in the editor.
+                    meta={"appearance": appearances[i]},
                     status="draft",
                 )
                 session.add(slide)
@@ -518,7 +555,15 @@ def prepare_deck(project_id: str, template_id: str | None = None,
             session.add(deck)
             session.flush()
 
-            for item in outline:
+            # Whole-deck visual rhythm, seeded by this deck's id (see plan_appearances).
+            # Template-faithful (uniform) when the director asked to follow their reference.
+            exact = _wants_exact_match(intake, design_clean)
+            appearances = layout_agent.plan_appearances(
+                [it["slide_type"] for it in outline], design_clean,
+                seed=str(deck.id), uniform=exact,
+            )
+            layout_rng = None if exact else random.Random(f"{deck.id}:layout")
+            for idx, item in enumerate(outline):
                 # Cheap deterministic seed (no LLM) — replaced by a story-grounded prompt at
                 # actual generation time; the director can also edit it in the workshop.
                 seeded_prompt = image_prompt_agent.build_prompt(
@@ -532,9 +577,9 @@ def prepare_deck(project_id: str, template_id: str | None = None,
                     purpose=item["purpose"],
                     # Minimal shell so the preview renders something before generation.
                     content={"heading": item["title"]},
-                    layout=layout_agent.run(item["slide_type"], design_clean),
+                    layout=layout_agent.run(item["slide_type"], design_clean, rng=layout_rng),
                     meta={
-                        "appearance": layout_agent.appearance_for(item["slide_type"], design_clean),
+                        "appearance": appearances[idx],
                         "prompts": {"contentInstructions": "", "imagePrompt": seeded_prompt},
                         "generated": False,
                     },

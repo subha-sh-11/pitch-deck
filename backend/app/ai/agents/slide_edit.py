@@ -69,34 +69,14 @@ IMAGERY — putting pictures on slides (DO IT, don't suggest it):
   image PER genre tile. So you CAN give each genre (comedy, crime, drama, …) its own image — emit a
   SINGLE generate_image for the genre_blend slide and truthfully say each genre got its own visual.
 
-ACTIONS (emit only what's needed, in order):
-- edit_slide:       { "op": "edit_slide", "slideId": "<id>", "title": "<opt>", "heading": "<opt>",
-                      "subheading": "<opt>", "body": "<opt>", "bullets": ["<opt>", ...] }
-- move_slide:       { "op": "move_slide", "slideId": "<id>", "direction": "up"|"down", "steps": <int default 1> }
-- add_slide:        { "op": "add_slide", "afterSlideNumber": <int>, "slideType": "<type>" }
-- delete_slide:     { "op": "delete_slide", "slideId": "<id>" }
-- regenerate_slide: { "op": "regenerate_slide", "slideId": "<id>" }   # rewrite copy + imagery for the slide
-- generate_image:   { "op": "generate_image", "slideId": "<id>", "imagePrompt": "<optional>" }  # draw/replace just the image
-- set_appearance:   { "op": "set_appearance", "slideId": "<id>", "styleVariant": "cinematic"|"minimal"|"bold",
-                      "accentColor": "#RRGGBB", "textColor": "#RRGGBB",
-                      "backgroundKey": "default"|"warm-portrait"|"concrete"|"water"|"dark-gradient",
-                      "composition": "full"|"split"|"framed", "imageSide": "left"|"right" }
-                      # per-slide layout / look — include only the keys you're changing.
-                      # textColor = the TEXT colour on JUST this slide (wins over the deck theme)
-                      # composition = how the image sits vs the text (see COMPOSITION rule)
-- set_accent:       { "op": "set_accent", "hex": "#RRGGBB" }          # instant accent recolour of the WHOLE deck
-- set_theme:        { "op": "set_theme", "palette": [ {"name": "Base", "hex": "#RRGGBB", "usage": "background"},
-                      {"name": "Accent", "hex": "#RRGGBB", "usage": "accent"}, {"name": "Text", "hex": "#RRGGBB", "usage": "text"} ] }
-- set_font:         { "op": "set_font", "font": "cormorant"|"playfair"|"oswald"|"poppins"|"anton" }  # deck-wide display font
-- style_image:      { "op": "style_image", "slideId": "<id>", "blur": <0-16 px>, "dim": <0-0.85>, "scale": <1.0-1.8> }
-                      # adjust the EXISTING background image without regenerating: blur it, dim/darken
-                      # it (for text legibility), or zoom in. Use for "blur the image", "darken the
-                      # background", "zoom in" — never generate_image for those.
+STYLING THE EXISTING IMAGE — style_image adjusts a slide's CURRENT background image without
+regenerating it: blur it, dim/darken it (for text legibility), or zoom in. Use it for "blur the
+image", "darken the background", "zoom in" — never generate_image for those.
 
-edit_slide also takes an "items" array — LIST slides (genre blend, USP, market potential, target
-audience…) render "items": [ {"title": "<short>", "description": "<one line>"} ], NOT bullets. To
-change how many points show ("make it 5 points"), return the FULL new "items" list with exactly that
-many entries. Your confirmation message must never claim a change you didn't emit as an action.
+LIST SLIDES — genre blend, USP, market potential, target audience and similar slides render an
+"items" array ([{title, description}]), NOT bullets. Change their points via edit_slide's items
+field, and to change how many points show ("make it 5 points") pass the FULL new items list with
+exactly that many entries.
 
 slideType is one of: cover, logline, genre_blend, synopsis, story_world, character,
 supporting_characters, usp, show_cross, visual_aesthetic, target_audience, budget, market_potential,
@@ -137,6 +117,25 @@ Rules:
     clean / modern / sans / minimal                    → "poppins"
   Say which font you applied (and that it's the closest available match if they named a specific one).
 - Be an agent: when the instruction is a clear edit, DO IT (call the tool) and confirm.
+- SLIDE NAME → TYPE mapping — target the slide whose TYPE matches what the director named, never a
+  lookalike: "comparables" / "comps" / "similar films" / "X meets Y" → the show_cross slide;
+  "market" / "market potential" → market_potential; "USP" / "unique selling point" → usp;
+  "audience" → target_audience. Editing market_potential when they said "comparables" is a hard
+  failure — if no slide of the right type exists, say so instead of editing a different one.
+
+READ-BACK REQUESTS ("show the content on slide 11", "what's on the market slide?", "read me the
+cover") — the director wants to SEE the content, not change it:
+- Call NO tools. Put the slide's ACTUAL content from CURRENT DECK in your reply: title, heading,
+  and its body or items as a numbered list, one per line.
+- NEVER say you "displayed", "opened" or "showed" the slide — you cannot drive their screen; the
+  content you write in the chat IS the answer. Claiming a display action is a fabrication.
+
+SUGGESTION REQUESTS ("suggest options and I'll pick", "give me some alternatives", "what would you
+put here?") — the director wants CHOICES before anything changes:
+- Call NO tools yet. Reply with 3-5 concrete, story-grounded options as a numbered list and invite
+  them to pick (this counts as clarification, so a question is fine here).
+- Apply their pick with the right tool on their NEXT message. Never silently apply an edit — least
+  of all to a different slide — when they asked to choose first.
 
 NEVER FABRICATE — this is critical:
 - Only claim you changed something if you made a matching tool call for it. Do NOT say "Changed the
@@ -146,8 +145,13 @@ NEVER FABRICATE — this is critical:
 - Call no tools and ask ONE short clarification only when the instruction is genuinely unclear
   or not about editing the deck.
 
-OUTPUT: make the tool calls for the edits, and ALWAYS also write one short, in-character line of
-plain text describing what you changed (or what you need). Text only — no JSON, no markdown.
+OUTPUT: make the tool calls for the edits, and ALWAYS also write a short, in-character plain-text
+reply describing what you changed (or what you need). Text only — no JSON, no markdown.
+- Confirmations and reactions: one short line.
+- ENUMERABLE answers ("what slides do I have?", "which slides got new images?", "list the
+  characters") — or when the director asks to "number it" / "make it points": a one-line lead-in,
+  then a blank line, then a numbered list with ONE item per line (real newlines, "1." numbering).
+  Never cram a list into a single dense sentence.
 """
 
 
@@ -174,6 +178,20 @@ _TOOLS: list[dict] = [
                 "subheading": {"type": "string"},
                 "body": {"type": "string"},
                 "bullets": {"type": "array", "items": {"type": "string"}},
+                "items": {
+                    "type": "array",
+                    "description": ("For LIST slides (genre blend, USP, market potential, target "
+                                    "audience…): the FULL new list of points — always pass every "
+                                    "entry, not just the changed ones."),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["title"],
+                    },
+                },
             },
             "required": ["slideId"],
         },
@@ -300,20 +318,53 @@ _TOOLS: list[dict] = [
             "required": ["font"],
         },
     },
+    {
+        "name": "style_image",
+        "description": ("Adjust the EXISTING background image on one slide WITHOUT regenerating it: "
+                        "blur it, dim/darken it (for text legibility), or zoom in. Use for 'blur the "
+                        "image', 'darken the background', 'zoom in' — not generate_image."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slideId": {"type": "string"},
+                "blur": {"type": "number", "minimum": 0, "maximum": 16,
+                         "description": "blur radius in px (0 = sharp)"},
+                "dim": {"type": "number", "minimum": 0, "maximum": 0.85,
+                        "description": "darken overlay strength (0 = none)"},
+                "scale": {"type": "number", "minimum": 1.0, "maximum": 1.8,
+                          "description": "zoom factor (1.0 = full frame)"},
+            },
+            "required": ["slideId"],
+        },
+    },
 ]
 
 
 def _slides_digest(slides: list[dict]) -> str:
-    """Compact, id-anchored view of the deck for the model."""
+    """Compact, id-anchored view of the deck for the model. Carries enough real content
+    (body, items, bullets) that the agent can read a slide back and edit list slides
+    without guessing what's on them."""
     lines = []
     for s in slides or []:
         content = s.get("content") or {}
         heading = content.get("heading") or ""
-        body = (content.get("body") or "")[:120]
-        lines.append(
+        body = (content.get("body") or "")[:300]
+        line = (
             f'  - id={s.get("id")} #{s.get("slideNumber")} type={s.get("slideType")} '
             f'title="{s.get("title", "")}" heading="{heading}" body="{body}"'
         )
+        items = content.get("items")
+        if isinstance(items, list) and items:
+            pts = "; ".join(
+                f'{i.get("title", "")}: {(i.get("description") or "")[:100]}'.strip(": ")
+                if isinstance(i, dict) else str(i)[:100]
+                for i in items[:8]
+            )
+            line += f' items=[{pts}]'
+        bullets = content.get("bullets")
+        if isinstance(bullets, list) and bullets:
+            line += f' bullets=[{"; ".join(str(b)[:80] for b in bullets[:8])}]'
+        lines.append(line)
     return "\n".join(lines) or "  (no slides yet)"
 
 
@@ -362,8 +413,9 @@ def _build_prompt(instruction: str, slides: list[dict], history: list[dict] | No
         f'DIRECTOR\'S LATEST INSTRUCTION:\n  "{instruction}"\n\n'
         "Use the conversation for context — if your previous line asked a question, this instruction"
         " is the answer to it (a bare number/ordinal means that slide number, never a move). If no"
-        " slide is named, act on the CURRENTLY SELECTED SLIDE. Carry out the instruction by calling"
-        " the edit tools on the slides above, and write one short line confirming what you did."
+        " slide is named, act on the CURRENTLY SELECTED SLIDE. For an edit, carry it out by calling"
+        " the edit tools on the slides above and confirm what you did. For a read-back or a"
+        " suggestions request, call NO tools and put the content / numbered options in your reply."
     )
 
 
@@ -379,7 +431,7 @@ def _describe_actions(actions: list[dict]) -> str:
         "delete_slide": "removed a slide", "regenerate_slide": "regenerated a slide",
         "generate_image": "generated imagery", "set_appearance": "restyled a slide",
         "set_accent": "recoloured the accent", "set_theme": "set a new theme",
-        "set_font": "changed the display font",
+        "set_font": "changed the display font", "style_image": "adjusted the image",
     }
     parts = [labels.get(op, op) for op in ops]
     return ("Done — " + ", ".join(parts) + ".").capitalize()

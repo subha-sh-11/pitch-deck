@@ -3,23 +3,28 @@ from __future__ import annotations
 
 import datetime as dt
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt operates on at most 72 bytes and (since 5.0) RAISES on longer input
+# instead of silently truncating — so we truncate here, matching bcrypt's classic
+# behaviour. We use the `bcrypt` library directly rather than passlib, whose 1.7.x
+# bcrypt backend is unmaintained and crashes against bcrypt>=4.1.
+def _to_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:72]
 
 
 def hash_password(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(_to_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
     try:
-        return _pwd.verify(password, password_hash)
+        return bcrypt.checkpw(_to_bytes(password), password_hash.encode("utf-8"))
     except ValueError:
         return False
 

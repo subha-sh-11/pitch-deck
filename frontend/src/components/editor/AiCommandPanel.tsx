@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { deckCommand, honestDeckCommandText } from "@/lib/api/deck";
+import { deckCommand, deckCommandErrorText, honestDeckCommandText } from "@/lib/api/deck";
 import { applyDeckActions, describeDeckAction, type DeckActionHandlers } from "@/lib/apply-deck-actions";
 
 type Msg =
@@ -92,8 +92,8 @@ export function AiCommandPanel({
       // Echo the agent's confirmation only when its changes actually applied;
       // otherwise report honestly instead of relaying a fabricated "Done".
       setLog((l) => [...l, { role: "agent", text: honestDeckCommandText(res) }]);
-    } catch {
-      setLog((l) => [...l, { role: "agent", text: "Sorry — I couldn't reach the editing model. Try again in a moment." }]);
+    } catch (err) {
+      setLog((l) => [...l, { role: "agent", text: deckCommandErrorText(err) }]);
     } finally {
       setBusy(false);
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 9e9, behavior: "smooth" }));

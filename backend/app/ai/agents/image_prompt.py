@@ -146,10 +146,10 @@ def _subject(slide_type: str, intake: dict) -> str:
 # dark street. Market/budget/team are intentionally MINIMAL (clarity over cinema, per the design
 # bible). COMPOSITION ONLY here — lighting/grade come from the theme.
 _SHOT_BY_TYPE: dict[str, str] = {
-    "cover": "epic wide establishing key art of the story's world, ultra-wide anamorphic, monumental "
-             "scale, layered depth, generous sky/negative space for the title, no people",
+    "cover": "epic wide establishing shot of the story's world, ultra-wide anamorphic, monumental "
+             "scale, layered depth, generous empty sky and clean uncluttered negative space, no people",
     "logline": "a lone central figure small within the wide world at a charged moment, poetic wide "
-               "shot, strong negative space for overlaid text",
+               "shot, strong clean negative space, minimalist composition",
     "synopsis": "an establishing shot of a DISTINCT key location from the story (a different place "
                 "than other slides), deep perspective, lived-in detail, no people",
     "story_world": "a sweeping environmental establishing shot of the setting, atmosphere and depth, "
@@ -177,7 +177,7 @@ _SHOT_BY_TYPE: dict[str, str] = {
     "contact": "the story's final hopeful frame — a quiet resonant closing image, forward-looking "
                "light, generous negative space, no people",
     "generic": "an atmospheric frame from a FRESH, unused corner of the story's world, a new "
-               "location, texture and depth, generous negative space for text, no people",
+               "location, texture and depth, generous clean negative space, no people",
 }
 
 
@@ -245,9 +245,11 @@ def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
         parts.append(visual_style)
     if palette:
         parts.append(f"color palette: {palette}")
+    # Deliberately NO "no text/no watermark" negations here: diffusion text encoders handle
+    # negation poorly, and mentioning text-words at all primes the model to render lettering.
     parts.append(
         f"film still, professional cinematography, {grade}, authentic regional detail, "
-        "no text, no watermark, no logo, no real-person likeness"
+        "pure photographic scene, no real-person likeness"
     )
     return _clean(", ".join(p for p in parts if p))
 
@@ -263,8 +265,9 @@ places, or plot that the material doesn't support. The image MUST be specific an
 film and THIS slide — generic stock imagery is a failure.
 
 Match the slide's job (by kind):
-- cover_image / background: evocative KEY ART of the story's world/setting; leave negative space for
-  overlaid title text; usually no people.
+- cover_image / background: an evocative establishing image of the story's world/setting; compose it
+  with a large clean, empty, uncluttered region (open sky, deep shadow, blank wall, still water);
+  usually no people.
 - story_world: an establishing environmental shot of the ACTUAL setting described in the summary.
 - character_art: a cinematic mood study evoking the SPECIFIC character(s) named on this slide — their
   role, era and world, expressive silhouette/atmosphere. NO real-person likeness.
@@ -287,13 +290,18 @@ slides are intentionally MINIMAL and clarity-first — restrained, plain, lots o
 dramatic key art.
 
 ALWAYS weave in, explicitly: subject · setting · mood · lighting · camera angle · lens (e.g.
-anamorphic, 35mm, 85mm) · composition WITH deliberate negative space for overlaid typography ·
-colour palette · texture/grain · and a film-still / editorial-photography realism level, plus a
-cinematic reference feel. The result must read like a premium film still or poster frame, and must
+anamorphic, 35mm, 85mm) · composition with a deliberate clean, EMPTY region (open sky, shadow,
+blank wall) · colour palette · texture/grain · and a film-still / editorial-photography realism
+level, plus a cinematic reference feel. The result must read like a premium film still, and must
 NOT look: glossy, plastic, generic-AI, over-saturated, deformed, cartoonish, or like a stock photo.
 
-HARD RULES: the image must contain NO text, letters, words, captions, watermarks or logos; NO
-real-person likeness; NO minors; film-still quality.
+HARD RULES for the prompt you write (a diffusion model paints whatever nouns it reads, so):
+- NEVER use the words "text", "title", "typography", "lettering", "caption", "font", "poster",
+  "slide", "logo", "sign", "signage", "headline", "book", "manuscript page", "words" — not even to
+  forbid them ("no text" makes the model MORE likely to paint gibberish lettering).
+- NEVER quote the film's title, character names as display text, or any of the slide's copy in the
+  prompt. Use the material only to describe the SCENE.
+- Describe a pure photographic scene only; NO real-person likeness; NO minors; film-still quality.
 
 Return ONLY JSON: {"prompt": "<one cohesive prompt, ~40-70 words, comma-separated descriptors>"}
 """
@@ -526,7 +534,7 @@ def build_item_prompt(item: dict, intake: dict, design: dict | None = None,
         f"color palette: {palette}" if palette else "",
         "single strong focal point, shallow depth of field, professional cinematography, film grain, "
         "photorealistic film photograph, real-location detail, not an illustration, not a 3D render, "
-        "no text, no watermark, no logo, no real-person likeness",
+        "pure photographic scene, no real-person likeness",
     ]
     return _clean(", ".join(p for p in parts if p))
 
@@ -564,7 +572,7 @@ def build_character_prompt(char: dict, intake: dict, design: dict | None = None,
         "true to the stated age and physique, shallow depth of field, 85mm portrait lens, film "
         "grain, photorealistic film photograph, real skin texture and pores, candid expression, not "
         "an illustration, not a 3D render, fictional original face, no real-person likeness, no "
-        "celebrity, no text, no watermark, no logo",
+        "celebrity",
     ]
     return _clean(", ".join(p for p in parts if p))
 
@@ -594,6 +602,6 @@ def build_mood_prompt(block: dict, intake: dict, design: dict | None = None,
         lighting,
         f"color palette: {palette}" if palette else "",
         "photorealistic cinematic film still, real photograph, film grain, not an illustration, "
-        "not a 3D render, no text, no watermark, no logo",
+        "not a 3D render, pure photographic scene",
     ]
     return _clean(", ".join(p for p in parts if p))

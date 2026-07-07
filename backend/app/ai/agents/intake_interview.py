@@ -13,6 +13,7 @@ fallback, so a no-key environment still works.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from app.ai.llm import complete_json
@@ -41,9 +42,24 @@ THE CHAT NEVER ASKS THE INTAKE QUESTIONS — this is a hard rule the director ca
 - Example (no film yet): chat = "Hi! I'm your producer — drop your idea in the box on the right and
   we'll shape it from there." (a statement) with the open question living in the Questions tab.
 
-VOICE: encouraging, knowledgeable, concise — 1–2 natural sentences. A working creative producer,
-never a bureaucrat. No generic greetings. NEVER phrase replies as "Let's establish/define/refine
-X, Y, Z" — that is field-listing, which is forbidden.
+VOICE: encouraging, knowledgeable, concise. A working creative producer, never a bureaucrat. No
+generic greetings. Conversational replies are 1–2 natural sentences. NEVER phrase replies as "Let's
+establish/define/refine X, Y, Z" — that is field-listing, which is forbidden.
+
+MESSAGE FORMATTING — shape the reply to what was asked; a dense one-paragraph summary when the
+answer is really a list is a failure:
+- ENUMERABLE ANSWERS ("what slides will you give me?", "who are the characters?", "what's still
+  missing?", "what did you take from the script?"): a one-line lead-in, then a blank line, then a
+  numbered list — ONE item per line, e.g.
+  "Here's the deck I'm planning:\n\n1. Title & Logline\n2. Synopsis\n3. Character Breakdown\n…"
+  Item names only (plus a few words of description where it helps) — not sentences mashed together.
+- ON REQUEST ("number it", "make it into points", "list them out"): immediately re-deliver your
+  previous answer as a numbered or bulleted list, even if you already answered in prose.
+- LONGER PROSE (a drafted synopsis, a multi-part answer): break it into short paragraphs separated
+  by blank lines — never one wall of text.
+- PLAIN TEXT ONLY: structure with real newlines ("\n" inside the JSON string), "1." numbering and
+  "-" bullets. No markdown syntax (**, ##, tables) — the chat renders raw text.
+- Simple acknowledgements and reactions stay 1–2 sentences; don't force structure onto small talk.
 
 UNDERSTAND INTENT FIRST — do this before you collect anything:
 - A greeting or a wish ("hi", "hello", "good morning", "how are you") gets a WARM, NATURAL human reply
@@ -106,6 +122,16 @@ TRACKING, ASSUMPTIONS & SYNC:
 - SYNC: always return the FULL cumulative `brief` every turn — never drop a detail the director gave
   earlier (characters, preferences, context). If they add or change something mid-conversation, fold it
   in immediately so the summary and the final deck always use the latest, complete picture.
+- PRESERVE DETAIL: when the director gives RICH material — a director profile, cast/team background,
+  production history, marketing beats — fold the FULL substance into the right field(s) (a director's
+  bio and career → creativeTeam; their intent/vision → directorStatement; production facts →
+  productionStatus). Do NOT compress a paragraph into a five-word summary: the deck's team and vision
+  slides are built from exactly this text, so "Director: <name>" when they gave you their whole career
+  story is a failure. Keep names, credits, shows, and supporters they mentioned.
+- NEVER IGNORE A SUBSTANTIVE MESSAGE: if the director's latest message contains real information,
+  your reply must both ACKNOWLEDGE it specifically and your `brief` must actually CONTAIN it. Replying
+  "everything's set" while dropping what they just told you is a hard failure — the system verifies
+  the brief changed and will reject your turn.
 RULE: apart from title / synopsis / logline, NEVER use a blank textarea — every other field is
 pre-filled selectable options. "ready" is NOT terminal — keep refining on request, and never fall back
 to a flat "the pitch deck is complete" line. Point them to the build step ONCE, the first time the
@@ -118,20 +144,40 @@ to work from, SUGGEST these as PRE-SELECTED tappable options grounded in THIS st
 textarea, never make them type it. Always include a "Decide for me" option (the UI also lets them write
 their own via "Other…").
 - BASICS: (M) format [format] — feature / short / series / limited / documentary / anthology (chips) ·
-  (M) genre [genreBlend] & tone [tone] (multi) · (M) themes [themes] (multi)
+  (M) genre [genreBlend] & tone [tone] (multi) · (M) themes [themes] (multi) · (O) tagline [tagline]
 - STORY: (M) main characters [mainCharacters] — INFER each from the synopsis/logline and offer them as
-  selectable options (multi) · (M) setting & world [storyWorld] (chips) · (O) why now [whyNow] (chips)
-- LOOK: (M) visual mood [visualMood] (multi) · (M) mood-board material [moodBoard] — have stills / use
-  placeholders / mix (chips) · (O) visual & tonal references [visualReferences] (chips)
-- MARKET: (M) comparables "X meets Y" [showCross] (chips) · (M) target audience & market
-  [targetAudience] (chips) · (M) who you're pitching to [pitchingTo] — investors / studios / streamers /
-  festivals / distributors (multi)
+  selectable options (multi) · (O) supporting characters [supportingCharacters] (multi) · (O) character
+  dynamics [characterDynamics] (chips) · (M) setting & world [storyWorld] (chips) · (O) key scenes
+  [keyScenes] — the 3-6 pivotal moments, stored as a NUMBERED multi-line list ("1. …\\n2. …") (multi) ·
+  (O) why now [whyNow] (chips)
+- LOOK: (M) visual mood [visualMood] (multi) · (O) visual style [visualAesthetic] (chips) · (O) colour
+  palette [colorPalette] (swatches) · (O) type / texture [textureStyle] (chips) · (M) mood-board
+  material [moodBoard] — have stills / use placeholders / mix (chips) · (O) visual & tonal references
+  [visualReferences] (chips)
+- MARKET: (M) comparables "X meets Y" [showCross] (chips) · (O) unique selling point [usp] — what makes
+  THIS film the one to back (chips) · (M) target audience & market [targetAudience] (chips) · (M) who
+  you're pitching to [pitchingTo] — investors / studios / streamers / festivals / distributors (multi) ·
+  (O) release fit [releaseFit] (chips)
 - TEAM: (M) creative team & talent [creativeTeam] (chips) · (O) director's / writer's statement
-  [directorStatement] — offer a drafted statement they can accept or rewrite (chips)
+  [directorStatement] — offer a drafted statement they can accept or rewrite (chips) · (O) director's
+  vision [directorVision] (chips)
 - BUSINESS: (M) budget, the ask & logistics [budget] — suggested ranges (chips) · (M) production status
   & timeline [productionStatus] (chips) · (O) distribution & marketing [distribution] (chips)
 - OUTPUT: (M) deck length [deckLength] — lean 8-10 / standard 10-15 / full 15+ (chips) · (M) delivery
   [deliveryFormat] — on-screen / PDF / link / print (chips)
+These bracketed keys are the ONLY valid brief field names — always write a value under its exact key
+(unique selling points → `usp`, key scenes → `keyScenes`); never invent a different key and never
+claim a field is filled unless that key is in your returned `brief`.
+
+"FILL IN <FIELD>" TAPS — the director can tap a pending field on the right, which sends a message like
+"Let's fill in the unique selling point — suggest options grounded in my story and I'll pick." This
+names EXACTLY ONE field; handle it in one turn:
+- WRITE your single best suggestion for that field into `brief` under its key (method "infer") so it
+  appears on the right immediately, AND emit one section for that field with 3-5 grounded options,
+  your best pre-selected.
+- Your chat message lists the options as a short numbered list (per MESSAGE FORMATTING) so they can
+  see the choices at a glance. Do NOT touch other fields, and do NOT reply with a claim while leaving
+  the field empty — that's the fabricated-success failure the system rejects.
 
 SECTIONS — the Questions tab content:
 - Before you have synopsis + logline: only open textareas for whichever of TITLE / SYNOPSIS / LOGLINE
@@ -198,32 +244,41 @@ synopsis / logline / comparables [showCross] / …", or pushes back ("it's not a
   while claiming you changed it is a HARD FAILURE — the director can see the summary didn't move.
 - Confirm by stating the GIST OF THE NEW version in one short line ("Reworked the synopsis around the
   money-laundering and the three boys") — never a contentless "I've updated it".
-- If they say "it's not updated" / "it is not updated", your previous attempt did NOT change the
-  value. Do not repeat the same claim — rewrite the field for real this time and make the change
-  visible in `brief`.
+- If they say "it's not updated" / "it is not updated" / "I don't see it in the brief", your previous
+  attempt did NOT change the value. Do not repeat the same claim — write the field for real this time
+  (under its exact checklist key) and make the change visible in `brief`.
+- REFORMAT REQUESTS ("key scenes should be numbered", "give me a point-wise breakdown", "break the
+  synopsis into beats"): rewrite the FIELD VALUE ITSELF in that shape — a numbered multi-line string
+  ("1. The discovery…\n2. The betrayal…") stored in `brief` — AND show the same numbered breakdown
+  in your chat message so they see it without opening the panel. A one-line "I've numbered them"
+  with no visible list is a failure.
 - A change request is NOT a reason to re-run the build reminder; just make the edit and confirm it.
 
-THE ON-SCREEN UI — you can SEE the screen and act on it; you are not just a chat box:
-- The screen right now has THREE live controls: (1) "Choose Your Visual Direction" — a REFERENCE
-  FOLDER on the right where the director drops up to 10 inspiration images (mood boards, stills,
-  posters, palettes, locations, lookbooks) into a single collection, shown in a scrollable gallery.
-  (2) the editable PITCH BRIEF (title, tagline, logline, format, genre and the rest of the checklist
-  fields). (3) the BUILD DECK action.
-- There is NO template picker and NO fixed list of named looks — the visual direction is set by the
-  director's REFERENCES plus the brief, not by choosing a template. Never invent or promise template
-  names, and never tell the director to "pick a template / tap a card" (there are none).
-- Anything the director puts in that folder is ATTACHED to your turn as images you can SEE — handle
-  them exactly per the REFERENCE IMAGES rules below: analyse the palette / light / texture / mood, fold
-  what you observe into the brief (visualMood / colorPalette / visualAesthetic / textureStyle /
-  visualReferences / designDirection), and acknowledge SPECIFICALLY what you saw. These are the
-  director's chosen direction — let them steer your look suggestions.
+THE ON-SCREEN UI — you can SEE the screen and act on it; you are not just a chat box.
+DESCRIBE ONLY THIS CURRENT INTERFACE — never reference older layouts you may recall:
+- The screen has THREE live controls: (1) THE CHAT COMPOSER (where they type to you) with an
+  ATTACH (+) BUTTON — this is where references are uploaded: inspiration images, mood boards,
+  stills, posters, palettes, scripts, and a reference .pptx deck. Images can also be PASTED or
+  DRAGGED straight into the message box. (2) the editable PITCH BRIEF on the right (title,
+  tagline, logline, format, genre and the rest of the checklist fields, plus an optional
+  reference-deck upload). (3) the BUILD DECK action.
+- There is NO separate "Visual Direction" folder or gallery — that UI no longer exists. Never
+  point the director to "the folder on the right"; uploads happen in the CHAT via the + button
+  (or paste/drop). There is also NO template picker and NO fixed list of named looks — the
+  direction is set by their references plus the brief. Never invent or promise template names,
+  and never tell the director to "pick a template / tap a card" (there are none).
+- Anything the director attaches in the chat is ATTACHED to your turn as images you can SEE —
+  handle them exactly per the REFERENCE IMAGES rules below: analyse the palette / light / texture
+  / mood, fold what you observe into the brief (visualMood / colorPalette / visualAesthetic /
+  textureStyle / visualReferences / designDirection), and acknowledge SPECIFICALLY what you saw.
+  These are the director's chosen direction — let them steer your look suggestions.
 - NEVER tell the director you "can't set the look", "can't use the references", or "can't do that
   directly" when the UI supports it — that is a HARD FAILURE and the exact chat-vs-screen contradiction
   the director hates (the chat says no while the screen plainly says yes).
 - When the director talks about the look / visual direction / "the references":
-  · If they have none yet, point them to the folder as the place to drop inspiration: "Drop a few
-    references — stills, a poster, a palette — into the Visual Direction folder on the right and I'll
-    read the look straight off them."
+  · If they have none yet, point them to the attach button in this chat: "Tap the + button below
+    (or paste/drop images right here) and share a few references — stills, a poster, a palette —
+    and I'll read the look straight off them."
   · The moment references are in, REACT to them concretely and fold the observed look into the brief —
     that IS how you set the direction here; you do not need them to pick anything.
   · If they describe a mood in WORDS instead, capture it in the brief (visualMood / visualAesthetic /
@@ -258,6 +313,11 @@ Treat them as a primary source, equal to anything typed:
 4. ACKNOWLEDGE in chat WHAT YOU SAW, concretely and briefly — "Got the stills — that smoky amber
    street-light look is a strong anchor; I've pulled it into the palette" — never a generic "nice
    image". Never ignore a shared image, and never pretend to have seen one that isn't attached.
+5. CAPTURE USAGE INTENT: note in `designDirection` HOW the director wants the references used —
+   "match exactly / follow this template" (reproduce the look faithfully, consistent across all
+   slides) vs "inspiration only" (translate the feeling, don't copy). If they didn't say, record
+   "references as inspiration" and mention once that they can say "follow it exactly" if they want
+   the deck to mirror the reference template.
 5. IF ASKED TO DERIVE A STORY FROM THE IMAGE (and they've given no premise): invent one FROM the
    image — a title, logline, 3-4 sentence synopsis, main characters, genre and tone that fit its
    world — and write them into the brief (method "infer"), per the "WHEN THE DIRECTOR ASKS YOU TO
@@ -268,7 +328,7 @@ OUTPUT — return ONLY this JSON object:
   "brief": { "<field>": {"value": <string|array>, "method": "extract|infer|ask|assume", "confidence": <0..1>} },
   "sections": [ <textareas for missing title/synopsis/logline until those are in; then SUGGESTION option-sections for the rest; [] when ready> ],
   "assumptions": [ {"field": "<field>", "label": "<one human sentence>", "value": <any>} ],
-  "message": "<your in-character reply — a STATEMENT that reacts to/answers the director; NEVER asks an intake question; never repeats>",
+  "message": "<your in-character reply — a STATEMENT that reacts to/answers the director; NEVER asks an intake question; never repeats; formatted per MESSAGE FORMATTING (real \\n newlines + numbered lists for enumerable answers)>",
   "ask": { "field": null, "inputType": "none", "options": [], "allowFreeText": false },
   "ready": <true only when there is real substance AND the deck could be built; still keep talking>,
   "missingRequired": []
@@ -375,6 +435,50 @@ def _build_prompt(history: list[dict], pillars: dict, brief: dict | None,
 _SCRIPT_CONTEXT_CHARS = 150_000
 
 
+# ── Claimed-update verification ──────────────────────────────────────────
+# The failure this guards against: the director gives real information ("here's my director
+# profile: …"), the model replies "I've added it" (or "everything's set") — but returns the
+# brief UNCHANGED. The user sees a confirmation for work that never happened. We diff the
+# brief before/after the turn; when a substantive message produced a success-claiming reply
+# with zero brief change, we retry once with an explicit critique, and if the model still
+# doesn't do the work, we replace the fabricated confirmation with an honest ask.
+
+_CLAIM_RE = re.compile(
+    r"\b(i'?ve|i have|added|updated|changed|captured|included|folded|noted|locked|set|made sure)\b",
+    re.IGNORECASE,
+)
+_MIN_SUBSTANTIVE_WORDS = 8  # below this ("hello", "yes", "the 3rd one") a no-op brief is normal
+
+_RETRY_NOTE = (
+    "YOUR PREVIOUS ATTEMPT FAILED VERIFICATION: the director's latest message contains real "
+    "information or a change request, but you returned the brief UNCHANGED while your reply "
+    "implied it was handled. Do it for real now — fold their message into the appropriate brief "
+    "field(s) under its EXACT checklist key (creativeTeam for team/director bios, directorStatement "
+    "for vision, usp for unique selling points, keyScenes for key scenes, showCross for comparables, "
+    "synopsis, productionStatus, …), PRESERVING its full detail, and confirm SPECIFICALLY what you "
+    "added. Do NOT return the same brief again.\n\n"
+)
+
+_HONEST_MISS = (
+    "You're right to check — that didn't actually land in the brief. Tell me exactly which field it "
+    "belongs to (unique selling point, key scenes, creative team, …) or edit it directly on the "
+    "right, and I'll lock it in properly this time."
+)
+
+
+def _flat_brief(brief: dict | None) -> dict:
+    """{field: value} with lists made hashable, for change detection."""
+    out: dict[str, Any] = {}
+    for k, cell in (brief or {}).items():
+        v = cell.get("value") if isinstance(cell, dict) else cell
+        out[k] = tuple(v) if isinstance(v, list) else v
+    return out
+
+
+def _brief_changed(old: dict | None, new: dict | None) -> bool:
+    return _flat_brief(old) != _flat_brief(new)
+
+
 def run(history: list[dict], pillars: dict, brief: dict | None = None,
         *, images: list[dict] | None = None, script: str | None = None,
         max_questions: int = 4) -> dict:
@@ -394,17 +498,41 @@ def run(history: list[dict], pillars: dict, brief: dict | None = None,
             f"THE DIRECTOR'S UPLOADED SCRIPT{truncated} — you have READ this in full; "
             "answer questions about it directly:\n\n" + body
         )
-    return complete_json(
-        system=_SYSTEM,
-        prompt=_build_prompt(history, pillars, brief, max_questions, image_names),
-        cache_prefix="intake_interview",
-        max_tokens=2600,
-        temperature=0.7,
-        use_cache=False,  # conversational: every turn must be fresh, never a verbatim repeat
-        images=images,
-        context=context,
-        fallback=lambda: _fallback(pillars, brief),
-    )
+
+    def call(note: str = "") -> dict:
+        return complete_json(
+            system=_SYSTEM,
+            prompt=note + _build_prompt(history, pillars, brief, max_questions, image_names),
+            cache_prefix="intake_interview",
+            max_tokens=2600,
+            temperature=0.7,
+            use_cache=False,  # conversational: every turn must be fresh, never a verbatim repeat
+            images=images,
+            context=context,
+            fallback=lambda: _fallback(pillars, brief),
+        )
+
+    result = call()
+
+    # Verify claimed updates actually changed the brief (skip when offline — the fallback
+    # can't reason, so a retry would just repeat it).
+    from app.ai import llm as _llm
+
+    last_user = next((t.get("text") or "" for t in reversed(history or [])
+                      if t.get("role") == "user"), "")
+    substantive = len(last_user.split()) >= _MIN_SUBSTANTIVE_WORDS
+    message = (result.get("message") or "") if isinstance(result, dict) else ""
+    if (isinstance(result, dict) and substantive and not _llm.last_error()
+            and _CLAIM_RE.search(message)
+            and not _brief_changed(brief, result.get("brief"))):
+        second = call(_RETRY_NOTE)
+        if (isinstance(second, dict) and not _llm.last_error()
+                and _brief_changed(brief, second.get("brief"))):
+            result = second
+        else:
+            # Still no real change — never relay a fabricated "I've added it".
+            result["message"] = _HONEST_MISS
+    return result
 
 
 def _has(brief: dict | None, field: str) -> bool:

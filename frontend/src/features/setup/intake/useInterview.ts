@@ -6,6 +6,7 @@ import {
   finalizeInterview,
   interview,
   pollJob,
+  uploadReferenceDeck,
   workshopSlideImage,
   type InterviewAssumption,
   type InterviewBrief,
@@ -17,7 +18,7 @@ import {
   type InterviewPillars,
   type InterviewResult,
 } from "@/lib/api";
-import { deckCommand, honestDeckCommandText, type DeckCommandImage } from "@/lib/api/deck";
+import { deckCommand, deckCommandErrorText, honestDeckCommandText, type DeckCommandImage } from "@/lib/api/deck";
 import { applyDeckActions, describeDeckAction, type DeckActionHandlers } from "@/lib/apply-deck-actions";
 import { EMPTY_INTAKE_FORM, type GenerationStatus } from "@/types/setup";
 import type { IntakeFormData } from "@/types/workflow";
@@ -74,15 +75,47 @@ function strValue(cell: unknown): string | undefined {
   return undefined;
 }
 
+// The agent occasionally invents a near-miss field name ("director" instead of "creativeTeam").
+// Without a mapping those values silently vanish from the right-side brief — the user hears
+// "added it" in chat but sees nothing. Route the common strays to their real field.
+const BRIEF_KEY_ALIASES: Record<string, keyof IntakeFormData> = {
+  director: "creativeTeam", directorprofile: "creativeTeam", directorinfo: "creativeTeam",
+  directorbio: "creativeTeam", team: "creativeTeam", cast: "creativeTeam", crew: "creativeTeam",
+  talent: "creativeTeam",
+  genre: "genreBlend", genres: "genreBlend",
+  audience: "targetAudience", market: "targetAudience",
+  comparables: "showCross", comps: "showCross",
+  vision: "directorVision", directorsvision: "directorVision",
+  statement: "directorStatement", directorsstatement: "directorStatement",
+  world: "storyWorld", setting: "storyWorld",
+  characters: "mainCharacters", protagonist: "mainCharacters",
+  moodboard: "moodBoard", budgetask: "budget", ask: "budget",
+  production: "productionStatus", timeline: "productionStatus",
+  marketing: "distribution",
+};
+
 function briefToForm(brief: InterviewBrief): Partial<IntakeFormData> {
   const allowed = new Set(Object.keys(EMPTY_INTAKE_FORM));
   const out: Record<string, string> = {};
-  for (const [k, cell] of Object.entries(brief ?? {})) {
-    if (!allowed.has(k)) continue;
+  const entries = Object.entries(brief ?? {});
+  // Direct fields first, then aliases — an alias must never clobber a directly-named field.
+  for (const [k, cell] of entries) {
     const v = strValue(cell);
-    if (v) out[k] = v;
+    if (v && allowed.has(k)) out[k] = v;
+  }
+  for (const [k, cell] of entries) {
+    if (allowed.has(k)) continue;
+    const v = strValue(cell);
+    const alias = BRIEF_KEY_ALIASES[k.toLowerCase().replace(/[^a-z]/g, "")];
+    if (v && alias && !out[alias]) out[alias] = v;
   }
   return out as Partial<IntakeFormData>;
+}
+
+/** "creativeTeam" → "Creative team" — for the captured-fields card in the chat. */
+function fieldLabel(key: string): string {
+  const spaced = key.replace(/([A-Z])/g, " $1").toLowerCase().trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 /** Downscale an image file to ≤1280px JPEG and return base64 (no data-URL prefix) for the vision model. */
@@ -299,11 +332,33 @@ export function useInterview(projectId: string): Interview {
 
   const applyResult = useCallback(
     (res: InterviewResult, baseHistory: InterviewHistoryTurn[]) => {
+      // What did this turn actually capture? Diff the MAPPED form (what the right panel
+      // shows) before vs after, and show it as a review card — so the director always sees
+      // exactly what was extracted and can immediately correct anything that's off.
+      const prevForm = briefToForm(brief.current ?? {});
+      const newForm = briefToForm(res.brief ?? {});
+      const captured = Object.entries(newForm)
+        .filter(([k, v]) => v && v !== prevForm[k as keyof IntakeFormData])
+        .map(([k, v]) => {
+          const val = String(v);
+          return `${fieldLabel(k)}: ${val.length > 110 ? `${val.slice(0, 110)}…` : val}`;
+        });
       brief.current = res.brief;
       setSections(res.sections ?? []);
-      updateForm(briefToForm(res.brief));
+      updateForm(newForm);
       setAssumptions(res.assumptions ?? []);
       setReady(res.ready);
+      if (captured.length > 0) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: nextId(),
+            role: "tool",
+            label: `Captured ${captured.length} ${captured.length === 1 ? "detail" : "details"} — review on the right`,
+            detail: captured,
+          },
+        ]);
+      }
       if (res.message) {
         setMessages((m) => [...m, { id: nextId(), role: "assistant", text: res.message }]);
       }
@@ -512,10 +567,10 @@ export function useInterview(projectId: string): Interview {
         const text = honestDeckCommandText(res);
         setMessages((m) => [...m, { id: nextId(), role: "assistant", text }]);
         history.current = [...history.current, { role: "assistant", text }];
-      } catch {
+      } catch (err) {
         setMessages((m) => [
           ...m,
-          { id: nextId(), role: "assistant", text: "I couldn't reach the editing model — try again in a moment." },
+          { id: nextId(), role: "assistant", text: deckCommandErrorText(err) },
         ]);
       } finally {
         setThinking(false);
@@ -572,7 +627,57 @@ export function useInterview(projectId: string): Interview {
     async (file: File, selectedSlideId?: string, stage = false) => {
       if (thinking) return;
       const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
-      const isDoc = /\.(pdf|docx|fdx|txt|md|rtf)$/i.test(file.name) || /pdf|word|officedocument|text/.test(file.type);
+      const isDeck = /\.pptx$/i.test(file.name) || file.type.includes("presentationml");
+      const isDoc = !isDeck
+        && (/\.(pdf|docx|fdx|txt|md|rtf)$/i.test(file.name) || /pdf|word|officedocument|text/.test(file.type));
+
+      // Reference DECK (.pptx) → parsed + persisted on the project; generation mirrors its
+      // slide structure and visual style. (Must be checked before isDoc — pptx MIME also
+      // matches "officedocument", which would wrongly send it to the script parser.)
+      if (isDeck) {
+        setMessages((m) => [...m, { id: nextId(), role: "attachment", name: file.name, note: "Reference deck" }]);
+        const toolId = nextId();
+        setMessages((m) => [...m, { id: toolId, role: "tool", label: `Reading ${file.name}`, detail: ["parsing slides, fonts, colours…"] }]);
+        try {
+          const ref = await uploadReferenceDeck(projectId, file);
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === toolId && msg.role === "tool"
+                ? {
+                    ...msg,
+                    label: `Reference deck loaded — ${ref.slideCount} slides`,
+                    detail: [
+                      `structure: ${ref.slides.slice(0, 6).map((s) => s.title || "untitled").join(" → ")}${ref.slides.length > 6 ? " → …" : ""}`,
+                      ...(ref.colors.length ? [`palette: ${ref.colors.slice(0, 5).join(", ")}`] : []),
+                      ...(ref.fonts.length ? [`fonts: ${ref.fonts.slice(0, 3).join(", ")}`] : []),
+                    ],
+                  }
+                : msg,
+            ),
+          );
+          setMessages((m) => [
+            ...m,
+            {
+              id: nextId(),
+              role: "assistant",
+              text: `Got your reference deck — I'll follow its ${ref.slideCount}-slide structure and take visual cues from it when we build.`,
+            },
+          ]);
+          history.current = [
+            ...history.current,
+            { role: "user", text: `(uploaded a reference deck: ${file.name}, ${ref.slideCount} slides)` },
+          ];
+        } catch {
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === toolId && msg.role === "tool"
+                ? { ...msg, label: `Couldn't read ${file.name}`, detail: ["make sure it's a valid .pptx"] }
+                : msg,
+            ),
+          );
+        }
+        return;
+      }
 
       // Images / inspiration boards / references → the agent SEES them: encode, then either
       // fold into the intake brief (pre-build) or hand to the deck agent to adapt the look (post-build).

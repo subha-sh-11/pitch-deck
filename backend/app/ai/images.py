@@ -85,10 +85,11 @@ def _resolve_image_provider() -> str:
 # Prepended to the prompt when the director supplied reference images, so the model treats
 # them as a STYLE guide for new art rather than something to copy literally.
 _REF_STYLE_PREAMBLE = (
-    "Use the attached reference image(s) as the VISUAL STYLE GUIDE for brand-new, original key art: "
-    "match their colour palette, lighting, grain/texture and graphic treatment (framing, composition, "
-    "typographic mood, any film-strip / poster motifs). Render THIS film's subject described below — "
-    "do NOT copy the reference's people, faces, or any text/letters that appear in them.\n\n"
+    "Use the attached reference image(s) as the VISUAL STYLE GUIDE for a brand-new, original image: "
+    "match their colour palette, lighting, grain/texture and graphic treatment (framing, "
+    "composition, mood). Render THIS film's subject described below — do NOT copy the reference's "
+    "people or faces, and the new image must be a pure photographic scene with absolutely no "
+    "lettering, writing or typography of any kind, even if the references contain some.\n\n"
 )
 
 
@@ -114,7 +115,8 @@ def generate_image(
     *,
     aspect_ratio: str = "16:9",
     palette: list[dict] | None = None,
-    negative_prompt: str = "text, watermark, logo, signature, deformed",
+    negative_prompt: str = ("text, words, letters, typography, captions, titles, subtitles, "
+                            "writing, gibberish lettering, watermark, logo, signature, deformed"),
     seed: int | None = None,
     label: str = "",
     reference_images: list[dict] | None = None,
@@ -389,6 +391,10 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
     else:
         model = settings.fal_image_model
         args = {"prompt": prompt, "image_size": {"width": w, "height": h}}
+    # FLUX-family endpoints are guidance-distilled and reject/ignore negative prompts;
+    # SD/SDXL-style fal endpoints honour them.
+    if neg and "flux" not in model.lower():
+        args["negative_prompt"] = neg
     if seed is not None:
         args["seed"] = seed
     result = _fal_run(model, args)
@@ -402,11 +408,14 @@ def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None)
     import replicate  # lazy
 
     client = replicate.Client(api_token=settings.replicate_api_token)
-    out = client.run(
-        settings.replicate_image_model,
-        input={"prompt": prompt, "width": w, "height": h,
-               **({"seed": seed} if seed is not None else {})},
-    )
+    model = settings.replicate_image_model
+    inputs: dict[str, Any] = {"prompt": prompt, "width": w, "height": h}
+    # Same caveat as fal: FLUX models don't take a negative prompt; SD-family ones do.
+    if neg and "flux" not in model.lower():
+        inputs["negative_prompt"] = neg
+    if seed is not None:
+        inputs["seed"] = seed
+    out = client.run(model, input=inputs)
     url = out[0] if isinstance(out, (list, tuple)) else str(out)
     data, mime = _fetch_bytes(url)
     return ImageResult(data, mime, {"provider": "replicate",

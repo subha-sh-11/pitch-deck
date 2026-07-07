@@ -48,6 +48,14 @@ export function describeDeckAction(a: DeckAction, slides: Pick<Slide, "id" | "sl
       const fields = Object.keys(a).filter((k) => k !== "op" && k !== "slideId");
       return `Restyling ${name(a.slideId)} (${fields.join(", ")})`;
     }
+    case "style_image": {
+      const parts = [
+        a.imageBlur !== undefined ? "blur" : null,
+        a.imageDim !== undefined ? "dim" : null,
+        a.imageScale !== undefined ? "zoom" : null,
+      ].filter(Boolean);
+      return `Adjusting the image on ${name(a.slideId)} (${parts.join(", ") || "look"})`;
+    }
     case "set_accent":
       return `Recolouring the deck accent to ${a.hex}`;
     case "set_theme":

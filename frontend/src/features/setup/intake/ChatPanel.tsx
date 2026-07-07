@@ -55,6 +55,35 @@ export function ChatPanel({ iv }: { iv: Interview }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [iv.messages, iv.thinking]);
 
+  // When the conversation turns to uploading references, make the attach button
+  // impossible to miss: glow/pulse it for a few seconds so the director knows
+  // exactly where uploads happen (the + below — there is no other upload spot).
+  const [attachGlow, setAttachGlow] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect --
+     Transient UI cue keyed off the latest assistant message: a timed glow with its own
+     timeout cleanup. No cascading-render risk — it flips one boolean and clears itself. */
+  useEffect(() => {
+    const last = [...iv.messages].reverse().find((m) => m.role === "assistant");
+    const text = last && "text" in last ? (last.text ?? "") : "";
+    const invitesUpload =
+      /\+ button|attach button/i.test(text) ||
+      /(upload|attach|paste|drop|share|send)[^.!?]{0,60}(image|reference|still|poster|mood ?board|palette|inspiration|script|\.pptx|deck)/i.test(text);
+    if (!invitesUpload) return;
+    setAttachGlow(true);
+    const t = setTimeout(() => setAttachGlow(false), 9000);
+    return () => clearTimeout(t);
+  }, [iv.messages]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Keep the composer hugging its content: grow with what's typed, but never balloon —
+  // clamp between ~2 rows and a hard max (then it scrolls). Fixes the intermittent tall box.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 48), 160)}px`;
+  }, [draft, staged.length]);
+
   const send = async () => {
     const value = draft.trim();
     if ((!value && staged.length === 0) || iv.thinking) return;
@@ -152,9 +181,6 @@ export function ChatPanel({ iv }: { iv: Interview }) {
         </div>
       )}
 
-      {/* Brief strength — tells the director how close they are to a strong deck. */}
-      {iv.draftSlides.length === 0 && <BriefStrength iv={iv} />}
-
       {/* Composer */}
       <div className="px-3 pb-3 pt-1">
         <input
@@ -229,14 +255,15 @@ export function ChatPanel({ iv }: { iv: Interview }) {
                 send();
               }
             }}
-            rows={3}
+            rows={2}
             placeholder={options.length ? "…or type your own answer" : "Paste a logline, story idea, or script summary…"}
-            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:outline-none"
+            className="max-h-40 w-full resize-none overflow-y-auto bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:outline-none"
           />
           <div className="flex items-center justify-between pt-1.5">
             <IconButton
-              title="Attach files — scripts, reference images, mood boards, themes"
+              title="Attach files — scripts, reference images, mood boards, or a reference deck (.pptx) to match its structure and style"
               onClick={() => openPicker(ALL_ACCEPT)}
+              glow={attachGlow}
             >
               <PlusIcon />
             </IconButton>
@@ -275,62 +302,6 @@ function ContextOptions({ onDescribe }: { onDescribe: () => void }) {
         </span>
         <ArrowIcon className="shrink-0 text-accent-neon transition-transform group-hover:translate-x-0.5" />
       </button>
-    </div>
-  );
-}
-
-// How fully the brief is specified — drives the "Brief strength" guidance so the
-// director knows what to add next before generating questions.
-function BriefStrength({ iv }: { iv: Interview }) {
-  const f = iv.form;
-  const signals = [
-    (f.title ?? "").trim(),
-    ((f.logline ?? "").trim() || (f.synopsis ?? "").trim()),
-    (f.genreBlend ?? "").trim(),
-    (f.targetAudience ?? "").trim(),
-    (f.visualAesthetic ?? "").trim(),
-  ].filter(Boolean).length + (iv.referenceImages.length > 0 ? 1 : 0);
-
-  const level = signals >= 4 ? "Strong" : signals >= 2 ? "Medium" : "Low";
-  const hint =
-    level === "Strong"
-      ? "Ready to generate questions."
-      : level === "Medium"
-        ? "Getting there — add genre, audience, or visual references to sharpen it."
-        : "Add a story idea, genre, and visual references to improve it.";
-  const tone =
-    level === "Strong"
-      ? "text-accent-neon"
-      : level === "Medium"
-        ? "text-amber-300"
-        : "text-text-muted";
-  const filled = Math.min(6, signals);
-
-  return (
-    <div className="mx-3 mb-1 rounded-xl border border-border-glass bg-surface-2/40 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-          Brief strength
-        </span>
-        <span className={`text-xs font-semibold ${tone}`}>{level}</span>
-      </div>
-      <div className="mt-2 flex gap-1" aria-hidden>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <span
-            key={i}
-            className={`h-1 flex-1 rounded-full transition-colors ${
-              i < filled
-                ? level === "Strong"
-                  ? "bg-accent-neon"
-                  : level === "Medium"
-                    ? "bg-amber-400/70"
-                    : "bg-text-dim"
-                : "bg-surface-3"
-            }`}
-          />
-        ))}
-      </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-text-dim">{hint}</p>
     </div>
   );
 }
@@ -406,7 +377,7 @@ function PaperclipIcon() {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[88%] rounded-2xl rounded-tr-sm bg-surface-3/70 px-3.5 py-2 text-sm leading-relaxed text-text-primary">
+      <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-tr-sm bg-surface-3/70 px-3.5 py-2 text-sm leading-relaxed text-text-primary">
         {text}
       </div>
     </div>
@@ -419,7 +390,8 @@ function Assistant({ text }: { text: string }) {
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-neon/15 text-[11px] font-bold text-accent-neon">
         P
       </span>
-      <p className="max-w-[90%] text-sm leading-relaxed text-text-muted">{text}</p>
+      {/* pre-line: the producer structures list answers with newlines — keep them visible. */}
+      <p className="max-w-[90%] whitespace-pre-line text-sm leading-relaxed text-text-muted">{text}</p>
     </div>
   );
 }
@@ -461,13 +433,22 @@ function Thinking() {
   );
 }
 
-function IconButton({ title, onClick, children }: { title: string; onClick?: () => void; children: React.ReactNode }) {
+function IconButton({ title, onClick, children, glow = false }: {
+  title: string; onClick?: () => void; children: React.ReactNode;
+  /** Pulse/glow the button — used to point the director at the attach button when the
+   *  conversation is about uploading references. */
+  glow?: boolean;
+}) {
   return (
     <button
       title={title}
       onClick={onClick}
       type="button"
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-text-dim hover:bg-surface-3/60 hover:text-text-primary"
+      className={`flex h-8 w-8 items-center justify-center rounded-lg text-text-dim hover:bg-surface-3/60 hover:text-text-primary ${
+        glow
+          ? "animate-pulse rounded-full text-accent-neon ring-2 ring-accent-neon/80 shadow-[0_0_14px_rgba(248,201,164,0.55)]"
+          : ""
+      }`}
     >
       {children}
     </button>
