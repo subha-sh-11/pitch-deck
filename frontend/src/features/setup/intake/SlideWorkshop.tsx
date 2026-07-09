@@ -58,21 +58,43 @@ function ScaledSlide({ slide, designDirection }: { slide: Slide; designDirection
  * prompt + controls on the LEFT and the (inline-editable) slide on the RIGHT, so the
  * director can regenerate, tweak the prompt, edit text, and swap the image in place.
  */
-export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
-  const { generationStatus, generationProgress, generationError, replaceDraftSlide } =
-    useSetupWizard();
+export function SlideWorkshop(_props: { onAssembled: () => void }) {
+  const {
+    generationStatus,
+    generationProgress,
+    generationError,
+    replaceDraftSlide,
+    regenerateAllDraftSlides,
+    designDirection,
+    deckHistory,
+  } = useSetupWizard();
   const displayProgress = useSmoothProgress(generationProgress, generationStatus === "generating");
-  const { slides, approvedCount, allApproved, assembling, assemble } = useWorkshop();
+  const { slides } = useWorkshop();
   const [genAll, setGenAll] = useState<{ running: boolean; done: number; total: number }>({
     running: false,
     done: 0,
     total: 0,
   });
-  const [approvingAll, setApprovingAll] = useState(false);
+  // Previous deck versions live in the wizard context — they're archived before EVERY (re)build
+  // (Rebuild deck, Build deck, or a style change), so nothing is ever lost regardless of trigger.
+  const history = deckHistory;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const generatedCount = slides.filter((s) => s.generated).length;
   const allGenerated = slides.length > 0 && generatedCount === slides.length;
-  const anyToApprove = slides.some((s) => s.generated && s.status !== "approved");
+
+  // Rebuild = generate a brand-new deck from scratch. The context archives the current deck into
+  // history first (same as Build deck / a style change), so the old one is always recoverable.
+  const rebuildDeck = async () => {
+    if (rebuilding || generationStatus === "generating") return;
+    setRebuilding(true);
+    try {
+      await regenerateAllDraftSlides();
+    } finally {
+      setRebuilding(false);
+    }
+  };
 
   // Generate every not-yet-built slide in sequence (quota-safe), with live progress.
   const generateAll = async () => {
@@ -96,21 +118,6 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
     setGenAll((g) => ({ ...g, running: false }));
   };
 
-  const approveAll = async () => {
-    setApprovingAll(true);
-    for (const s of slides) {
-      if (s.generated && s.status !== "approved") {
-        replaceDraftSlide({ ...s, status: "approved" });
-        try {
-          await apiUpdateSlide(s.id, { status: "approved" });
-        } catch {
-          /* keep going */
-        }
-      }
-    }
-    setApprovingAll(false);
-  };
-
   if (generationStatus === "generating") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-text-muted">
@@ -132,12 +139,11 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Toolbar — generate all, approve all, assemble */}
+      {/* Toolbar — generate all, view history, rebuild the whole deck */}
       <div className="flex shrink-0 flex-col gap-2 border-b border-border-glass bg-surface-0/40 px-4 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-text-dim">
-            <span className="text-text-muted">{generatedCount}</span>/{slides.length} generated ·{" "}
-            <span className="text-emerald-400/90">{approvedCount}</span>/{slides.length} approved
+            <span className="text-text-muted">{generatedCount}</span>/{slides.length} generated
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -159,19 +165,21 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
             </button>
             <button
               type="button"
-              onClick={() => void approveAll()}
-              disabled={!anyToApprove || approvingAll}
-              className="rounded-full border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => setHistoryOpen(true)}
+              disabled={history.length === 0}
+              title={history.length ? "View the previous deck versions" : "No previous versions yet"}
+              className="rounded-full border border-border-glass px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {approvingAll ? "Approving…" : "Approve all"}
+              🕘 History{history.length ? ` (${history.length})` : ""}
             </button>
             <button
               type="button"
-              disabled={!allApproved || assembling}
-              onClick={() => void assemble().then((ok) => ok && onAssembled())}
+              onClick={() => void rebuildDeck()}
+              disabled={rebuilding || genAll.running}
+              title="Archive this deck and generate a brand-new one"
               className="rounded-full bg-accent-neon px-4 py-1.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-accent-neon-dim disabled:cursor-not-allowed disabled:bg-accent-neon/25 disabled:text-zinc-950/60"
             >
-              {assembling ? "Assembling…" : "Assemble deck →"}
+              {rebuilding ? "Rebuilding…" : "↻ Rebuild deck"}
             </button>
           </div>
         </div>
@@ -195,6 +203,84 @@ export function SlideWorkshop({ onAssembled }: { onAssembled: () => void }) {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 [scrollbar-width:thin]">
         {slides.map((s) => (
           <SlideCard key={s.id} slide={s} deckGenerating={genAll.running} />
+        ))}
+      </div>
+
+      {historyOpen && (
+        <DeckHistory
+          history={history}
+          designDirection={designDirection ?? undefined}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Read-only viewer for archived deck versions — the previous whole decks captured before each
+ *  Rebuild. Lets the director scroll through an earlier version's slides (newest archive first). */
+function DeckHistory({
+  history,
+  designDirection,
+  onClose,
+}: {
+  history: Slide[][];
+  designDirection?: DesignDirection;
+  onClose: () => void;
+}) {
+  const [version, setVersion] = useState(0);
+  const deck = history[version] ?? [];
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col bg-black/95 p-5" onClick={onClose}>
+      <div
+        className="flex shrink-0 flex-wrap items-center justify-between gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-white/90">Deck history</span>
+          {history.length > 1 && (
+            <div className="flex items-center gap-1 rounded-lg bg-white/10 p-0.5">
+              {history.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setVersion(i)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                    i === version ? "bg-accent-neon text-zinc-950" : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  {i === 0 ? "Previous" : `−${i + 1}`}
+                </button>
+              ))}
+            </div>
+          )}
+          <span className="text-xs text-white/50">{deck.length} slides</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3 [scrollbar-width:thin]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {deck.map((s) => (
+          <div key={s.id} className="flex flex-col gap-1.5">
+            <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-surface-0">
+              <ScaledSlide slide={s} designDirection={designDirection} />
+            </div>
+            <span className="text-[11px] text-white/50">
+              Slide {s.slideNumber} · {SLIDE_TYPE_LABELS[s.slideType]}
+            </span>
+          </div>
         ))}
       </div>
     </div>
@@ -237,7 +323,7 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
     (patch: Partial<SlideContent>) => {
       replaceDraftSlide({ ...slide, content: { ...slide.content, ...patch } });
       if (!slide.id.startsWith("local-")) {
-        void apiUpdateSlide(slide.id, { content: patch }).catch(() => {});
+        void apiUpdateSlide(slide.id, { content: patch }).catch(() => { });
       }
     },
     [slide, replaceDraftSlide],
@@ -258,10 +344,10 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
         // so the text changes too — not just the image.
         ...(slide.generated
           ? {
-              instructions:
-                "Rewrite this slide completely fresh — a distinctly different angle, new phrasing, "
-                + "and a new headline. Do NOT repeat the previous version's wording.",
-            }
+            instructions:
+              "Rewrite this slide completely fresh — a distinctly different angle, new phrasing, "
+              + "and a new headline. Do NOT repeat the previous version's wording.",
+          }
           : {}),
       });
       const final = await pollJob(job);
@@ -340,9 +426,8 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
     <div
       onMouseDown={markActive}
       title={isActive ? "The chat's edits apply to this slide" : "Click to edit this slide via chat"}
-      className={`grid grid-cols-1 gap-4 rounded-2xl border bg-surface-1/30 p-4 transition-colors lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden ${
-        isActive ? "border-accent-neon/60 ring-1 ring-accent-neon/30" : "border-border-glass"
-      }`}
+      className={`grid grid-cols-1 gap-4 rounded-2xl border bg-surface-1/30 p-4 transition-colors lg:h-[clamp(240px,33vh,380px)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden ${isActive ? "border-accent-neon/60 ring-1 ring-accent-neon/30" : "border-border-glass"
+        }`}
     >
       {/* LEFT — a clean control rail (no per-slide prompt; the deck writes as one whole) */}
       <div className="flex min-w-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
@@ -362,9 +447,8 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                approved ? "bg-emerald-400" : slide.generated ? "bg-accent-neon" : "bg-zinc-600"
-              }`}
+              className={`h-2.5 w-2.5 rounded-full ${approved ? "bg-emerald-400" : slide.generated ? "bg-accent-neon" : "bg-zinc-600"
+                }`}
             />
             <h3 className="text-sm font-semibold text-text-primary">Slide {slide.slideNumber}</h3>
           </div>
@@ -419,11 +503,10 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
             type="button"
             onClick={() => void toggleApprove()}
             disabled={!slide.generated}
-            className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              approved
+            className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${approved
                 ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300"
                 : "border-border-glass text-text-muted hover:border-emerald-400/40 hover:text-emerald-300"
-            }`}
+              }`}
           >
             {approved ? "Approved ✓" : "Approve"}
           </button>
@@ -546,9 +629,8 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
               return (
                 <div
                   key={i}
-                  className={`group relative h-fit overflow-hidden rounded-xl border-2 transition-colors ${
-                    selected ? "border-accent-neon" : "border-transparent hover:border-white/40"
-                  }`}
+                  className={`group relative h-fit overflow-hidden rounded-xl border-2 transition-colors ${selected ? "border-accent-neon" : "border-transparent hover:border-white/40"
+                    }`}
                 >
                   {/* Click places it in the slide */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -571,9 +653,8 @@ function SlideCard({ slide, deckGenerating = false }: { slide: Slide; deckGenera
                     </button>
                   </div>
                   <span
-                    className={`absolute right-2 top-2 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                      selected ? "bg-accent-neon text-zinc-950" : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
-                    }`}
+                    className={`absolute right-2 top-2 rounded px-2 py-0.5 text-[10px] font-semibold ${selected ? "bg-accent-neon text-zinc-950" : "bg-black/60 text-white opacity-0 group-hover:opacity-100"
+                      }`}
                   >
                     {selected ? "✓ In deck" : "Use this"}
                   </span>

@@ -88,6 +88,15 @@ def sync_db(env: dict, assume_yes: bool) -> None:
     for tab, col, seq in sc.fetchall():
         if seq:
             dc.execute(f'select setval(%s, coalesce((select max("{col}") from "{tab}"),1))', (seq,))
+    # Asset image URLs are stored absolute (http://localhost:8000/...). Rewrite them to the prod
+    # backend so images resolve in the cloud (the files themselves live in cloud storage).
+    local_base = env.get("LOCAL_BASE_URL", "http://localhost:8000")
+    prod_base = env.get("PROD_BASE_URL")
+    if prod_base:
+        dc.execute(
+            "update slides set content = replace(content::text, %s, %s)::jsonb "
+            "where content::text like %s", (local_base, prod_base, f"%{local_base}%"))
+        print(f"  rewrote {dc.rowcount} slides' image URLs -> {prod_base}")
     d.commit()
     for t in TABLE_ORDER:
         dc.execute(f'select count(*) from "{t}"')

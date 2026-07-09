@@ -7,12 +7,15 @@ Falls back to an inline threadpool run only when neither path is available.
 """
 from __future__ import annotations
 
+import threading
 from typing import Callable
 
 from fastapi import BackgroundTasks
-from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+log = get_logger("dispatch")
 
 
 async def dispatch(
@@ -21,7 +24,7 @@ async def dispatch(
     args: list,
     background_tasks: BackgroundTasks | None = None,
 ) -> str:
-    """Return the dispatch mode: "queued" (Celery), "background" (BackgroundTask), or "inline"."""
+    """Return the dispatch mode: "queued" (Celery worker) or "thread" (in-process background)."""
     if not settings.celery_eager:
         try:
             from app.workers.celery_app import celery_app
@@ -29,11 +32,19 @@ async def dispatch(
             celery_app.send_task(task_name, args=args)
             return "queued"
         except Exception:
-            pass  # broker unreachable / celery missing → run locally
+            log.warning("celery broker unreachable — running %s in a local thread", task_name)
 
-    # Eager / no broker: run INLINE (the request waits and returns a finished job). We used to
-    # use FastAPI BackgroundTasks here, but those left jobs stuck at "queued" — they run after
-    # the response and swallow errors — so nothing ever generated. Inline is reliable.
-    _ = background_tasks  # kept for signature compatibility; unused in eager mode
-    await run_in_threadpool(sync_fn, *args)
-    return "inline"
+    # No worker (free-tier / eager): run in a BACKGROUND THREAD so the request returns immediately
+    # and the client polls GET /jobs/{id}. Blocking inline would exceed the ~100s HTTP timeout on
+    # long generations; FastAPI BackgroundTasks ran after the response and swallowed errors. A plain
+    # daemon thread runs independently and the task manages its own job record + errors.
+    _ = background_tasks  # unused; kept for signature compatibility
+
+    def _run() -> None:
+        try:
+            sync_fn(*args)
+        except Exception:  # noqa: BLE001 — the task marks the job failed; log for visibility
+            log.exception("background task %s failed", task_name)
+
+    threading.Thread(target=_run, name=f"gen-{task_name}", daemon=True).start()
+    return "thread"

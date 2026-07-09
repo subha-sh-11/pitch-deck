@@ -103,6 +103,8 @@ interface SetupWizardContextValue extends SetupWizardState {
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
   regenerateDraftSlide: (id: string, instruction?: string, referenceImage?: { mediaType: string; data: string }) => Promise<void>;
   regenerateAllDraftSlides: () => Promise<void>;
+  /** Archived previous decks (newest first) — captured before every (re)build. */
+  deckHistory: Slide[][];
   /** Deck-wide design changes that render instantly (the canvas reads designDirection). */
   applyAccent: (hex: string) => void;
   applyThemePalette: (palette: ColorToken[]) => void;
@@ -334,9 +336,19 @@ export function SetupWizardProvider({
     setState((prev) => ({ ...prev, scriptUploaded: value }));
   }, []);
 
+  // ── Deck history — every time a generation REPLACES the deck (Build, Rebuild, or a style-change
+  // rebuild), the outgoing deck is archived here first so it's never lost, whatever the trigger.
+  // Newest first; kept in-memory for the session (full decks are too big for localStorage).
+  const [deckHistory, setDeckHistory] = useState<Slide[][]>([]);
+  const pushDeckHistory = useCallback(() => {
+    const current = stateRef.current.draftSlides.filter((s) => s.generated);
+    if (current.length) setDeckHistory((h) => [current, ...h].slice(0, 10));
+  }, []);
+
   /** Backend generation: design + content + images, then load the deck. */
   const runGeneration = useCallback(async () => {
     if (generatingRef.current) return;
+    pushDeckHistory(); // archive the current deck before it's overwritten
     generatingRef.current = true;
     setGenerationError(null);
     setGenerationProgress(0);
@@ -361,7 +373,7 @@ export function SetupWizardProvider({
     } finally {
       generatingRef.current = false;
     }
-  }, [projectId]);
+  }, [projectId, pushDeckHistory]);
 
   const initDraftSlides = useCallback(() => {
     if (stateRef.current.draftSlides.length > 0 || generatingRef.current) return;
@@ -371,6 +383,7 @@ export function SetupWizardProvider({
   /** Workshop step 1: analysis + design + outline → empty slide shells (no batch generation). */
   const prepareDraftSlides = useCallback(async () => {
     if (generatingRef.current) return;
+    pushDeckHistory(); // archive the current deck before this (re)build wipes it
     generatingRef.current = true;
     setGenerationError(null);
     setGenerationProgress(0);
@@ -398,7 +411,7 @@ export function SetupWizardProvider({
     } finally {
       generatingRef.current = false;
     }
-  }, [projectId]);
+  }, [projectId, pushDeckHistory]);
 
   /** Workshop: adopt a freshly (re)generated slide from the backend (local merge only). */
   const replaceDraftSlide = useCallback((slide: Slide) => {
@@ -410,9 +423,10 @@ export function SetupWizardProvider({
   }, [pushUndo]);
 
   const regenerateAllDraftSlides = useCallback(async () => {
+    pushDeckHistory(); // archive before clearing (runGeneration would see an empty deck otherwise)
     setState((prev) => ({ ...prev, draftSlides: [] }));
     await runGeneration();
-  }, [runGeneration]);
+  }, [runGeneration, pushDeckHistory]);
 
   const updateDraftSlide = useCallback(
     (id: string, patch: Partial<SlideContent> & { title?: string }) => {
@@ -686,6 +700,7 @@ export function SetupWizardProvider({
       moveDraftSlide,
       regenerateDraftSlide,
       regenerateAllDraftSlides,
+      deckHistory,
       applyAccent,
       applyThemePalette,
       applyDisplayFont,
@@ -700,7 +715,7 @@ export function SetupWizardProvider({
       setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
       updateDraftSlide, undo, canUndo, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
-      regenerateDraftSlide, regenerateAllDraftSlides, applyAccent, applyThemePalette,
+      regenerateDraftSlide, regenerateAllDraftSlides, deckHistory, applyAccent, applyThemePalette,
       applyDisplayFont, chooseDesign, setGenerationStatus, approveContent,
       getEditorSlides,
     ],
