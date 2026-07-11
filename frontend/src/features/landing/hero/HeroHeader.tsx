@@ -1,36 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import { NAV_ITEMS } from "./data";
 import { projectRoutes } from "@/lib/routes";
-import { HeroNav } from "./HeroNav";
 import { HeroAuthNav } from "./HeroAuthNav";
 
-/** Logo, centered nav capsule, auth actions, and the mobile menu. */
+/** Logo, centered nav capsule, auth actions, and the mobile menu.
+ *  Fixed to the top of the viewport so it stays visible (and clickable)
+ *  as the whole landing page scrolls; gains a solid backdrop once scrolled. */
 export function HeroHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <>
-      <header className="hero-header">
-        <Link href="/" className="hero-logo" aria-label="Pitch-deck home">
-          <span className="hero-logo-mark" aria-hidden>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9L20 9.5V18.5A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5z"
-                fill="currentColor"
-                fillOpacity="0.9"
-              />
-              <path d="M9 9.5v5l4.5-2.5z" fill="#fff" />
-            </svg>
-          </span>
-          <span>
-            Pitch<span className="hero-logo-accent">-</span>deck
+    <header className="hero-header" data-scrolled={scrolled ? "true" : "false"}>
+      <div className="hero-header-inner">
+        <Link href="/" className="hero-logo" aria-label="Pitch Deck home">
+          <span className="hero-logo-img">
+            <Image
+              src="/pitchdeck-logo.png"
+              alt="Pitch Deck"
+              fill
+              sizes="120px"
+              priority
+              style={{ objectFit: "contain" }}
+            />
           </span>
         </Link>
-
-        <HeroNav />
 
         <div className="hero-right">
           <div className="hero-auth">
@@ -63,7 +68,7 @@ export function HeroHeader() {
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       <div
         id="hero-mobile-menu"
@@ -88,6 +93,6 @@ export function HeroHeader() {
           Login
         </Link>
       </div>
-    </>
+    </header>
   );
 }

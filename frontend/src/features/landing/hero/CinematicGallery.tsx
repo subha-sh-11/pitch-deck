@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { CINEMATIC_CARDS } from "./data";
 import { CinematicCard } from "./CinematicCard";
 
@@ -38,6 +41,25 @@ function MarqueeGroup({ duplicate }: { duplicate: boolean }) {
  * Motion is pure CSS transform on `.hero-marquee-track`; no JS/state.
  */
 export function CinematicGallery() {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // Pause the infinite marquee whenever it isn't on screen. Once you scroll
+  // past the hero the animation stops, so it no longer keeps a large image
+  // layer compositing and stealing frames from the sections below.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        track.style.animationPlayState = entry.isIntersecting ? "running" : "paused";
+      },
+      { rootMargin: "200px 0px" },
+    );
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="hero-gallery-wrap">
       <div
@@ -45,7 +67,7 @@ export function CinematicGallery() {
         role="region"
         aria-label="Cinematic pitch-deck examples"
       >
-        <div className="hero-marquee-track">
+        <div className="hero-marquee-track" ref={trackRef}>
           <MarqueeGroup duplicate={false} />
           <MarqueeGroup duplicate />
         </div>
