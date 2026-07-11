@@ -142,15 +142,23 @@ def _set_job(session, job_id: str | None, *, status: str | None = None,
     session.flush()
 
 
-def _gen_image_resilient(prompt, aspect, palette, reference_images):
+def _gen_image_resilient(prompt, aspect, palette, reference_images, seed=None):
     """generate_image, but if reference-conditioning (img2img) falls back to a placeholder, retry
     ONCE as plain text-to-image — so a slide/element still gets a REAL picture even when img2img
     fails (e.g. a 3:4 portrait against a wide reference image)."""
     img = generate_image(prompt, aspect_ratio=aspect, palette=palette,
-                         reference_images=reference_images)
+                         reference_images=reference_images, seed=seed)
     if reference_images and img.meta.get("provider") == "placeholder":
-        img = generate_image(prompt, aspect_ratio=aspect, palette=palette, reference_images=None)
+        img = generate_image(prompt, aspect_ratio=aspect, palette=palette,
+                             reference_images=None, seed=seed)
     return img
+
+
+def _slide_seed(slide_type: str) -> int:
+    """A STABLE but DISTINCT seed per slide type. When a thin brief makes every slide's prompt
+    collapse to the same generic scene (e.g. a dark city skyline), a shared seed would render the
+    SAME picture on every slide. A per-slide seed forces each frame's composition to differ."""
+    return (abs(hash(slide_type)) % 2_000_000_000) + 1
 
 
 def _generate_slide_image(slide_type: str, intake: dict, design: dict, content: dict | None = None,
@@ -164,7 +172,7 @@ def _generate_slide_image(slide_type: str, intake: dict, design: dict, content: 
         slide_type, intake, design, content, has_references=bool(reference_images)
     )
     img = _gen_image_resilient(prompt, image_prompt_agent.aspect_for(slide_type),
-                               design.get("palette"), reference_images)
+                               design.get("palette"), reference_images, seed=_slide_seed(slide_type))
     return prompt, img
 
 
@@ -354,9 +362,14 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             reference = project.reference_deck or None
             pdict = _project_dict(project)
             references = _load_reference_images(session, project.id)
-            log.info("> Generating deck for %r (genres=%s tone=%s, %d ref image(s), deck ref=%s)",
+            # References always inform the DESIGN (palette/typography). They condition the per-slide
+            # IMAGES (img2img) only when explicitly enabled — otherwise every slide would copy the
+            # same reference and look identical (and inherit its text). Default: text-to-image, so
+            # each slide is a unique, text-free frame.
+            image_refs = references if settings.build_images_from_references else None
+            log.info("> Generating deck for %r (genres=%s tone=%s, %d ref image(s), img2img=%s, deck ref=%s)",
                      project.title, pdict["genres"], pdict["tone"], len(references),
-                     (reference or {}).get("fileName"))
+                     bool(image_refs), (reference or {}).get("fileName"))
 
             # 1. Story analysis
             project.story_analysis = story_agent.run(pdict, intake)
@@ -419,7 +432,7 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                     i, item = pair
                     # contents[i] is THIS slide's generated copy → image grounded in the real slide.
                     return i, _generate_slide_image(
-                        item["slide_type"], intake, design_clean, contents[i], references
+                        item["slide_type"], intake, design_clean, contents[i], image_refs
                     )
 
                 # Image providers (esp. Vertex Imagen) rate-limit per minute — keep image
@@ -473,7 +486,7 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                         select(Slide).where(Slide.deck_id == deck.id)
                     ).scalars().all()
                     n = _generate_all_item_images(
-                        session, project.id, persisted, intake, design_clean, references,
+                        session, project.id, persisted, intake, design_clean, image_refs,
                         limit=max(0, settings.max_deck_images - len(img_map)))
                     log.info("  -per-element images -%d generated", n)
                 except Exception as exc:  # noqa: BLE001
@@ -653,9 +666,11 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         project = session.get(Project, deck.project_id)
         intake = project.intake_form or {}
         design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
-        references = _load_reference_images(session, project.id)
-        # A per-call reference (deck-edit "make this slide look like this image") joins the
-        # persisted intake references as an img2img style source.
+        # Persisted intake references drive img2img only when explicitly enabled — otherwise every
+        # regenerate would copy the same reference (identical-looking + text-laden frames). A
+        # per-call reference (deck-edit "make this slide look like this image") is ALWAYS honoured.
+        references = (_load_reference_images(session, project.id)
+                      if settings.build_images_from_references else [])
         if reference_image and reference_image.get("data"):
             references = [{"mediaType": reference_image.get("mediaType", "image/jpeg"),
                            "data": reference_image["data"]}, *references][:4]

@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   type CSSProperties,
@@ -9,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { pxDeltaToPct, useSlideEdit } from "./SlideEditContext";
 
 interface EditableTextProps {
@@ -93,20 +96,39 @@ export function EditableText({
     }
   }, [baseFont]);
 
-  // Keep the drag-resize handles pinned to the selected element's box, in SLIDE-ROOT coordinates
-  // (see handleRect note) so they sit exactly on the element regardless of where the slide is.
-  useLayoutEffect(() => {
+  // Keep the drag-resize handles pinned to the selected element's box. We measure the element's
+  // VIEWPORT rect (getBoundingClientRect) and render the handle overlay via a PORTAL to <body> in
+  // fixed/viewport coordinates. This sidesteps the containing-block trap entirely: the slide-root's
+  // `container-type: size` (and any template ancestor with transform/backdrop-filter) would
+  // otherwise capture our `position: fixed` overlay and resolve its coordinates against an
+  // unpredictable, possibly SCALED box — which is why the handles drifted off the text.
+  const measure = useCallback(() => {
     const el = ref.current;
-    const root = el?.closest("[data-slide-root]") as HTMLElement | null;
-    if (selected && el && root) {
+    if (selected && el) {
       const er = el.getBoundingClientRect();
-      const rr = root.getBoundingClientRect();
-      setHandleRect({ left: er.left - rr.left, top: er.top - rr.top, width: er.width, height: er.height });
+      setHandleRect({ left: er.left, top: er.top, width: er.width, height: er.height });
     } else {
       setHandleRect(null);
     }
+  }, [selected]);
+
+  useLayoutEffect(() => {
+    measure();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, edit.fontScale, liveScale, edit.widthPct, liveWidth, edit.dxPct, edit.dyPct, edit.color, edit.scrim, resolved, active]);
+  }, [measure, edit.fontScale, liveScale, edit.widthPct, liveWidth, edit.dxPct, edit.dyPct, edit.color, edit.scrim, resolved, active]);
+
+  // The overlay is fixed to the viewport, so keep it glued to the element as the page scrolls or
+  // resizes (the workshop is a scrollable list of slide cards).
+  useEffect(() => {
+    if (!selected) return;
+    const onMove = () => measure();
+    window.addEventListener("scroll", onMove, true); // capture → catch scroll on any ancestor
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [selected, measure]);
 
   if (edit.hidden) return null;
 
@@ -114,15 +136,17 @@ export function EditableText({
   //   • right edge (e)   → drag horizontally to widen/narrow (text rewraps)
   //   • bottom edge (s)  → drag vertically to grow/shrink the font (taller/shorter)
   //   • corner (se)      → both at once
-  const slideRootWidth = () => {
-    const root = ref.current?.closest("[data-slide-root]") as HTMLElement | null;
-    return root?.getBoundingClientRect().width || 0;
-  };
   const onRzDown = (dir: string) => (e: ReactPointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    const rootW = slideRootWidth();
-    const curW = handleRect && rootW ? (handleRect.width / rootW) * 100 : 40;
+    // Use LIVE (visible/scaled) rects for both the root width and the element's current width, so
+    // the starting width % and the drag-delta math share the same (screen-pixel) coordinate space.
+    const el = ref.current;
+    const root = el?.closest("[data-slide-root]") as HTMLElement | null;
+    const rr = root?.getBoundingClientRect();
+    const er = el?.getBoundingClientRect();
+    const rootW = rr?.width || 0;
+    const curW = er && rootW ? (er.width / rootW) * 100 : 40;
     rz.current = {
       dir, x: e.clientX, y: e.clientY,
       baseScale: edit.fontScale ?? 1,
@@ -158,30 +182,34 @@ export function EditableText({
     setLiveWidth(null);
   };
 
-  // Fixed-position resize handles on the selected element's right edge, bottom edge, and corner
-  // (siblings, never children of the contentEditable Tag).
+  // Resize handles on the selected element's right edge, bottom edge, and corner. Rendered through
+  // a PORTAL to <body> in viewport (fixed) coordinates so no ancestor containing-block can offset
+  // or scale them — they land exactly on the element's on-screen box.
   const HANDLE = "absolute rounded-sm border border-white/70 bg-accent-neon shadow";
   const resizeHandle =
-    selected && handleRect ? (
-      <div data-slide-toolbar style={{ position: "fixed", left: handleRect.left, top: handleRect.top,
-             width: handleRect.width, height: handleRect.height, zIndex: 50, pointerEvents: "none" }}>
-        {/* right edge — horizontal resize */}
-        <div onPointerDown={onRzDown("e")} onPointerMove={onRzMove} onPointerUp={onRzUp}
-          title="Drag to widen (text rewraps)"
-          className={HANDLE}
-          style={{ pointerEvents: "auto", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 22, cursor: "ew-resize" }} />
-        {/* bottom edge — vertical resize (font size) */}
-        <div onPointerDown={onRzDown("s")} onPointerMove={onRzMove} onPointerUp={onRzUp}
-          title="Drag to grow taller"
-          className={HANDLE}
-          style={{ pointerEvents: "auto", bottom: -5, left: "50%", transform: "translateX(-50%)", width: 22, height: 10, cursor: "ns-resize" }} />
-        {/* corner — both */}
-        <div onPointerDown={onRzDown("se")} onPointerMove={onRzMove} onPointerUp={onRzUp}
-          title="Drag to resize"
-          className={HANDLE}
-          style={{ pointerEvents: "auto", right: -5, bottom: -5, width: 12, height: 12, cursor: "se-resize" }} />
-      </div>
-    ) : null;
+    selected && handleRect && typeof document !== "undefined"
+      ? createPortal(
+          <div data-slide-toolbar style={{ position: "fixed", left: handleRect.left, top: handleRect.top,
+                 width: handleRect.width, height: handleRect.height, zIndex: 1000, pointerEvents: "none" }}>
+            {/* right edge — horizontal resize */}
+            <div onPointerDown={onRzDown("e")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+              title="Drag to widen (text rewraps)"
+              className={HANDLE}
+              style={{ pointerEvents: "auto", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 22, cursor: "ew-resize" }} />
+            {/* bottom edge — vertical resize (font size) */}
+            <div onPointerDown={onRzDown("s")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+              title="Drag to grow taller"
+              className={HANDLE}
+              style={{ pointerEvents: "auto", bottom: -5, left: "50%", transform: "translateX(-50%)", width: 22, height: 10, cursor: "ns-resize" }} />
+            {/* corner — both */}
+            <div onPointerDown={onRzDown("se")} onPointerMove={onRzMove} onPointerUp={onRzUp}
+              title="Drag to resize"
+              className={HANDLE}
+              style={{ pointerEvents: "auto", right: -5, bottom: -5, width: 12, height: 12, cursor: "se-resize" }} />
+          </div>,
+          document.body,
+        )
+      : null;
 
   const dx = edit.dxPct ?? 0;
   const dy = edit.dyPct ?? 0;

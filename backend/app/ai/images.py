@@ -127,13 +127,40 @@ def _enforce_single_frame(prompt: str) -> str:
     return f"{prompt.rstrip(' ,.')}, {_SINGLE_FRAME_GUARD}"
 
 
+# Diffusion models scrawl garbled faux-text onto any surface that would carry writing in real life —
+# billboards, neon signs, shopfronts, posters, movie-poster title cards. A plain "no text" is weak;
+# we explicitly blank out every text-bearing surface so URBAN scenes (the worst offenders) come back
+# clean. FLUX ignores negatives, so this lives in the POSITIVE prompt where every provider honours it.
+_NO_TEXT_GUARD = (
+    "completely free of any text, letters, words, numbers, captions, titles or typography anywhere "
+    "in the frame; blank unlabelled surfaces; no signage, no billboards, no neon signs, no shop "
+    "signs, no posters, no banners, no license plates, no writing of any kind"
+)
+
+
+# FLUX's CLIP encoder only attends to the first ~77 tokens, so a no-text clause tacked on the END
+# is invisible to it — the guard MUST also lead the prompt to land inside that window.
+_NO_TEXT_LEAD = "A clean textless photograph with absolutely no text, letters, words or signage. "
+
+
+def _enforce_no_text(prompt: str) -> str:
+    if not prompt or "no signage" in prompt.lower():
+        return prompt
+    return f"{_NO_TEXT_LEAD}{prompt.rstrip(' ,.')}, {_NO_TEXT_GUARD}"
+
+
+# Beefed-up negative for providers that honour it (fal/replicate). FLUX ignores negatives entirely,
+# which is why the positive guard above is the real workhorse.
+_NO_TEXT_NEGATIVE = ("text, words, letters, numbers, caption, subtitle, title card, typography, "
+                     "watermark, logo, signage, billboard, poster, writing, gibberish lettering")
+
+
 def generate_image(
     prompt: str,
     *,
     aspect_ratio: str = "16:9",
     palette: list[dict] | None = None,
-    negative_prompt: str = ("text, words, letters, typography, captions, titles, subtitles, "
-                            "writing, gibberish lettering, watermark, logo, signature, deformed"),
+    negative_prompt: str = _NO_TEXT_NEGATIVE + ", signature, deformed",
     seed: int | None = None,
     label: str = "",
     reference_images: list[dict] | None = None,
@@ -142,7 +169,7 @@ def generate_image(
     director's visual references; on Gemini image models they condition the output (style/palette/
     grade). Providers without image-input support ignore them gracefully and stay text-only."""
     provider = _resolve_image_provider()
-    prompt = _enforce_single_frame(prompt)
+    prompt = _enforce_no_text(_enforce_single_frame(prompt))
     w, h = ASPECT_DIMENSIONS.get(aspect_ratio, ASPECT_DIMENSIONS["16:9"])
     reason = "" if provider != "placeholder" else "no_image_provider_configured"
     try:
