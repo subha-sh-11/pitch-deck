@@ -22,11 +22,15 @@ MAX_CHARS = 300_000
 
 def _from_pdf(data: bytes) -> str:
     import pdfplumber  # lazy
+    from app.core.config import settings
 
     out: list[str] = []
+    # Cap pages so a huge/scanned PDF can't blow memory on a small host (a brief needs only the
+    # opening pages). `.close()` each page to release its parsed objects as we go.
     with pdfplumber.open(io.BytesIO(data)) as pdf:
-        for page in pdf.pages:
+        for page in pdf.pages[: settings.ocr_max_pages]:
             out.append(page.extract_text() or "")
+            page.close()
     return "\n".join(out)
 
 

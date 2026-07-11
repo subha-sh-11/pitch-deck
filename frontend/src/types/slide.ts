@@ -95,6 +95,8 @@ export interface SlideElementEdit {
   color?: string;
   /** Multiplier on the element's font size (0.5–2). */
   fontScale?: number;
+  /** Max width of the text box as a % of the slide (drag the right edge) — makes text rewrap. */
+  widthPct?: number;
   /** Frosted backdrop behind the text (blurs + darkens whatever is behind it) for legibility. */
   scrim?: boolean;
   /** Hide this element. */

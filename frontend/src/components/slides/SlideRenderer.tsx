@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { DesignDirection } from "@/types/design";
 import type { Slide, SlideContent } from "@/types/slide";
+import { fontFamilyOf } from "@/lib/fonts";
 import { DEFAULT_SLIDE_APPEARANCE, getBackgroundCss } from "@/lib/slide-appearance";
 import { SlideEditProvider, type ImageActions } from "./editing/SlideEditContext";
 import { SlideMotifs } from "./shared/SlideMotifs";
@@ -46,15 +47,6 @@ const HERO_MOTIF_SLIDES = new Set([
 ]);
 const LOUD_MOTIFS = new Set(["film_strip", "frame"]);
 
-// Theme display fonts → the CSS vars loaded in layout.tsx.
-const FONT_VARS: Record<string, string> = {
-  cormorant: "var(--font-cormorant)",
-  playfair: "var(--font-playfair)",
-  oswald: "var(--font-oswald)",
-  poppins: "var(--font-poppins)",
-  anton: "var(--font-anton)",
-};
-
 interface SlideRendererProps {
   slide: Slide;
   className?: string;
@@ -95,9 +87,7 @@ export function SlideRenderer({
   // Muted tone blends toward the surface behind the text (a dark scrim over images, else the bg)
   // so secondary copy stays readable in both cases.
   const mutedColor = `color-mix(in srgb, ${textColor} 70%, ${overImage ? "#0a0a0c" : bgColor})`;
-  const fontDisplay = designDirection?.fonts?.display
-    ? FONT_VARS[designDirection.fonts.display]
-    : undefined;
+  const fontDisplay = fontFamilyOf(designDirection?.fonts?.display);
 
   const variantOverlay =
     appearance.styleVariant === "minimal"

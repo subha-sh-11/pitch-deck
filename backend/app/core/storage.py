@@ -37,6 +37,9 @@ def get_s3():
             # Fail fast when MinIO/S3 isn't reachable → fall back to data URIs quickly.
             config=_BotoConfig(
                 signature_version="s3v4",
+                # Path-style for providers that require it (Supabase / MinIO / Filebase); "auto"
+                # keeps virtual-host for AWS S3 / R2.
+                s3={"addressing_style": settings.s3_addressing_style},
                 connect_timeout=2,
                 read_timeout=5,
                 retries={"max_attempts": 1},
@@ -49,17 +52,35 @@ def ensure_bucket() -> bool:
     global _bucket_ready, _s3_unavailable
     if _bucket_ready:
         return True
+    # Managed providers with SCOPED credentials (Supabase / Filebase / R2 tokens) can't list or
+    # create buckets — trust that it exists and go straight to using it.
+    if settings.s3_bucket_exists:
+        _bucket_ready = True
+        return True
     s3 = get_s3()
     if s3 is None:
         return False
+    # Distinguish a DEAD endpoint (connection error → fall back to local) from a PERMISSION error
+    # (bucket almost certainly exists, we just can't list/create it → use it anyway).
+    from botocore.exceptions import BotoCoreError, ClientError
     try:
-        existing = {b["Name"] for b in s3.list_buckets().get("Buckets", [])}
-        if settings.s3_bucket not in existing:
-            s3.create_bucket(Bucket=settings.s3_bucket)
+        s3.head_bucket(Bucket=settings.s3_bucket)
         _bucket_ready = True
         return True
+    except ClientError:
+        # Exists-but-forbidden, or needs creating. Try to create; if that's denied too, assume it's
+        # there (a real put_object failure later still falls back to local).
+        try:
+            s3.create_bucket(Bucket=settings.s3_bucket)
+        except ClientError:
+            pass
+        _bucket_ready = True
+        return True
+    except BotoCoreError:
+        _s3_unavailable = True  # can't reach the endpoint at all
+        return False
     except Exception:
-        _s3_unavailable = True  # stop hammering a dead endpoint
+        _s3_unavailable = True
         return False
 
 

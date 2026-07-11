@@ -146,10 +146,10 @@ def _subject(slide_type: str, intake: dict) -> str:
 # dark street. Market/budget/team are intentionally MINIMAL (clarity over cinema, per the design
 # bible). COMPOSITION ONLY here — lighting/grade come from the theme.
 _SHOT_BY_TYPE: dict[str, str] = {
-    "cover": "epic wide establishing key art of the story's world, anamorphic widescreen, monumental "
-             "scale, layered depth, generous sky/negative space for the title, no people",
+    "cover": "epic wide establishing shot of the story's world, anamorphic widescreen, monumental "
+             "scale, layered depth, a generous expanse of empty sky and open uncluttered space, no people",
     "logline": "a lone central figure small within the wide world at a charged moment, poetic wide "
-               "shot, strong negative space for overlaid text",
+               "shot, a large clean uncluttered empty area of the frame",
     "synopsis": "an establishing shot of a DISTINCT key location from the story (a different place "
                 "than other slides), deep perspective, lived-in detail, no people",
     "story_world": "a sweeping environmental establishing shot of the setting, atmosphere and depth, "
@@ -177,12 +177,41 @@ _SHOT_BY_TYPE: dict[str, str] = {
     "contact": "the story's final hopeful frame — a quiet resonant closing image, forward-looking "
                "light, generous negative space, no people",
     "generic": "an atmospheric frame from a FRESH, unused corner of the story's world, a new "
-               "location, texture and depth, generous negative space for text, no people",
+               "location, texture and depth, a generous clean uncluttered empty area, no people",
 }
 
 
 def _shot_for(slide_type: str) -> str:
     return _SHOT_BY_TYPE.get(slide_type, _SHOT_BY_TYPE["generic"])
+
+
+# When the brief is THIN, the model collapses every slide to one generic scene (a dark city
+# skyline, an empty sandy field) — so the whole deck looks like the SAME image. Give each slide a
+# distinct FACET (different time of day, distance and focal subject) so the frames diverge even
+# with no story to anchor on. Purely differentiating cues — the story still drives the content.
+_FACET_BY_TYPE: dict[str, str] = {
+    "cover": "at first light / dawn, an extreme-wide vista, the whole world laid out",
+    "logline": "at dusk / golden hour, a lone distant figure, vast empty space around them",
+    "synopsis": "at midday, a mid-distance lived-in location, everyday activity",
+    "story_world": "under an overcast sky, a sweeping different corner of the setting",
+    "genre_blend": "at blue hour, a moody atmospheric fusion of the story's tones",
+    "character": "in warm interior / window light, a tight intimate close framing of a face",
+    "supporting_characters": "in dappled shade, a grouped mid-shot of several figures",
+    "usp": "in hard side light, an extreme macro of a single symbolic object",
+    "show_cross": "at night, a graphic comparative framing, neon or lamp light",
+    "visual_aesthetic": "in soft diffused light, a painterly macro texture study",
+    "target_audience": "on a bright ordinary afternoon, a warm relatable everyday scene",
+    "budget": "in flat even daylight, a plain restrained near-empty frame",
+    "market_potential": "in clean neutral light, a minimal chart-ready backdrop",
+    "directors_vision": "in a single shaft of light against darkness, one poetic metaphor",
+    "team": "in clean studio light, a plain professional negative-space backdrop",
+    "contact": "at sunrise, a quiet hopeful forward-looking closing frame",
+    "generic": "in a fresh unused light and location not seen on any other slide",
+}
+
+
+def _facet_for(slide_type: str) -> str:
+    return _FACET_BY_TYPE.get(slide_type, _FACET_BY_TYPE["generic"])
 
 
 def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
@@ -229,7 +258,7 @@ def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
     # theme). This is what keeps the deck from repeating the same frame slide after slide.
     framing = _shot_for(slide_type)
 
-    parts = [framing, lighting]
+    parts = [framing, _facet_for(slide_type), lighting]
     if subject:
         parts.append(subject)
     if region and region not in (subject or ""):
@@ -263,8 +292,9 @@ places, or plot that the material doesn't support. The image MUST be specific an
 film and THIS slide — generic stock imagery is a failure.
 
 Match the slide's job (by kind):
-- cover_image / background: evocative KEY ART of the story's world/setting; leave negative space for
-  overlaid title text; usually no people.
+- cover_image / background: an evocative establishing image of the story's world/setting; leave a
+  clean, uncluttered EMPTY area of the frame (the app overlays its own text later — you render none);
+  usually no people.
 - story_world: an establishing environmental shot of the ACTUAL setting described in the summary.
 - character_art: a cinematic mood study evoking the SPECIFIC character(s) named on this slide — their
   role, era and world, expressive silhouette/atmosphere. NO real-person likeness.
@@ -283,14 +313,15 @@ slide uses a DIFFERENT shot type and, wherever the story allows, a DIFFERENT loc
 (wide establishing, character close-up, over-the-shoulder, action beat, quiet emotional moment,
 conflict, object/detail, final hopeful frame). Honor the SHOT specified for THIS slide below, and
 pick a fresh location rather than reusing one another slide already used. Market / budget / team
-slides are intentionally MINIMAL and clarity-first — restrained, plain, lots of negative space, NOT
-dramatic key art.
+slides are intentionally MINIMAL and clarity-first — restrained, plain, lots of empty space.
 
 ALWAYS weave in, explicitly: subject · setting · mood · lighting · camera angle · lens (e.g.
-anamorphic, 35mm, 85mm) · composition WITH deliberate negative space for overlaid typography ·
+anamorphic, 35mm, 85mm) · composition WITH a deliberate clean, EMPTY, uncluttered area of the frame ·
 colour palette · texture/grain · and a film-still / editorial-photography realism level, plus a
-cinematic reference feel. The result must read like a premium film still or poster frame, and must
-NOT look: glossy, plastic, generic-AI, over-saturated, deformed, cartoonish, or like a stock photo.
+cinematic reference feel. The result must read like a premium cinematic film still, and must NOT
+look: glossy, plastic, generic-AI, over-saturated, deformed, cartoonish, or like a stock photo.
+NEVER describe a poster, title card, credits, typography or any lettering — those induce garbled
+text in the render; the frame must be a clean photograph with NO text anywhere.
 
 HARD RULES: the image must contain NO text, letters, words, captions, watermarks or logos; NO
 real-person likeness; NO minors; film-still quality.
@@ -428,6 +459,8 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
         f"On the slide: {_slide_brief(content) or '(use the summary above)'}\n\n"
         f"SHOT FOR THIS SLIDE (use this framing, and a DIFFERENT location than other slides): "
         f"{_shot_for(slide_type)}\n"
+        f"MAKE THIS FRAME DISTINCT ({_facet_for(slide_type)}) — it MUST NOT look like a repeat of "
+        f"another slide. Vary the time of day, distance and focal subject accordingly.\n"
         f"THEME: {theme}\n"
         f"PALETTE: {palette or '(use a fitting palette)'}"
         f"{medium_line}\n\n"
@@ -438,7 +471,7 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
         prompt=prompt,
         cache_prefix="image_prompt",
         max_tokens=400,
-        temperature=0.6,
+        temperature=0.85,
         fallback=lambda: {"prompt": _deterministic_prompt(slide_type, intake, design, has_references)},
     )
     text = ""

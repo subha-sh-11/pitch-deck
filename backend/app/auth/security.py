@@ -3,24 +3,28 @@ from __future__ import annotations
 
 import datetime as dt
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _bcrypt_bytes(password: str) -> bytes:
+    """bcrypt hashes at most the first 72 bytes and modern bcrypt raises on
+    longer input, so truncate on a UTF-8 boundary ourselves."""
+    return password.encode("utf-8")[:72]
 
 
 def hash_password(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
     try:
-        return _pwd.verify(password, password_hash)
-    except ValueError:
+        return bcrypt.checkpw(_bcrypt_bytes(password), password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
         return False
 
 

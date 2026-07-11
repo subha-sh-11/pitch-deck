@@ -1,9 +1,11 @@
 """Application configuration, loaded from environment / .env."""
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Anchor the .env path to backend/ (two levels up from app/core/) so config loads
@@ -46,6 +48,17 @@ class Settings(BaseSettings):
     def result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
 
+    @model_validator(mode="after")
+    def _auto_public_base_url(self):
+        """When PUBLIC_BASE_URL isn't set, fall back to the platform-provided external URL so
+        asset links resolve in production. Render injects RENDER_EXTERNAL_URL automatically — this
+        avoids images silently pointing at http://localhost:8000 when the env var is forgotten."""
+        if self.public_base_url in ("", "http://localhost:8000"):
+            ext = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("PUBLIC_BASE_URL")
+            if ext:
+                self.public_base_url = ext.rstrip("/")
+        return self
+
     # Object storage. Defaults target the local "floci" S3 emulator (docker compose,
     # port 4566, creds test/test). MinIO (port 9000, minioadmin) is an alternative —
     # override S3_ENDPOINT/S3_KEY/S3_SECRET in .env to use it. Any S3/R2 works too.
@@ -54,6 +67,31 @@ class Settings(BaseSettings):
     s3_key: str = "test"
     s3_secret: str = "test"
     s3_region: str = "us-east-1"
+    # "auto" (virtual-host, works for AWS/R2) or "path" (Supabase/MinIO/Filebase need this).
+    s3_addressing_style: str = "auto"
+    # When the bucket is pre-created and the credentials are SCOPED (can't list/create buckets,
+    # e.g. Supabase/Filebase/R2 tokens), set true so we skip the list/create probe and just use it.
+    s3_bucket_exists: bool = False
+
+    # ─── Resource limits (turn DOWN on small / free-tier hosts) ───
+    # Generate slide images during the deck BUILD. Set false on a tiny worker so the build is
+    # text-only (fast, low-memory); images are then generated per-slide on demand in the workshop.
+    build_with_images: bool = True
+    # Condition every deck-build slide image on the director's REFERENCE images (img2img). Default
+    # OFF: img2img stamps the same reference onto all slides (they end up looking identical and drag
+    # the reference's text/poster structure into every frame). With it off, each slide is generated
+    # text-to-image — unique per slide and text-free — while references still drive the DESIGN
+    # (palette/typography). Explicit "regenerate with this reference" actions still use img2img.
+    build_images_from_references: bool = False
+    # Vision-OCR of SCANNED PDFs (renders pages to images — memory heavy). Turn OFF on a 512 MB
+    # host; text-based PDFs still parse fine, scanned ones just yield no text (paste instead).
+    enable_ocr: bool = True
+    # Max PDF pages OCR'd. Rendered a few at a time (streaming), so peak memory is small — but a
+    # brief only needs the first pages anyway. Lower on free tier (e.g. 8).
+    ocr_max_pages: int = 120
+    # Render scale for OCR page images. 2.0 ≈ 144dpi. Drop to 1.0 on a small host — a quarter the
+    # pixels/memory, still readable for typed screenplay text.
+    ocr_render_scale: float = 2.0
 
     # ─── LLM (provider-agnostic) ───
     # Which text-LLM backend to use: "auto" picks the first one with a configured key.
