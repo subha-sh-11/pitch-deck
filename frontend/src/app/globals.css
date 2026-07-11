@@ -12,10 +12,16 @@
   --foreground: #f7f3ee;
 }
 
-/* Native smooth scrolling — browser-driven (no JS), so it stays lag-free. */
+/* Native smooth scrolling — browser-driven (no JS), so it stays lag-free.
+   scroll-padding-top keeps anchor targets clear of the fixed landing header. */
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 24px;
+  scroll-padding-top: clamp(88px, 10vh, 108px);
+}
+
+/* Avoid the scroll chaining / rubber-band that reads as "laggy" at page ends. */
+body {
+  overscroll-behavior-y: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

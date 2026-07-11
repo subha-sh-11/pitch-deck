@@ -9,9 +9,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Create", href: projectRoutes.newProject(), active: true },
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Features", href: "#features" },
-  { label: "Dashboard", href: projectRoutes.dashboard() },
+  { label: "Examples", href: projectRoutes.dashboard() },
 ];
 
 /** A cinematic portrait card in the hero gallery marquee. */

@@ -9,16 +9,18 @@
   --hero-accent: #e74727;
   --hero-accent-deep: #dc3b21;
   position: relative;
+  /* Raised above the below-hero content (which sits at z-10) so the fixed
+     header inside this section is never covered by later siblings — otherwise
+     scrolled-up sections would intercept clicks meant for the nav. The hero's
+     own box doesn't overlap that content in flow, so only the fixed header is
+     effectively promoted. */
+  z-index: 30;
   isolation: isolate;
   overflow: hidden;
   background: var(--hero-bg);
-  min-height: 100svh;
-}
-
-@media (min-width: 1024px) {
-  .hero-root {
-    min-height: clamp(880px, 100svh, 1000px);
-  }
+  /* Exactly one viewport tall so the page is a single non-scrolling screen. */
+  height: 100svh;
+  height: 100dvh;
 }
 
 /* ---- Background layers (decorative, non-interactive) ---- */
@@ -28,6 +30,8 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  /* Composite the blur/grain layers so scrolling past the hero stays smooth. */
+  transform: translateZ(0);
 }
 
 /* Warm smoky glow behind the nav + headline — burgundy core, ember halo. */
@@ -85,29 +89,70 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  min-height: inherit;
+  /* Fill the hero's fixed viewport height so the flex column can distribute
+     content evenly on a single non-scrolling screen. min-height: 0 lets the
+     inner blocks shrink instead of overflowing. */
+  height: 100%;
+  min-height: 0;
   width: 100%;
   max-width: 1480px;
   margin: 0 auto;
-  padding: clamp(22px, 3.4vw, 40px) clamp(20px, 4vw, 56px) 0;
+  /* Top padding reserves space for the fixed header; bottom keeps the partner
+     strip off the very edge. */
+  padding: clamp(84px, 8vw, 108px) clamp(20px, 4vw, 56px) clamp(20px, 2.5vw, 34px);
 }
 
-/* ---- Header ---- */
+/* ---- Header ----
+   Fixed to the top of the viewport so it stays visible and clickable while
+   the whole landing page scrolls. It escapes .hero-root's overflow because
+   fixed positioning is relative to the viewport, not the section. */
 .hero-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  transition:
+    background-color 300ms ease,
+    backdrop-filter 300ms ease,
+    border-color 300ms ease;
+  border-bottom: 1px solid transparent;
+  /* Own compositor layer — the bar stays crisp and never repaints on scroll. */
+  transform: translateZ(0);
+}
+
+/* Content of the bar, aligned to the same max-width / gutters as .hero-shell. */
+.hero-header-inner {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 16px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: clamp(14px, 2.2vw, 22px) clamp(20px, 4vw, 56px);
+}
+
+/* Once the page is scrolled, drop in a smoky backdrop for legibility over the
+   lighter sections below the hero. */
+.hero-header[data-scrolled="true"] {
+  background: #090909;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .hero-logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: var(--hero-ink);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  font-size: clamp(17px, 1.4vw, 19px);
+}
+
+/* Full logo lockup image (source is 1448×1086 → 4:3). The box matches that
+   ratio so the logo fills it with no letterboxing; object-fit: contain keeps
+   it from ever distorting. */
+.hero-logo-img {
+  position: relative;
+  display: block;
+  flex: none;
+  height: clamp(46px, 5vw, 62px);
+  aspect-ratio: 1448 / 1086;
 }
 
 .hero-logo-mark {
@@ -252,7 +297,8 @@
 /* Mobile dropdown panel */
 .hero-mobile-menu {
   display: none;
-  margin-top: 12px;
+  /* Sits inside the fixed bar, so gutter with the same side padding. */
+  margin: 0 clamp(20px, 4vw, 56px) 0;
   padding: 10px;
   border-radius: 18px;
   background: rgba(16, 10, 9, 0.92);
@@ -297,19 +343,21 @@
 }
 
 .hero-heading {
-  max-width: min(850px, 100%);
+  max-width: min(900px, 100%);
   margin: 0;
-  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
-  font-weight: 500;
-  font-size: clamp(38px, 4.4vw, 74px);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
+  font-family: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  font-size: clamp(42px, 5vw, 82px);
+  line-height: 1.06;
+  letter-spacing: -0.005em;
   color: var(--hero-ink);
   text-wrap: balance;
 }
 
+/* Accent phrase: Cormorant's elegant true italic in the cinematic red. */
 .hero-heading em {
-  font-style: normal;
+  font-style: italic;
+  font-weight: 600;
   color: var(--hero-accent);
 }
 
@@ -383,7 +431,10 @@
 .hero-gallery-wrap {
   position: relative;
   width: 100%;
-  margin-top: clamp(36px, 4.5vw, 64px);
+  /* Sink the gallery (and the partner strip below it) to the bottom of the
+     hero so they sit flush against the bottom edge on the single-screen page. */
+  margin-top: auto;
+  padding-top: clamp(36px, 4.5vw, 64px);
 }
 
 /* Seamless left-to-right marquee.
@@ -555,7 +606,7 @@
   .hero-menu-btn {
     display: inline-flex;
   }
-  .hero-header {
+  .hero-header-inner {
     grid-template-columns: 1fr auto;
   }
   .hero-auth {
@@ -576,10 +627,11 @@
 /* Mobile — logo + menu button, stacked CTAs, ~1.15 cards visible */
 @media (max-width: 640px) {
   .hero-shell {
-    padding: 20px 20px 0;
+    padding: clamp(76px, 20vw, 92px) 20px 0;
   }
-  .hero-header {
+  .hero-header-inner {
     grid-template-columns: 1fr auto;
+    padding: 14px 20px;
   }
   .hero-copy {
     padding-top: 44px;

@@ -24,6 +24,7 @@ const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
 // Theme-driven display fonts (selected per style register).
@@ -52,7 +53,14 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} ${playfair.variable} ${oswald.variable} ${poppins.variable} ${anton.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-surface-0 text-text-primary font-sans">
+      {/* Browser extensions (password managers, Bitdefender, etc.) inject
+          attributes like `bis_register` / `__processed_*` onto <body> before
+          React hydrates, causing a benign attribute mismatch. Suppress it —
+          this only silences the body's own attributes, one level deep. */}
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-surface-0 text-text-primary font-sans"
+      >
         {children}
       </body>
     </html>
