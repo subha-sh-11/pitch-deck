@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   extractScript,
   finalizeInterview,
+  getInterviewState,
+  getProject,
   interview,
   pollJob,
+  saveInterviewState,
   uploadReferenceDeck,
   workshopSlideImage,
   type InterviewAssumption,
@@ -282,6 +285,7 @@ export function useInterview(projectId: string): Interview {
     applyAccent,
     applyThemePalette,
     applyDisplayFont,
+    restoreDeckSnapshot,
   } = useSetupWizard();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -299,6 +303,8 @@ export function useInterview(projectId: string): Interview {
 
   const history = useRef<InterviewHistoryTurn[]>([]);
   const brief = useRef<InterviewBrief | null>(null);
+  // Chat undo: deck snapshots taken before each mutating agent batch (newest last, cap 10).
+  const agentUndoStack = useRef<{ slides: Slide[]; design: DesignDirection | null }[]>([]);
   // Reference images waiting to be shown to the agent on the next turn (sent once, then cleared —
   // the agent folds what it saw into the brief, so the analysis persists as text).
   const pendingImages = useRef<InterviewImage[]>([]);
@@ -403,51 +409,88 @@ export function useInterview(projectId: string): Interview {
     [projectId, applyResult],
   );
 
-  // Restore a saved conversation — localStorage survives reloads and restarts, so the
-  // director resumes where they left off. Only the recent tail of the chat is shown
-  // (the full history/brief still ride along for the agent's continuity).
-  /* eslint-disable react-hooks/set-state-in-effect --
-     One-time hydration on mount: seeds chat state + refs from a saved session (and a
-     "picking up" marker). Guarded by started.current so it runs exactly once — there's no
-     cascading-render risk the rule guards against. */
+  // Restore a saved conversation. localStorage is the fast local mirror; the server copy
+  // (projects.interview_state) is the durable one shared across browsers/devices — whichever
+  // was saved most recently wins. One-time hydration guarded by started.current.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+
+    type SavedConvo = {
+      savedAt?: number;
+      messages?: ChatMessage[];
+      sections?: InterviewSection[];
+      assumptions?: InterviewAssumption[];
+      ready?: boolean;
+      brief?: InterviewBrief | null;
+      history?: InterviewHistoryTurn[];
+    };
+    const restore = (sv: SavedConvo) => {
+      setMessages(sv.messages ?? []);
+      setSections(sv.sections ?? []);
+      setAssumptions(sv.assumptions ?? []);
+      setReady(!!sv.ready);
+      brief.current = sv.brief ?? null;
+      history.current = sv.history ?? [];
+    };
+    const greet = () => {
+      // Don't generate anything yet — wait for the director to describe the film.
+      // The agent generates the tailored brief only in response to what they say (like Claude).
+      const greetingId = nextId();
+      setMessages([
+        {
+          id: greetingId,
+          role: "assistant",
+          text:
+            "Start by describing your film idea, uploading a script, or adding visual references. " +
+            "I'll turn it into a structured pitch-deck brief.",
+        },
+      ]);
+      // Personalise with what the director already entered on the project-creation form
+      // (title / genre / language). Only swap the text while the conversation hasn't begun.
+      void getProject(projectId)
+        .then((p) => {
+          if (history.current.length > 0 || !p.title) return;
+          const context = [...(p.genres ?? []), p.language].filter(Boolean).join(" · ");
+          const text =
+            `We're shaping “${p.title}”${context ? ` (${context})` : ""} — I have what you entered ` +
+            "at setup. Describe the story, paste a synopsis, upload a script, or add visual " +
+            "references and I'll build the pitch brief from there.";
+          setMessages((m) =>
+            m.map((msg) => (msg.id === greetingId && msg.role === "assistant" ? { ...msg, text } : msg)),
+          );
+        })
+        .catch(() => {});
+    };
+
+    let local: SavedConvo | null = null;
     try {
-      // localStorage is the durable home; fall back to a legacy sessionStorage save once.
+      // localStorage is the fast mirror; fall back to a legacy sessionStorage save once.
       const raw = localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey);
-      if (raw) {
-        const sv = JSON.parse(raw);
-        if (sv.messages?.length) {
-          // Restore the ENTIRE saved conversation from the start of the project — no
-          // truncation, no "picking up where we left off" marker.
-          setMessages(sv.messages as ChatMessage[]);
-          setSections(sv.sections ?? []);
-          setAssumptions(sv.assumptions ?? []);
-          setReady(!!sv.ready);
-          brief.current = sv.brief ?? null;
-          history.current = sv.history ?? [];
-          return;
-        }
-      }
+      if (raw) local = JSON.parse(raw) as SavedConvo;
     } catch {
       /* ignore */
     }
-    // Don't generate anything yet — wait for the director to describe the film.
-    // The agent generates the tailored brief only in response to what they say (like Claude).
-    setMessages([
-      {
-        id: nextId(),
-        role: "assistant",
-        text:
-          "Start by describing your film idea, uploading a script, or adding visual references. " +
-          "I'll turn it into a structured pitch-deck brief.",
-      },
-    ]);
-  }, [storageKey]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  // Persist durably (localStorage) so closing the tab doesn't lose the chat or brief.
+    if (local?.messages?.length) restore(local); // instant paint from the local mirror
+    void getInterviewState(projectId)
+      .then(({ state }) => {
+        const server = state as SavedConvo | null;
+        const serverNewer =
+          !!server?.messages?.length && (server.savedAt ?? 0) > (local?.savedAt ?? 0);
+        if (serverNewer) {
+          // The conversation continued on another device — its copy wins.
+          restore(server as SavedConvo);
+        } else if (!local?.messages?.length && !server?.messages?.length) {
+          greet();
+        }
+      })
+      .catch(() => {
+        if (!local?.messages?.length) greet();
+      });
+  }, [storageKey, projectId]);
+  // Persist on every change: localStorage immediately (fast local mirror), the server
+  // debounced (durable, cross-device). savedAt lets the two sides pick the newer copy.
+  const serverSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     try {
       // Keep small data-URI thumbnails so images survive a reload, but drop dead blob: URLs
@@ -459,14 +502,33 @@ export function useInterview(projectId: string): Interview {
         }
         return m;
       });
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ messages: slimMessages, sections, assumptions, ready, brief: brief.current, history: history.current }),
-      );
+      const payload = {
+        savedAt: Date.now(),
+        messages: slimMessages,
+        sections,
+        assumptions,
+        ready,
+        brief: brief.current,
+        history: history.current,
+      };
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+      // Only push real conversations (not the bare greeting), debounced against bursts.
+      if (messages.length > 1) {
+        if (serverSaveTimer.current) clearTimeout(serverSaveTimer.current);
+        serverSaveTimer.current = setTimeout(() => {
+          void saveInterviewState(projectId, payload).catch(() => {});
+        }, 2000);
+      }
     } catch {
       /* ignore quota */
     }
-  }, [messages, sections, assumptions, ready, storageKey]);
+  }, [messages, sections, assumptions, ready, storageKey, projectId]);
+  useEffect(
+    () => () => {
+      if (serverSaveTimer.current) clearTimeout(serverSaveTimer.current);
+    },
+    [],
+  );
 
   // After the deck is built, the chat BECOMES the deck-editing agent: each message → slide_edit
   // agent → structured actions applied live. Colour/theme actions are instant; content via mutations.
@@ -509,6 +571,26 @@ export function useInterview(projectId: string): Interview {
           content: s.content,
         }));
         const res = await deckCommand(projectId, value, slim, priorHistory, selectedSlideId, images);
+        // Chat undo: an undo_last with nothing on the stack must not narrate a restore that
+        // can't happen — drop it and answer honestly.
+        let actions = res.actions;
+        if (actions.some((a) => a.op === "undo_last") && agentUndoStack.current.length === 0) {
+          actions = actions.filter((a) => a.op !== "undo_last");
+          if (actions.length === 0) {
+            const text = "There's nothing to undo yet — I haven't changed the deck in this session.";
+            setMessages((m) => [...m, { id: nextId(), role: "assistant", text }]);
+            history.current = [...history.current, { role: "assistant", text }];
+            return;
+          }
+        }
+        // Snapshot the deck BEFORE a mutating batch so "undo" can restore it exactly.
+        if (actions.some((a) => a.op !== "undo_last")) {
+          agentUndoStack.current.push({
+            slides: structuredClone(draftSlides),
+            design: designDirection ? structuredClone(designDirection) : null,
+          });
+          if (agentUndoStack.current.length > 10) agentUndoStack.current.shift();
+        }
         const handlers: DeckActionHandlers = {
           slides: draftSlides,
           onUpdateSlide: updateDraftSlide,
@@ -521,11 +603,15 @@ export function useInterview(projectId: string): Interview {
           onSetAccent: applyAccent,
           onSetTheme: applyThemePalette,
           onSetFont: applyDisplayFont,
+          onUndoLast: () => {
+            const snap = agentUndoStack.current.pop();
+            if (snap) restoreDeckSnapshot(snap.slides, snap.design);
+          },
         };
         // Narrate the work as live tool steps (the way Claude/ChatGPT show their tool use):
         // each action appears in the chat, ticks over while running, and ✓s when done.
-        if (res.actions.length > 0) {
-          const labels = res.actions.map((a) => describeDeckAction(a, draftSlides));
+        if (actions.length > 0) {
+          const labels = actions.map((a) => describeDeckAction(a, draftSlides));
           const toolId = nextId();
           const renderDetail = (upTo: number, runningIdx: number | null) =>
             labels.map((l, j) =>
@@ -544,7 +630,7 @@ export function useInterview(projectId: string): Interview {
             setMessages((m) =>
               m.map((msg) => (msg.id === toolId && msg.role === "tool" ? { ...msg, ...patch } : msg)),
             );
-          await applyDeckActions(res.actions, handlers, (i, phase) =>
+          await applyDeckActions(actions, handlers, (i, phase) =>
             patchTool({ detail: phase === "start" ? renderDetail(i, i) : renderDetail(i + 1, null) }),
           );
           patchTool({
@@ -567,9 +653,9 @@ export function useInterview(projectId: string): Interview {
       }
     },
     [
-      projectId, draftSlides, updateDraftSlide, updateDraftSlideMeta, moveDraftSlide,
-      insertDraftSlideAfter, deleteDraftSlide, regenerateDraftSlide, generateSlideImage,
-      applyAccent, applyThemePalette, applyDisplayFont,
+      projectId, draftSlides, designDirection, updateDraftSlide, updateDraftSlideMeta,
+      moveDraftSlide, insertDraftSlideAfter, deleteDraftSlide, regenerateDraftSlide,
+      generateSlideImage, applyAccent, applyThemePalette, applyDisplayFont, restoreDeckSnapshot,
     ],
   );
 

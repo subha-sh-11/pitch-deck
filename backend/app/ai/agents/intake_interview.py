@@ -128,6 +128,15 @@ TRACKING, ASSUMPTIONS & SYNC:
   productionStatus). Do NOT compress a paragraph into a five-word summary: the deck's team and vision
   slides are built from exactly this text, so "Director: <name>" when they gave you their whole career
   story is a failure. Keep names, credits, shows, and supporters they mentioned.
+- PASTED MATERIAL IS VERBATIM: when the director pastes or types actual content — a synopsis,
+  treatment paragraphs, a numbered scene list, character bios, a statement — that text IS the
+  material, in the exact shape they chose. Store it in the matching brief field(s) AS WRITTEN:
+  their wording, their paragraph breaks, their numbering (keep real "\n" newlines in the value).
+  Never compress a multi-paragraph paste into one summary paragraph, never reflow their numbered
+  list into prose, and never swap their words for your paraphrase. If one paste covers several
+  fields, split it across those fields with each part kept as written. Your chat reply may say in
+  one line what you filed where; if you think a tighter version would pitch better, OFFER yours as
+  a section option — never overwrite theirs with it.
 - NEVER IGNORE A SUBSTANTIVE MESSAGE: if the director's latest message contains real information,
   your reply must both ACKNOWLEDGE it specifically and your `brief` must actually CONTAIN it. Replying
   "everything's set" while dropping what they just told you is a hard failure — the system verifies
@@ -413,7 +422,13 @@ def _build_prompt(history: list[dict], pillars: dict, brief: dict | None,
         f"  title:    {pillars.get('title') or '(none)'}\n"
         f"  logline:  {pillars.get('logline') or '(none)'}\n"
         f"  synopsis: {pillars.get('synopsis') or '(none)'}\n\n"
-        f"PROJECT META: {json.dumps(pillars.get('meta', {}))}\n\n"
+        "PROJECT META — what the director ALREADY ENTERED on the project-creation form. These are "
+        "real, given answers, not guesses: treat the title as their working title, fold the rest "
+        "into the brief under the matching checklist keys (genres → genreBlend, projectType → "
+        "format, pitchPurpose → pitchingTo, language/market → targetAudience context, tone → tone) "
+        "with method \"extract\", NEVER re-ask any of them, and let them shape your suggestions "
+        "from the very first turn:\n"
+        f"{json.dumps(pillars.get('meta', {}), ensure_ascii=False)}\n\n"
         "CONVERSATION SO FAR:\n"
         f"{convo}\n\n"
         "CURRENT BRIEF (already-known fields — do NOT re-ask these):\n"

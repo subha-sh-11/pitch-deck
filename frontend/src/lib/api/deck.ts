@@ -82,17 +82,18 @@ export const reorderSlides = (projectId: string, slideIds: string[]) =>
 // ── Agent action layer: natural-language deck edits ──
 
 export type DeckAction =
-  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[] }
+  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[]; comps?: { title: string; note: string; posterUrl?: string }[]; characters?: { name: string; role: string; description: string; appearance?: string; imageUrl?: string }[]; moodBlocks?: { label: string; color?: string; imageUrl?: string }[] }
   | { op: "style_image"; slideId: string; imageBlur?: number; imageDim?: number; imageScale?: number }
   | { op: "move_slide"; slideId: string; direction: "up" | "down"; steps?: number }
-  | { op: "add_slide"; afterSlideNumber: number; slideType: string }
+  | { op: "add_slide"; afterSlideNumber: number; slideType: string; title?: string; contentBrief?: string; pointCount?: number }
   | { op: "delete_slide"; slideId: string }
-  | { op: "regenerate_slide"; slideId: string }
+  | { op: "regenerate_slide"; slideId: string; direction?: string }
   | { op: "generate_image"; slideId: string; imagePrompt?: string }
   | { op: "set_appearance"; slideId: string; styleVariant?: SlideStyleVariant; accentColor?: string; backgroundKey?: SlideBackgroundKey; textColor?: string; composition?: "full" | "split" | "framed"; imageSide?: "left" | "right" }
   | { op: "set_accent"; hex: string }
   | { op: "set_theme"; palette: { name: string; hex: string; usage: string }[] }
-  | { op: "set_font"; font: "cormorant" | "playfair" | "oswald" | "poppins" | "anton" };
+  | { op: "set_font"; font: "cormorant" | "playfair" | "oswald" | "poppins" | "anton" }
+  | { op: "undo_last" };
 
 export interface DeckCommandResult {
   message: string;

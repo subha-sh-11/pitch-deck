@@ -54,6 +54,9 @@ class Project(Base, TimestampMixin):
     # Parsed reference deck (uploaded .pptx) — {fileName, slideCount, slides[], fonts[], colors[]}.
     # When present, generation mirrors its slide structure and visual style (see pptx_ref.py).
     reference_deck: Mapped[dict | None] = mapped_column(JSONB)
+    # Saved intake/deck-edit conversation ({messages, sections, brief, history, savedAt}) so the
+    # chat survives across browsers/devices — localStorage is only a fast local mirror.
+    interview_state: Mapped[dict | None] = mapped_column(JSONB)
 
     last_edited_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

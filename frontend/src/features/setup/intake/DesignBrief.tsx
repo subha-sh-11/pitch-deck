@@ -597,6 +597,9 @@ const LONG_LABELS = new Set([
   "Comparables",
   "Creative team & talent",
   "Director's statement",
+  "Director's vision",
+  "Distribution & marketing",
+  "Production status",
   "Budget & the ask",
   "Visual references",
 ]);
@@ -632,7 +635,9 @@ function CapturedField({
   status?: FieldStatus | null;
   highlight?: boolean;
 }) {
-  const multiline = LONG_LABELS.has(label);
+  // Multi-line when the label is known-long OR the value itself carries structure (pasted
+  // paragraphs / numbered lists) — a paste must never collapse into a one-line input.
+  const multiline = LONG_LABELS.has(label) || value.includes("\n") || value.length > 90;
   return (
     <div
       className={`rounded-xl border bg-surface-2/40 px-3.5 py-2.5 transition-colors ${
@@ -647,7 +652,12 @@ function CapturedField({
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={Math.min(6, Math.max(2, Math.ceil((value.length || 1) / 56)))}
+          // Size to the content's real shape: explicit newlines count as lines, so a pasted
+          // numbered list or multi-paragraph synopsis shows as provided instead of collapsing.
+          rows={Math.min(
+            14,
+            Math.max(2, value.split("\n").length, Math.ceil((value.length || 1) / 56)),
+          )}
           className="mt-1 w-full resize-none bg-transparent text-sm leading-relaxed text-text-primary focus:outline-none"
         />
       ) : (
