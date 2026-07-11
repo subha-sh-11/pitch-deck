@@ -28,6 +28,17 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Target Audience"} />
         </SlideLabel>
+        {/* Supporting paragraph: shown when the agent/user adds prose to `body`, so added
+            content is never silently swallowed by the items grid. */}
+        {content.body && (
+          <EditableText
+            k="body"
+            as="p"
+            multiline
+            className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-relaxed text-[var(--slide-text-muted,#C9CDD3)]"
+            value={content.body}
+          />
+        )}
         {items.length > 0 ? (
           <div className="mt-6 grid flex-1 grid-cols-2 gap-3 content-start">
             {items.map((item, i) => (
@@ -62,17 +73,7 @@ export function TargetAudienceSlide({ content }: TargetAudienceSlideProps) {
               </MovableCard>
             ))}
           </div>
-        ) : (
-          content.body && (
-            <EditableText
-              k="body"
-              as="p"
-              multiline
-              className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-[var(--slide-text-muted,#C9CDD3)]"
-              value={content.body}
-            />
-          )
-        )}
+        ) : null}
       </div>
     </SlideFrame>
   );

@@ -93,12 +93,17 @@ audience…) render "items": [ {"title": "<short>", "description": "<one line>"}
 change how many points show ("make it 5 points"), return the FULL new "items" list with exactly that
 many entries. Your confirmation message must never claim a change you didn't emit as an action.
 
-ADD / REMOVE POINTS ("add more points", "add another point/card", "add 2 more", "remove the last
-point") — the CURRENT deck view shows each list slide's existing points as items[N]="a; b; c" (or
-bullets[N]/comps[N]). To ADD points, emit edit_slide on THAT slide with the FULL items list = ALL
-existing points (unchanged) PLUS the new ones, each grounded in this film. Never return only the new
-points (that would delete the originals), and never claim you added points without emitting the
-edit_slide action. Default to the SELECTED slide the director is looking at — do NOT retarget the
+ADD / REMOVE POINTS / ADD CONTENT ("add more points", "add another point/card", "add 2 more",
+"remove the last point", and ALSO generic "add content", "add some content", "more", "add more",
+"expand this slide", "elaborate", "flesh it out") — the CURRENT deck view shows each list slide's
+existing points as items[N]="a; b; c" (or bullets[N]/comps[N]). For ANY list-style slide (genre_blend,
+usp, show_cross, market_potential, target_audience, and any slide that already has items/bullets/comps),
+"add content" MEANS add more ITEMS — emit edit_slide on THAT slide with the FULL items list = ALL
+existing points (unchanged) PLUS the new ones, each grounded in this film. On a list-style slide you
+MUST use "items"; NEVER put the new content in "body" (the slide renders the items grid and ignores
+body, so a body edit is invisible and the director sees no change). Never return only the new points
+(that would delete the originals), and never claim you added content without emitting the edit_slide
+action with items. Default to the SELECTED slide the director is looking at — do NOT retarget the
 cover unless they named it.
 
 slideType is one of: cover, logline, genre_blend, synopsis, story_world, character,
@@ -221,15 +226,31 @@ def _history_digest(history: list[dict] | None) -> str:
     return "\n".join(lines) or "  (start of conversation)"
 
 
+def _full_list(content: dict) -> str:
+    """The selected slide's FULL list content (title AND description per item) so the agent can
+    echo the existing points back VERBATIM when adding to them — the compact _list_summary drops
+    descriptions and joins titles, which made the model merge/lose existing items."""
+    items = content.get("items")
+    if isinstance(items, list) and items:
+        lines = [f'      - title="{(it or {}).get("title", "")}" description="{(it or {}).get("description", "")}"'
+                 for it in items if isinstance(it, dict)]
+        return "\n    existing items (echo these EXACTLY, then append new ones):\n" + "\n".join(lines)
+    bullets = content.get("bullets")
+    if isinstance(bullets, list) and bullets:
+        return "\n    existing bullets (keep all, then append):\n" + "\n".join(f'      - {b}' for b in bullets)
+    return ""
+
+
 def _selected_digest(slides: list[dict], selected_slide_id: str | None) -> str:
     """The slide the director currently has open — the default target for unaddressed edits."""
     if not selected_slide_id:
         return "  (none — ask which slide only if the instruction is ambiguous)"
     for s in slides or []:
         if s.get("id") == selected_slide_id:
+            content = s.get("content") or {}
             return (
                 f'  id={s.get("id")} #{s.get("slideNumber")} type={s.get("slideType")} '
-                f'title="{s.get("title", "")}"'
+                f'title="{s.get("title", "")}"' + _full_list(content)
             )
     return "  (none — ask which slide only if the instruction is ambiguous)"
 

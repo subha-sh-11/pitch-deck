@@ -19,10 +19,10 @@ async def get_current_owner(db: AsyncSession = Depends(get_db)) -> User:
 Any caller can read/mutate any project, deck, slide, or asset. Expensive endpoints (generation, slide regeneration) are also unauthenticated — direct cost-abuse vector against your LLM/image API keys. **Fix:** implement JWT (NEXTAUTH_SECRET already exists), add `owner_id` checks in `get_owned_project`, protect asset serving.
 
 ### 2. Secrets hygiene
-- Real API keys (Anthropic, Google, OpenAI, fal, Replicate) live in `.env`; the file was captured in a **git stash** (`git log --all -- .env`). Stashes don't push, but rotate keys if this repo/machine is ever shared.
+- Real API keys (Anthropic, Google, OpenAI, fal, Replicate) live in `.env`; the file was captured in a **git stash** (`git log --all -- .env`). Stashes don't push, but rotate keys if this repo/machine is ever shared.    
 - `docker-compose.yml`: default credentials everywhere — Postgres `pitchdeck/pitchdeck`, MinIO `minioadmin/minioadmin`, Redis with no password — and all three bind to host ports.
 - `.env` has space-padded keys (`GOOGLE_API_KEY =`) which pydantic-settings may parse unexpectedly — verify these load.
-
+v      
 ### 3. No deployment story
 No Dockerfile for backend or frontend (backend starts via `start-backend.ps1`, dev-mode only), no CI (`.github/workflows` absent), **zero tests anywhere**, no TLS or security headers in `nginx/`, no healthchecks/restart policies in compose. Nothing here can currently be shipped reproducibly.
 

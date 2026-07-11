@@ -158,8 +158,15 @@ function DeckStage({
   generating: boolean;
   buildProgress: number;
 }) {
-  const { projectId, updateDraftSlide, replaceDraftSlide, applyAccent, applyDisplayFont, undo, canUndo } =
-    useSetupWizard();
+  const {
+    projectId, updateDraftSlide, replaceDraftSlide, applyAccent, applyDisplayFont, undo, canUndo,
+    insertDraftSlideAfter, duplicateDraftSlide, deleteDraftSlide, removedSlides, restoreSlide,
+  } = useSetupWizard();
+  const [binOpen, setBinOpen] = useState(false);
+
+  // After an add/duplicate the slides array grows on the next render; remember which index to
+  // select so the new slide opens automatically once it lands.
+  const pendingSelectRef = useRef<number | null>(null);
 
   // Ctrl/Cmd+Z undoes the last deck edit — unless the user is mid-typing in a text field, where
   // the browser's own text undo should win.
@@ -192,6 +199,41 @@ function DeckStage({
 
   const selected = slides.find((s) => s.id === selectedId) ?? slides[0];
   const curIndex = Math.max(0, slides.findIndex((s) => s.id === selectedId));
+
+  // Select the freshly added/duplicated slide once it appears in the list.
+  useEffect(() => {
+    if (pendingSelectRef.current != null) {
+      const s = slides[pendingSelectRef.current];
+      if (s) setSelectedId(s.id);
+      pendingSelectRef.current = null;
+    }
+  }, [slides]);
+
+  // Keep the selection valid. A newly inserted slide starts with a temporary local id that the
+  // backend later swaps for a real id — which would leave selectedId pointing at a slide that no
+  // longer exists (nothing highlighted, view snaps to slide 1). When that happens, re-select the
+  // slide now occupying the same position. Also clamps after a deletion.
+  const lastIndexRef = useRef(0);
+  useEffect(() => {
+    const idx = slides.findIndex((s) => s.id === selectedId);
+    if (idx >= 0) {
+      lastIndexRef.current = idx;
+    } else if (slides.length > 0) {
+      const clamped = Math.min(lastIndexRef.current, slides.length - 1);
+      setSelectedId(slides[clamped].id);
+    }
+  }, [slides, selectedId]);
+
+  // Add a blank "Custom Slide" after the current one, or duplicate the current slide. Both open the
+  // new slide automatically.
+  const addSlideAfter = () => {
+    insertDraftSlideAfter(curIndex, "generic");
+    pendingSelectRef.current = curIndex + 1;
+  };
+  const duplicateCurrent = () => {
+    duplicateDraftSlide(curIndex);
+    pendingSelectRef.current = curIndex + 1;
+  };
 
   // Step to the previous / next slide, clamped to the deck bounds.
   const goTo = (delta: number) => {
@@ -398,6 +440,31 @@ function DeckStage({
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
                 type="button"
+                onClick={addSlideAfter}
+                title="Add a new blank slide after this one"
+                className="rounded-lg border border-border-glass px-2 py-1 text-xs text-text-muted transition-colors hover:text-text-primary"
+              >
+                ＋ Slide
+              </button>
+              <button
+                type="button"
+                onClick={duplicateCurrent}
+                title="Duplicate this slide"
+                className="rounded-lg border border-border-glass px-2 py-1 text-xs text-text-muted transition-colors hover:text-text-primary"
+              >
+                ⧉ Duplicate
+              </button>
+              <button
+                type="button"
+                onClick={() => setBinOpen(true)}
+                disabled={removedSlides.length === 0}
+                title={removedSlides.length ? "Restore removed slides" : "No removed slides"}
+                className="rounded-lg border border-border-glass px-2 py-1 text-xs text-text-muted transition-colors hover:text-text-primary disabled:opacity-40"
+              >
+                🗑 Removed{removedSlides.length ? ` (${removedSlides.length})` : ""}
+              </button>
+              <button
+                type="button"
                 onClick={() => undo()}
                 disabled={!canUndo}
                 title="Undo last change (Ctrl+Z)"
@@ -454,31 +521,72 @@ function DeckStage({
           </button>
         </div>
 
-        {/* Filmstrip — centered */}
-        <div className="flex shrink-0 justify-center gap-2 overflow-x-auto border-t border-border-glass bg-black/40 px-4 py-3">
-          {slides.map((s, i) => {
-            const active = s.id === selectedId;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSelectedId(s.id)}
-                title={s.title}
-                className={`group relative w-32 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${active ? "border-accent-neon" : "border-transparent hover:border-white/30"
-                  }`}
-              >
-                <SlideThumbnailPreview slide={s} designDirection={design} />
-                {isSlideGenerating(s, generating) && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/55">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-neon/40 border-t-accent-neon" />
-                  </span>
-                )}
-                <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-[10px] font-medium text-white/80">
-                  {i + 1}
-                </span>
-              </button>
-            );
-          })}
+        {/* Filmstrip — the inner `mx-auto` centres the strip when it fits, but (unlike
+            `justify-center` on the scroller) still lets it scroll fully when it overflows —
+            e.g. when the chat panel narrows this column. */}
+        <div className="flex shrink-0 overflow-x-auto border-t border-border-glass bg-black/40 px-4 py-3">
+          <div className="mx-auto flex gap-2">
+            {slides.map((s, i) => {
+              const active = s.id === selectedId;
+              return (
+                <div
+                  key={s.id}
+                  className={`group relative w-32 shrink-0 transition-transform ${active ? "z-10 scale-[1.06]" : ""
+                    }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(s.id)}
+                    title={s.title}
+                    className={`relative block w-full overflow-hidden rounded-lg border-2 transition-all ${active
+                      ? "border-accent-neon"
+                      : "border-transparent opacity-70 hover:border-white/30 hover:opacity-100"
+                      }`}
+                  >
+                    <SlideThumbnailPreview slide={s} designDirection={design} />
+                    {isSlideGenerating(s, generating) && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-neon/40 border-t-accent-neon" />
+                      </span>
+                    )}
+                    <span
+                      className={`absolute bottom-1 left-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-accent-neon text-zinc-950" : "bg-black/70 font-medium text-white/80"
+                        }`}
+                    >
+                      {i + 1}
+                    </span>
+                  </button>
+                  {/* Remove → sends the slide to the recycle bin (restorable). Hidden until hover. */}
+                  {slides.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteDraftSlide(s.id);
+                      }}
+                      title="Remove slide (restore from the Removed bin)"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-xs text-white/90 opacity-0 transition-opacity hover:bg-red-500/90 group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {/* Add a new slide at the end of the deck. */}
+            <button
+              type="button"
+              onClick={() => {
+                insertDraftSlideAfter(slides.length - 1, "generic");
+                pendingSelectRef.current = slides.length;
+              }}
+              title="Add a new slide to the end"
+              className="flex aspect-video w-32 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-dashed border-white/15 text-text-dim transition-colors hover:border-accent-neon/50 hover:text-text-primary"
+            >
+              <span className="text-xl leading-none">＋</span>
+              <span className="text-[10px] uppercase tracking-wider">Add slide</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -604,6 +712,53 @@ function DeckStage({
           )}
         </div>
       </aside>
+
+      {/* Recycle bin — removed slides, restorable. */}
+      {binOpen && (
+        <div className="fixed inset-0 z-[200] flex flex-col bg-black/95 p-5" onClick={() => setBinOpen(false)}>
+          <div className="flex shrink-0 items-center justify-between" onClick={(e) => e.stopPropagation()}>
+            <span className="text-sm font-semibold text-white/90">
+              Removed slides {removedSlides.length ? `· ${removedSlides.length}` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBinOpen(false)}
+              aria-label="Close"
+              className="rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {removedSlides.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-white/50">
+              Nothing here — removed slides will appear so you can restore them.
+            </div>
+          ) : (
+            <div
+              className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3 [scrollbar-width:thin]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {removedSlides.map((s) => (
+                <div key={s.id} className="flex flex-col gap-1.5">
+                  <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-surface-0">
+                    <SlideThumbnailPreview slide={s} designDirection={design} />
+                    <button
+                      type="button"
+                      onClick={() => restoreSlide(s.id)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-semibold text-white opacity-0 transition-opacity hover:bg-black/55 hover:opacity-100"
+                    >
+                      ↩ Restore
+                    </button>
+                  </div>
+                  <span className="truncate text-[11px] text-white/60">{s.title || s.slideType}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

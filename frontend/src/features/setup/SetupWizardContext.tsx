@@ -98,6 +98,10 @@ interface SetupWizardContextValue extends SetupWizardState {
   ) => void;
   addSlideComment: (id: string, text: string) => void;
   deleteDraftSlide: (id: string) => boolean;
+  /** Slides the user removed — a recycle bin, newest first. */
+  removedSlides: Slide[];
+  /** Restore a removed slide from the recycle bin back into the deck. */
+  restoreSlide: (id: string) => void;
   insertDraftSlideAfter: (index: number, slideType: SlideType) => void;
   duplicateDraftSlide: (index: number) => void;
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
@@ -340,6 +344,12 @@ export function SetupWizardProvider({
   // rebuild), the outgoing deck is archived here first so it's never lost, whatever the trigger.
   // Newest first; kept in-memory for the session (full decks are too big for localStorage).
   const [deckHistory, setDeckHistory] = useState<Slide[][]>([]);
+  // Recycle bin for removed slides (newest first), mirrored into a ref for callbacks.
+  const [removedSlides, setRemovedSlides] = useState<Slide[]>([]);
+  const removedRef = useRef<Slide[]>([]);
+  useEffect(() => {
+    removedRef.current = removedSlides;
+  }, [removedSlides]);
   const pushDeckHistory = useCallback(() => {
     const current = stateRef.current.draftSlides.filter((s) => s.generated);
     if (current.length) setDeckHistory((h) => [current, ...h].slice(0, 10));
@@ -515,6 +525,7 @@ export function SetupWizardProvider({
 
   const deleteDraftSlide = useCallback(
     (id: string): boolean => {
+      const slide = stateRef.current.draftSlides.find((s) => s.id === id);
       let deleted = false;
       setState((prev) => {
         if (prev.draftSlides.length <= 1) return prev;
@@ -524,13 +535,26 @@ export function SetupWizardProvider({
           draftSlides: renumberSlides(prev.draftSlides.filter((s) => s.id !== id)),
         };
       });
-      if (deleted && isBackendSlide(id)) {
-        trackSave(apiDeleteSlide(id));
+      if (deleted) {
+        // Archive to the recycle bin so the user can restore it, then remove from the backend.
+        if (slide) setRemovedSlides((r) => [slide, ...r].slice(0, 30));
+        if (isBackendSlide(id)) trackSave(apiDeleteSlide(id));
       }
       return deleted;
     },
     [trackSave],
   );
+
+  const restoreSlide = useCallback((id: string) => {
+    const slide = removedRef.current.find((s) => s.id === id);
+    if (!slide) return;
+    // Re-insert as a fresh client-side slide (like duplicate) at the end of the deck.
+    const clone: Slide = structuredClone(slide);
+    clone.id = `local-restored-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    clone.comments = [];
+    setState((st) => ({ ...st, draftSlides: renumberSlides([...st.draftSlides, clone]) }));
+    setRemovedSlides((r) => r.filter((s) => s.id !== id));
+  }, []);
 
   const insertDraftSlideAfter = useCallback(
     (index: number, slideType: SlideType) => {
@@ -701,6 +725,8 @@ export function SetupWizardProvider({
       regenerateDraftSlide,
       regenerateAllDraftSlides,
       deckHistory,
+      removedSlides,
+      restoreSlide,
       applyAccent,
       applyThemePalette,
       applyDisplayFont,
@@ -715,7 +741,8 @@ export function SetupWizardProvider({
       setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
       updateDraftSlide, undo, canUndo, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
-      regenerateDraftSlide, regenerateAllDraftSlides, deckHistory, applyAccent, applyThemePalette,
+      regenerateDraftSlide, regenerateAllDraftSlides, deckHistory, removedSlides, restoreSlide,
+      applyAccent, applyThemePalette,
       applyDisplayFont, chooseDesign, setGenerationStatus, approveContent,
       getEditorSlides,
     ],
