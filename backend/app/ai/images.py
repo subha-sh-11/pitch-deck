@@ -392,11 +392,24 @@ def _fetch_bytes(url: str) -> tuple[bytes, str]:
     return resp.content, resp.headers.get("content-type", "image/png")
 
 
+# Account-level fal failures that no amount of retrying can cure — an exhausted balance or a
+# bad/locked key fails identically on every attempt, and a deck build fires ~20 image calls,
+# so retrying these 3× each just adds minutes of dead time before the placeholder fallback.
+_FAL_FATAL = ("exhausted balance", "user is locked", "unauthorized", "invalid api key",
+              "forbidden", "401", "403")
+
+
+def _fal_fatal(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _FAL_FATAL)
+
+
 def _fal_run(model: str, args: dict, attempts: int = 3):
     """Call fal with a short exponential backoff. A full deck fires ~20 image calls in two bursts
     (backgrounds, then per-element portraits/genres); the later burst is the one that gets
     rate-limited, and a single 429/timeout used to degrade straight to a placeholder. Retrying a
-    couple of times with jittered backoff turns those transient failures back into real images."""
+    couple of times with jittered backoff turns those transient failures back into real images.
+    Account-level errors (balance, auth) are NOT retried — they fail the same way every time."""
     import random
     import time
 
@@ -406,9 +419,9 @@ def _fal_run(model: str, args: dict, attempts: int = 3):
     for i in range(max(1, attempts)):
         try:
             return fal_client.run(model, arguments=args)
-        except Exception as exc:  # noqa: BLE001 — retry ANY error; non-transient ones just exhaust
+        except Exception as exc:  # noqa: BLE001 — retry transient errors; fatal ones raise now
             last = exc
-            if i == attempts - 1:
+            if i == attempts - 1 or _fal_fatal(exc):
                 raise
             _log.warning("fal attempt %d/%d failed (%s); retrying…",
                          i + 1, attempts, str(exc)[:140])

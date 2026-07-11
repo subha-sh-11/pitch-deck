@@ -147,7 +147,8 @@ def _subject(slide_type: str, intake: dict) -> str:
 # bible). COMPOSITION ONLY here — lighting/grade come from the theme.
 _SHOT_BY_TYPE: dict[str, str] = {
     "cover": "epic wide establishing shot of the story's world, anamorphic widescreen, monumental "
-             "scale, layered depth, a generous expanse of empty sky and open uncluttered space, no people",
+             "scale, layered depth, a generous expanse of empty sky and open uncluttered space for "
+             "the title, no people",
     "logline": "a lone central figure small within the wide world at a charged moment, poetic wide "
                "shot, a large clean uncluttered empty area of the frame",
     "synopsis": "an establishing shot of a DISTINCT key location from the story (a different place "

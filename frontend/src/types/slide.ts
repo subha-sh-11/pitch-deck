@@ -49,6 +49,9 @@ export interface SlideContent {
   /** Backend-generated image (served URL) bound to this slide, if any. */
   imageUrl?: string;
   imagePrompt?: string;
+  /** Set when the image provider failed and imageUrl is a gradient placeholder — the raw
+   * provider error (e.g. exhausted balance) so the UI can say why art is missing. */
+  imageError?: string;
   /** Multiple generated image options to choose from in the full-screen gallery. */
   imageCandidates?: string[];
   /** Background-image adjustments (no regeneration): blur px, dim 0-1 overlay, zoom scale. */

@@ -83,6 +83,11 @@ export function SlideWorkshop(_props: { onAssembled: () => void }) {
 
   const generatedCount = slides.filter((s) => s.generated).length;
   const allGenerated = slides.length > 0 && generatedCount === slides.length;
+  // Slides whose art is a gradient placeholder because the image provider failed (out of
+  // credits, bad key…). The backend records why on the slide, so tell the director instead of
+  // silently shipping gradients behind a green "all generated".
+  const imageFailures = slides.filter((s) => s.content.imageError);
+  const imageFailureReason = imageFailures[0]?.content.imageError ?? "";
 
   // Rebuild = generate a brand-new deck from scratch. The context archives the current deck into
   // history first (same as Build deck / a style change), so the old one is always recoverable.
@@ -183,6 +188,20 @@ export function SlideWorkshop(_props: { onAssembled: () => void }) {
             </button>
           </div>
         </div>
+        {/* Image-provider failure: the deck built, but slides carry gradient placeholders
+            instead of generated art. Say why, and how to recover. */}
+        {imageFailures.length > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <span className="font-semibold">
+              ⚠ Slide images couldn’t be generated ({imageFailures.length}/{slides.length} slides
+              are showing placeholder art).
+            </span>{" "}
+            <span className="text-amber-200/80">{imageFailureReason}</span>{" "}
+            <span className="text-amber-200/80">
+              Fix the provider (e.g. top up credits), then use “Regenerate slide” or “Rebuild deck”.
+            </span>
+          </div>
+        )}
         {/* Live progress while generating all. At 0% we show an indeterminate shimmer so the
             bar is always visibly "working"; once slides land it becomes a real progress fill. */}
         {genAll.running && (

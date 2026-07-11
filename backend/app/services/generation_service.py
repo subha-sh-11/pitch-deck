@@ -206,6 +206,12 @@ def _persist_image(session, project_id, slide: Slide, prompt: str, img) -> None:
     content["imageCandidates"] = cands[-12:]
     content["imageUrl"] = url
     content["imagePrompt"] = prompt
+    # Surface WHY this slide shows a gradient placeholder instead of real art (provider out of
+    # credits, bad key, safety block…) so the UI can tell the director instead of failing silently.
+    if img.meta.get("provider") == "placeholder" and img.meta.get("reason"):
+        content["imageError"] = str(img.meta["reason"])[:300]
+    else:
+        content.pop("imageError", None)
     slide.content = content
 
 
@@ -868,7 +874,8 @@ def generate_project_image(project_id: str, slide_type: str) -> dict:
         prompt, img = _generate_slide_image(slide_type, intake, design,
                                             reference_images=references)
         if img.meta.get("provider") == "placeholder":
-            return {"ok": False, "reason": "image_provider_unavailable"}
+            return {"ok": False,
+                    "reason": img.meta.get("reason") or "image_provider_unavailable"}
 
         kind = image_prompt_agent.image_kind(slide_type)
         ext = _EXT.get(img.mime, "png")
@@ -917,9 +924,11 @@ def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
             aspect = image_prompt_agent.aspect_for(slide.slide_type)
 
             urls: list[str] = []
+            provider_reason = ""
             for _ in range(max(1, min(n, 6))):
                 img = generate_image(use_prompt, aspect_ratio=aspect, palette=design.get("palette"))
                 if img.meta.get("provider") == "placeholder":
+                    provider_reason = img.meta.get("reason") or provider_reason
                     continue
                 ext = _EXT.get(img.mime, "png")
                 key = f"generated/{project.id}/{kind}/{uuid.uuid4().hex}.{ext}"
@@ -934,7 +943,7 @@ def generate_slide_image_variants(slide_id: str, job_id: str | None = None,
 
             if not urls:
                 result = {"slide": serialize_slide(slide), "urls": [], "ok": False,
-                          "reason": "image_provider_unavailable"}
+                          "reason": provider_reason or "image_provider_unavailable"}
                 _set_job(session, job_id, status="succeeded", progress=100, result=result)
                 return result
 
