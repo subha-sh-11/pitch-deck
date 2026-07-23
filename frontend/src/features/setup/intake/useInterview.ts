@@ -40,7 +40,9 @@ import { useSetupWizard } from "../SetupWizardContext";
 export type ChatMessage =
   | { id: string; role: "assistant"; text: string }
   | { id: string; role: "user"; text: string }
-  | { id: string; role: "tool"; label: string; detail: string[] }
+  // kind lets the chat render purpose-built activity cards: "capture" (brief fields
+  // extracted → Review button) and "edit" (deck changes applied → Undo button).
+  | { id: string; role: "tool"; label: string; detail: string[]; kind?: "capture" | "edit" }
   | { id: string; role: "attachment"; name: string; previewUrl?: string; note?: string };
 
 export interface AskedQuestion {
@@ -262,6 +264,12 @@ export interface Interview {
   editField: (field: string, value: string) => void;
   build: () => Promise<void>;
   nextRound: () => void;
+  /** True while at least one agent deck-edit batch can be rolled back. */
+  canUndoAgent: boolean;
+  /** Roll back the most recent agent deck-edit batch (the Undo action on edit cards). */
+  undoAgentEdit: () => void;
+  /** Clear the visible conversation and start fresh. Brief, form, and deck are untouched. */
+  resetConversation: () => void;
 }
 
 export function useInterview(projectId: string): Interview {
@@ -304,7 +312,9 @@ export function useInterview(projectId: string): Interview {
   const history = useRef<InterviewHistoryTurn[]>([]);
   const brief = useRef<InterviewBrief | null>(null);
   // Chat undo: deck snapshots taken before each mutating agent batch (newest last, cap 10).
+  // Depth mirrored in state so the chat can show/hide the Undo action on edit cards.
   const agentUndoStack = useRef<{ slides: Slide[]; design: DesignDirection | null }[]>([]);
+  const [agentUndoDepth, setAgentUndoDepth] = useState(0);
   // Reference images waiting to be shown to the agent on the next turn (sent once, then cleared —
   // the agent folds what it saw into the brief, so the analysis persists as text).
   const pendingImages = useRef<InterviewImage[]>([]);
@@ -350,7 +360,20 @@ export function useInterview(projectId: string): Interview {
           return `${fieldLabel(k)}: ${val.length > 110 ? `${val.slice(0, 110)}…` : val}`;
         });
       brief.current = res.brief;
-      setSections(res.sections ?? []);
+      const nextSections = res.sections ?? [];
+      setSections((prev) => {
+        // A turn that just answers a question or confirms an edit returns no NEW sections —
+        // that must not silently withdraw questions still pending from an earlier round
+        // (e.g. the drafted-logline box vanishing after an unrelated chat turn). Keep prior
+        // sections whose field is still unanswered. `ready` deliberately does NOT clear them:
+        // it means "buildable", not "complete", and stays true for whole conversations — once
+        // a field fills (or is skipped, which DesignBrief filters), its section retires itself.
+        if (nextSections.length > 0) return nextSections;
+        const form = newForm as Record<string, unknown>;
+        return prev.filter(
+          (s) => !s.field || !String(form[s.field] ?? "").trim(),
+        );
+      });
       updateForm(newForm);
       setAssumptions(res.assumptions ?? []);
       setReady(res.ready);
@@ -360,7 +383,8 @@ export function useInterview(projectId: string): Interview {
           {
             id: nextId(),
             role: "tool",
-            label: `Captured ${captured.length} ${captured.length === 1 ? "detail" : "details"} — review on the right`,
+            kind: "capture",
+            label: `${captured.length} ${captured.length === 1 ? "detail" : "details"} captured`,
             detail: captured,
           },
         ]);
@@ -590,6 +614,7 @@ export function useInterview(projectId: string): Interview {
             design: designDirection ? structuredClone(designDirection) : null,
           });
           if (agentUndoStack.current.length > 10) agentUndoStack.current.shift();
+          setAgentUndoDepth(agentUndoStack.current.length);
         }
         const handlers: DeckActionHandlers = {
           slides: draftSlides,
@@ -605,6 +630,7 @@ export function useInterview(projectId: string): Interview {
           onSetFont: applyDisplayFont,
           onUndoLast: () => {
             const snap = agentUndoStack.current.pop();
+            setAgentUndoDepth(agentUndoStack.current.length);
             if (snap) restoreDeckSnapshot(snap.slides, snap.design);
           },
         };
@@ -622,6 +648,7 @@ export function useInterview(projectId: string): Interview {
             {
               id: toolId,
               role: "tool",
+              kind: "edit",
               label: `Editing the deck — ${labels.length} ${labels.length === 1 ? "step" : "steps"}`,
               detail: renderDetail(0, 0),
             },
@@ -945,6 +972,36 @@ export function useInterview(projectId: string): Interview {
     [updateForm],
   );
 
+  // Roll back the last agent edit batch from its activity card. Uses the same snapshot
+  // stack as the agent's own undo_last op, so the two stay consistent.
+  const undoAgentEdit = useCallback(() => {
+    const snap = agentUndoStack.current.pop();
+    setAgentUndoDepth(agentUndoStack.current.length);
+    if (!snap) return;
+    restoreDeckSnapshot(snap.slides, snap.design);
+    const text = "Rolled the deck back to before that change.";
+    setMessages((m) => [...m, { id: nextId(), role: "assistant", text }]);
+    history.current = [...history.current, { role: "assistant", text }];
+  }, [restoreDeckSnapshot]);
+
+  // "New chat" — clear the visible thread and the agent's conversational memory, but keep
+  // everything durable (brief, form fields, references, slides) exactly as it is.
+  const resetConversation = useCallback(() => {
+    if (thinkingRef.current) return;
+    history.current = [];
+    setQuestions([]);
+    setMessages([
+      {
+        id: nextId(),
+        role: "assistant",
+        text:
+          draftSlides.length > 0
+            ? "Fresh chat — your deck is untouched. Tell me what to change: copy, images, colours, layout, or whole slides."
+            : "Fresh chat — your brief is untouched. Describe your film, upload a script, or add visual references and I'll keep building the pitch brief.",
+      },
+    ]);
+  }, [draftSlides.length]);
+
   // Advance to the next round of questions without a chat message — the agent
   // re-analyses the (already updated) brief and asks the next 3-4 questions.
   const nextRound = useCallback(() => {
@@ -1003,5 +1060,8 @@ export function useInterview(projectId: string): Interview {
     editField,
     build,
     nextRound,
+    canUndoAgent: agentUndoDepth > 0,
+    undoAgentEdit,
+    resetConversation,
   };
 }

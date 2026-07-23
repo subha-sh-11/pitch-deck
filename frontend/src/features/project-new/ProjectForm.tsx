@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { SectionCard } from "@/components/layout/SectionCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { projectRoutes } from "@/lib/routes";
 import { createProject } from "@/lib/api";
 import type { PitchPurpose, ProjectType, StoryStage } from "@/types/project";
@@ -73,46 +74,28 @@ export function ProjectForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-8">
       <SectionCard title="Project Identity" description="Define what you're pitching and why.">
         <div className="grid gap-6 md:grid-cols-2">
-          <Input label="Project Title" name="title" placeholder="The Tank" required />
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text-primary">Project Type</label>
-            <select
-              name="projectType"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
-              defaultValue="feature_film"
-            >
-              {PROJECT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text-primary">Pitch Purpose</label>
-            <select
-              name="pitchPurpose"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
-              defaultValue="investor"
-            >
-              {PITCH_PURPOSES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text-primary">Story Stage</label>
-            <select
-              name="storyStage"
-              className="w-full rounded-xl border border-border-glass bg-surface-2 px-4 py-2.5 text-sm text-text-primary focus:border-accent-neon/50 focus:outline-none"
-              defaultValue="synopsis_ready"
-            >
-              {STORY_STAGES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
+          <Input label="Project Title" name="title" placeholder="The Tank" autoComplete="off" required />
+          <Select
+            label="Project Type"
+            name="projectType"
+            options={PROJECT_TYPES}
+            defaultValue="feature_film"
+          />
+          <Select
+            label="Pitch Purpose"
+            name="pitchPurpose"
+            options={PITCH_PURPOSES}
+            defaultValue="investor"
+          />
+          <Select
+            label="Story Stage"
+            name="storyStage"
+            options={STORY_STAGES}
+            defaultValue="synopsis_ready"
+          />
         </div>
       </SectionCard>
 
@@ -122,13 +105,15 @@ export function ProjectForm() {
             label="Language / Market"
             name="language"
             placeholder="e.g. Telugu, Hindi, Pan-India, Global Indie"
+            autoComplete="off"
           />
-          <Input label="Primary Genre" name="genre" placeholder="e.g. Crime Drama" />
+          <Input label="Primary Genre" name="genre" placeholder="e.g. Crime Drama" autoComplete="off" />
           <div className="md:col-span-2">
             <Input
               label="Genre Blend"
               name="genreBlend"
               placeholder="e.g. Crime + Comedy + Drama"
+              autoComplete="off"
             />
           </div>
         </div>

@@ -70,6 +70,11 @@ const CAPTURED_FIELDS: [field: string, label: string][] = [
   ["deliveryFormat", "Delivery format"],
 ];
 
+// Facts only the director can supply — auto-committing a pre-selected guess here would write
+// an invented claim ("Established director…") straight into the deck. The server also
+// force-deselects options on these fields; this is the client-side half of that guard.
+const FACT_FIELDS = new Set(["creativeTeam", "budget", "productionStatus", "distribution"]);
+
 export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: string }) {
   const form = iv.form as unknown as FormShape;
 
@@ -104,8 +109,8 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
 
   const handleReferenceUpload = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pptx")) {
-      setRefError("Only PowerPoint .pptx files are supported. Export your deck as .pptx and retry.");
+    if (!/\.(pptx|pdf)$/i.test(file.name)) {
+      setRefError("Only .pptx or PDF decks are supported. Export your deck (Canva → PDF, Slides/Keynote → .pptx) and retry.");
       return;
     }
     setRefBusy(true);
@@ -205,7 +210,7 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
   useEffect(() => {
     const init = buildSel(sections);
     for (const s of sections) {
-      if (!s.field || (form[s.field] ?? "").trim()) continue;
+      if (!s.field || FACT_FIELDS.has(s.field) || (form[s.field] ?? "").trim()) continue;
       const def =
         (init[s.id] ?? []).join(", ") || (s.kind === "textarea" ? String(s.value ?? "") : "");
       if (def) iv.editField(s.field, def);
@@ -334,13 +339,14 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
               Reference deck (optional)
             </h2>
             <p className="mt-1 text-xs text-text-muted">
-              Upload a PowerPoint <span className="text-text-primary">.pptx</span> and I&apos;ll match its
+              Upload a deck (<span className="text-text-primary">.pptx</span> or{" "}
+              <span className="text-text-primary">PDF</span>, e.g. a Canva export) and I&apos;ll match its
               slide structure and visual style when building your deck.
             </p>
             <input
               ref={refInput}
               type="file"
-              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               className="hidden"
               onChange={(e) => void handleReferenceUpload(e.target.files?.[0])}
             />
@@ -379,7 +385,7 @@ export function DesignBrief({ iv, projectId }: { iv: Interview; projectId: strin
                 disabled={refBusy}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border-glass bg-surface-2/40 px-4 py-3 text-sm text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary disabled:opacity-50"
               >
-                {refBusy ? "Reading deck…" : "↑ Upload reference .pptx"}
+                {refBusy ? "Reading deck…" : "↑ Upload reference deck (.pptx / PDF)"}
               </button>
             )}
             {refError && <p className="mt-2 text-xs text-red-400/90">{refError}</p>}

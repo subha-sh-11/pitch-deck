@@ -49,10 +49,12 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
       className={`relative h-full w-full overflow-hidden ${className}`}
       // Background/text follow the deck palette (via CSS vars) and fall back to the dark
       // cinematic default — so changing the theme's base/text colour recolours every slide.
+      // --slide-ground (reference profile: gradient/textured grounds) wins over the flat theme
+      // colour when the renderer sets it.
       style={
         {
           containerType: "size",
-          background: "var(--slide-bg, #0a0a0c)",
+          background: "var(--slide-ground, var(--slide-bg, #0a0a0c))",
           color: "var(--slide-text, #F5F1E8)",
         } as CSSProperties
       }
@@ -71,6 +73,14 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
       )}
       {resolvedImage && dim > 0 && (
         <div className="pointer-events-none absolute inset-0 z-0 bg-black" style={{ opacity: dim }} />
+      )}
+      {/* Reference profile scrim boost (imageTreatment.overlays): a uniform extra dim under any
+          text over imagery — 0 when no profile demands it, so nothing changes without one. */}
+      {resolvedImage && (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 bg-black"
+          style={{ opacity: "var(--slide-scrim-extra, 0)" }}
+        />
       )}
       <div
         className="pointer-events-none absolute inset-0 z-0 opacity-[0.035]"
@@ -104,7 +114,7 @@ export function SlideFrame({ children, className = "", imageUrl }: SlideFramePro
 export function SlideLabel({ children }: { children: ReactNode }) {
   return (
     <span
-      className="text-[10px] font-semibold uppercase tracking-[0.28em]"
+      className="text-[clamp(0.625rem,1cqw,0.8rem)] font-semibold uppercase tracking-[0.28em]"
       style={{ color: "var(--slide-accent, #22d3ee)" }}
     >
       {children}

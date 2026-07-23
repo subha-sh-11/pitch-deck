@@ -19,9 +19,14 @@ export function USPGridSlide({ content }: USPGridSlideProps) {
   return (
     <SlideFrame imageUrl={content.imageUrl}>
       <div
-        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : ""}`}
+        style={
+          content.imageUrl
+            ? undefined
+            : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+        }
       />
-      <div className="relative flex h-full flex-col p-[7%]">
+      <div className="relative flex h-full flex-col p-[calc(7%_+_var(--slide-pad-delta,0%))]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Unique Selling Points"} />
         </SlideLabel>

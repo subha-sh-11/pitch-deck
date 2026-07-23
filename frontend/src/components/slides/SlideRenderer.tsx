@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
-import type { DesignDirection } from "@/types/design";
+import type { DesignDirection, DesignMotif } from "@/types/design";
 import type { Slide, SlideContent } from "@/types/slide";
 import { fontFamilyOf } from "@/lib/fonts";
+import { deriveTreatment } from "@/lib/reference-profile";
 import { DEFAULT_SLIDE_APPEARANCE, getBackgroundCss } from "@/lib/slide-appearance";
 import { SlideEditProvider, type ImageActions } from "./editing/SlideEditContext";
 import { SlideMotifs } from "./shared/SlideMotifs";
+import { SlideTreatmentProvider } from "./shared/SlideTreatmentContext";
 import {
   CharacterSlide,
   ContactSlide,
@@ -71,6 +73,10 @@ export function SlideRenderer({
   const appearance = { ...DEFAULT_SLIDE_APPEARANCE, ...slide.appearance };
   const bgCss = getBackgroundCss(appearance.backgroundKey);
 
+  // Reference-derived surface language (design_direction.referenceProfile). Neutral when no
+  // profile exists, so decks without references render exactly as before.
+  const treatment = deriveTreatment(designDirection?.referenceProfile);
+
   // The AI palette drives accent/text on every slide; a user-customized appearance wins.
   const accentColor =
     slide.appearance?.accentColor ?? paletteAccent(designDirection) ?? appearance.accentColor;
@@ -132,6 +138,22 @@ export function SlideRenderer({
     }
   })();
 
+  // Profile-driven motifs join the design direction's own. A film-strip framing habit in the
+  // references becomes a real compositional frame on IMAGE slides (strong bands), not just a
+  // hero-slide decoration; grain/vignette read deck-wide like the reference's surface.
+  const gatedMotifs = HERO_MOTIF_SLIDES.has(slideType)
+    ? designDirection?.motifs
+    : designDirection?.motifs?.filter((m) => !LOUD_MOTIFS.has(m));
+  const profileMotifs: DesignMotif[] = [];
+  const strongFilmStrip = treatment.filmStrip && Boolean(content.imageUrl);
+  if (strongFilmStrip) profileMotifs.push("film_strip");
+  if (treatment.frameBorder && HERO_MOTIF_SLIDES.has(slideType)) profileMotifs.push("frame");
+  if (treatment.grainy) profileMotifs.push("grain");
+  if (treatment.vignette && content.imageUrl) profileMotifs.push("vignette");
+  const motifs = profileMotifs.length
+    ? Array.from(new Set([...(gatedMotifs ?? []), ...profileMotifs]))
+    : gatedMotifs;
+
   return (
     <div
       className={`relative aspect-video w-full overflow-hidden ${className}`}
@@ -142,6 +164,13 @@ export function SlideRenderer({
           "--slide-bg": bgColor,
           "--slide-text-muted": mutedColor,
           ...(fontDisplay ? { "--slide-font-display": fontDisplay } : {}),
+          // Reference-profile surface vars — consumed by SlideFrame + templates, all with
+          // no-op fallbacks so their absence changes nothing.
+          ...(treatment.groundCss ? { "--slide-ground": treatment.groundCss } : {}),
+          ...(treatment.padDeltaPct
+            ? { "--slide-pad-delta": `${treatment.padDeltaPct}%` }
+            : {}),
+          ...(treatment.scrimStrong ? { "--slide-scrim-extra": "0.16" } : {}),
         } as CSSProperties
       }
     >
@@ -159,24 +188,22 @@ export function SlideRenderer({
             : undefined
         }
       >
-        <SlideEditProvider
-          content={content}
-          editing={editing}
-          onContentChange={onContentChange}
-          imageActions={imageActions}
-        >
-          {template}
-        </SlideEditProvider>
+        <SlideTreatmentProvider value={treatment}>
+          <SlideEditProvider
+            content={content}
+            editing={editing}
+            onContentChange={onContentChange}
+            imageActions={imageActions}
+          >
+            {template}
+          </SlideEditProvider>
+        </SlideTreatmentProvider>
       </div>
-      {/* Graphic motifs from the design direction. Loud ones (film-strip, frame) are limited to
-          HERO slides so the deck varies; subtle grain/vignette stay deck-wide for texture. */}
-      <SlideMotifs
-        motifs={
-          HERO_MOTIF_SLIDES.has(slideType)
-            ? designDirection?.motifs
-            : designDirection?.motifs?.filter((m) => !LOUD_MOTIFS.has(m))
-        }
-      />
+      {/* Graphic motifs from the design direction (+ the reference profile's surface language).
+          Loud ones (film-strip, frame) are limited to HERO slides so the deck varies — except a
+          reference-mandated film strip, which frames every image slide. Subtle grain/vignette
+          stay deck-wide for texture. */}
+      <SlideMotifs motifs={motifs} strongFilmStrip={strongFilmStrip} />
       {/* Consistent slide nav per the deck spec: section label bottom-left, slide number
           bottom-right. Subtle, non-interactive, kept in the bottom margin so it never covers copy.
           Omitted on the cover and closing/contact slides. */}

@@ -1,6 +1,7 @@
 import type { SlideAppearance, SlideContent } from "@/types/slide";
 import { EditableText } from "../editing/EditableText";
 import { SlideFrame, SlideLabel } from "../shared/SlideFrame";
+import { useSlideTreatment } from "../shared/SlideTreatmentContext";
 import { SplitLayout } from "../shared/SplitLayout";
 
 interface GenericSlideProps {
@@ -10,9 +11,17 @@ interface GenericSlideProps {
   appearance?: SlideAppearance;
 }
 
+// Statement (divider-like) copy scales with the reference profile's typography.scale.
+const STATEMENT_SIZE = {
+  default: "text-[clamp(1.2rem,2.6cqw,2.1rem)]",
+  large: "text-[clamp(1.4rem,3.2cqw,2.6rem)]",
+  oversized: "text-[clamp(1.7rem,4cqw,3.2rem)]",
+} as const;
+
 export function GenericSlide({ content, layout, appearance }: GenericSlideProps) {
   const statement = layout === "statement";
   const comp = appearance?.composition;
+  const t = useSlideTreatment();
 
   // Two-column / framed composition (text-led slides): text in one half, image in the other.
   if (!statement && (comp === "split" || comp === "framed") && content.imageUrl) {
@@ -57,14 +66,17 @@ export function GenericSlide({ content, layout, appearance }: GenericSlideProps)
     return (
       <SlideFrame imageUrl={content.imageUrl}>
         <div
-          className={`absolute inset-0 ${
-            content.imageUrl ? "bg-black/70" : "bg-[var(--slide-bg,#0a0a0c)]"
-          }`}
+          className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : ""}`}
+          style={
+            content.imageUrl
+              ? undefined
+              : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+          }
         />
-        <div className="relative flex h-full flex-col items-center justify-center p-[10%] text-center">
+        <div className="relative flex h-full flex-col items-center justify-center p-[calc(10%_+_var(--slide-pad-delta,0%))] text-center">
           <SlideLabel>{content.heading}</SlideLabel>
           {content.body && (
-            <p className="mt-6 max-w-3xl font-display text-[clamp(1.2rem,2.6cqw,2.1rem)] font-medium leading-snug text-[var(--slide-text,#F5F1E8)]">
+            <p className={`mt-6 max-w-3xl font-display ${STATEMENT_SIZE[t.displayScale]} font-medium leading-snug text-[var(--slide-text,#F5F1E8)]`}>
               {content.body}
             </p>
           )}
@@ -80,11 +92,14 @@ export function GenericSlide({ content, layout, appearance }: GenericSlideProps)
   return (
     <SlideFrame imageUrl={content.imageUrl}>
       <div
-        className={`absolute inset-0 ${
-          content.imageUrl ? "bg-black/65" : "bg-[var(--slide-bg,#0a0a0c)]"
-        }`}
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/65" : ""}`}
+        style={
+          content.imageUrl
+            ? undefined
+            : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+        }
       />
-      <div className="relative flex h-full flex-col p-[7%]">
+      <div className="relative flex h-full flex-col p-[calc(7%_+_var(--slide-pad-delta,0%))]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading} />
         </SlideLabel>

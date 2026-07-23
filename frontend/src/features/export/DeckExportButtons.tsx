@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { OverlayMenuItem, OverlayPanel, useOverlay } from "@/components/ui/overlay";
 import {
   SLIDE_H,
   SLIDE_W,
@@ -14,17 +15,19 @@ import type { DesignDirection } from "@/types/design";
 import type { Slide } from "@/types/slide";
 
 /**
- * Inline "Export PDF / PPTX" controls for the presentation page. On click it mounts a hidden,
- * full-size (1280×720) copy of the deck, waits for its images, captures each slide, and builds the
- * file — so the download is full-resolution without a permanent second render of the deck.
+ * The single "Export" menu for the presentation editor (PDF / PPTX live inside it).
+ * On pick it mounts a hidden, full-size (1280×720) copy of the deck, waits for its
+ * images, captures each slide, and builds the file — so the download is
+ * full-resolution without a permanent second render of the deck.
  */
-export function DeckExportButtons({
+export function DeckExportMenu({
   slides,
   design,
 }: {
   slides: Slide[];
   design?: DesignDirection;
 }) {
+  const menu = useOverlay("menu");
   const [pending, setPending] = useState<null | "pdf" | "pptx">(null);
   const [status, setStatus] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
@@ -65,26 +68,39 @@ export function DeckExportButtons({
   }, [pending, slides]);
 
   const busy = Boolean(pending);
+  const pick = (kind: "pdf" | "pptx") => {
+    if (!busy) setPending(kind);
+  };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative">
       <button
         type="button"
-        onClick={() => !busy && setPending("pdf")}
+        {...menu.triggerProps}
         disabled={busy}
-        className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-black transition hover:bg-white/90 disabled:opacity-40"
+        aria-busy={busy}
+        title="Download the deck as PDF or PowerPoint"
+        className="flex h-10 items-center gap-1.5 rounded-lg border border-border-glass px-3.5 text-[13px] font-medium text-text-muted transition-colors hover:border-white/30 hover:text-text-primary disabled:opacity-50"
       >
-        Export PDF
+        {busy ? (
+          <>
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-neon border-t-transparent" />
+            {status || "Exporting…"}
+          </>
+        ) : (
+          <>
+            Export
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </>
+        )}
       </button>
-      <button
-        type="button"
-        onClick={() => !busy && setPending("pptx")}
-        disabled={busy}
-        className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-white/85 transition hover:bg-white/10 disabled:opacity-40"
-      >
-        Export PPTX
-      </button>
-      {status && <span className="text-[11px] text-white/55">{status}</span>}
+
+      <OverlayPanel state={menu} align="end" label="Export the deck" className="w-52 p-1">
+        <MenuItem onClick={() => pick("pdf")} label="PDF document" hint="Best for sharing & review" />
+        <MenuItem onClick={() => pick("pptx")} label="PowerPoint (.pptx)" hint="Editable slides" />
+      </OverlayPanel>
 
       {/* Hidden full-size render, mounted only while exporting. */}
       {pending && (
@@ -115,5 +131,14 @@ export function DeckExportButtons({
         </div>
       )}
     </div>
+  );
+}
+
+function MenuItem({ onClick, label, hint }: { onClick: () => void; label: string; hint: string }) {
+  return (
+    <OverlayMenuItem onSelect={onClick} className="flex flex-col items-start gap-0.5">
+      <span className="text-sm text-text-primary">{label}</span>
+      <span className="text-[11px] text-text-dim">{hint}</span>
+    </OverlayMenuItem>
   );
 }

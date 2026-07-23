@@ -90,6 +90,9 @@ interface SetupWizardContextValue extends SetupWizardState {
   /** Undo the last slide-editing change (Ctrl+Z). */
   undo: () => void;
   canUndo: boolean;
+  /** Re-apply the last undone change (Ctrl+Shift+Z). */
+  redo: () => void;
+  canRedo: boolean;
   /** Restore the whole deck (slides + optionally design) to a snapshot, PERSISTING the
    *  restore: content diffs are saved, agent-added slides deleted, agent-deleted slides
    *  re-created, order re-synced. Used by the chat agent's undo. */
@@ -113,8 +116,10 @@ interface SetupWizardContextValue extends SetupWizardState {
   ) => void | Promise<void>;
   duplicateDraftSlide: (index: number) => void;
   moveDraftSlide: (index: number, direction: "up" | "down") => void;
+  /** Move a slide from one position to another (filmstrip drag-and-drop). */
+  reorderDraftSlide: (from: number, to: number) => void;
   regenerateDraftSlide: (id: string, instruction?: string, referenceImage?: { mediaType: string; data: string }) => Promise<void>;
-  regenerateAllDraftSlides: () => Promise<void>;
+  regenerateAllDraftSlides: (opts?: { keepLook?: boolean }) => Promise<void>;
   /** Archived previous decks (newest first) — captured before every (re)build. */
   deckHistory: Slide[][];
   /** Deck-wide design changes that render instantly (the canvas reads designDirection). */
@@ -173,6 +178,11 @@ export function SetupWizardProvider({
   // A visual-system candidate the director picked before building — applied to the deck once
   // it's prepared so generation + rendering use it.
   const selectedDesignRef = useRef<DesignDirection | null>(null);
+  // Mirror of designDirection for callbacks that must both update AND persist the design.
+  const designDirectionRef = useRef<DesignDirection | null>(null);
+  useEffect(() => {
+    designDirectionRef.current = designDirection;
+  }, [designDirection]);
   // Mirror the latest state into a ref for callbacks/async work — in an effect, not during
   // render (refs must not be written while rendering).
   useEffect(() => {
@@ -181,10 +191,15 @@ export function SetupWizardProvider({
 
   // ── Undo stack (Ctrl+Z) — snapshots of draftSlides taken BEFORE each slide-editing mutation. ──
   const undoStackRef = useRef<Slide[][]>([]);
+  const redoStackRef = useRef<Slide[][]>([]);
   const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const pushUndo = useCallback(() => {
     const cur = stateRef.current.draftSlides;
     const stack = undoStackRef.current;
+    // A fresh edit invalidates anything that was undone before it.
+    redoStackRef.current = [];
+    setCanRedo(false);
     if (stack[stack.length - 1] === cur) return; // this exact state is already on top
     stack.push(cur);
     if (stack.length > 80) stack.shift();
@@ -193,7 +208,20 @@ export function SetupWizardProvider({
   const undo = useCallback(() => {
     const prev = undoStackRef.current.pop();
     setCanUndo(undoStackRef.current.length > 0);
-    if (prev) setState((s) => ({ ...s, draftSlides: prev }));
+    if (prev) {
+      redoStackRef.current.push(stateRef.current.draftSlides);
+      setCanRedo(true);
+      setState((s) => ({ ...s, draftSlides: prev }));
+    }
+  }, []);
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop();
+    setCanRedo(redoStackRef.current.length > 0);
+    if (next) {
+      undoStackRef.current.push(stateRef.current.draftSlides);
+      setCanUndo(true);
+      setState((s) => ({ ...s, draftSlides: next }));
+    }
   }, []);
 
   // ── Save tracking: every backend write goes through trackSave so the UI can
@@ -363,8 +391,10 @@ export function SetupWizardProvider({
     if (current.length) setDeckHistory((h) => [current, ...h].slice(0, 10));
   }, []);
 
-  /** Backend generation: design + content + images, then load the deck. */
-  const runGeneration = useCallback(async () => {
+  /** Backend generation: design + content + images, then load the deck.
+   *  `keepLook`: same-look rebuild — the backend reuses the current design system and
+   *  regenerates only copy, pacing and art. */
+  const runGeneration = useCallback(async (opts?: { keepLook?: boolean }) => {
     if (generatingRef.current) return;
     pushDeckHistory(); // archive the current deck before it's overwritten
     generatingRef.current = true;
@@ -375,6 +405,8 @@ export function SetupWizardProvider({
       const job = await generateDeck(
         projectId,
         stateRef.current.selectedTemplateId ?? undefined,
+        true,
+        opts?.keepLook ?? false,
       );
       const final = await pollJob(job, { onProgress: (j) => setGenerationProgress(j.progress) });
       if (final.status === "failed") throw new Error(final.error ?? "Generation failed");
@@ -440,10 +472,10 @@ export function SetupWizardProvider({
     }));
   }, [pushUndo]);
 
-  const regenerateAllDraftSlides = useCallback(async () => {
+  const regenerateAllDraftSlides = useCallback(async (opts?: { keepLook?: boolean }) => {
     pushDeckHistory(); // archive before clearing (runGeneration would see an empty deck otherwise)
     setState((prev) => ({ ...prev, draftSlides: [] }));
-    await runGeneration();
+    await runGeneration(opts);
   }, [runGeneration, pushDeckHistory]);
 
   const updateDraftSlide = useCallback(
@@ -696,6 +728,21 @@ export function SetupWizardProvider({
     [queueReorder],
   );
 
+  const reorderDraftSlide = useCallback(
+    (from: number, to: number) => {
+      setState((prev) => {
+        const len = prev.draftSlides.length;
+        if (from === to || from < 0 || from >= len || to < 0 || to >= len) return prev;
+        const next = [...prev.draftSlides];
+        const [item] = next.splice(from, 1);
+        next.splice(to, 0, item);
+        return { ...prev, draftSlides: renumberSlides(next) };
+      });
+      queueReorder();
+    },
+    [queueReorder],
+  );
+
   // Restore the deck to a snapshot (the chat agent's undo) — unlike the local Ctrl+Z stack,
   // this PERSISTS the restore so the backend matches what the user sees again.
   const restoreDeckSnapshot = useCallback(
@@ -766,19 +813,28 @@ export function SetupWizardProvider({
   );
 
   // Deck-wide design changes from the agent — update designDirection so every rendered slide
-  // (workshop canvas + thumbnails + preview) reflects them immediately.
+  // (workshop canvas + thumbnails + preview) reflects them immediately, AND persist to the
+  // deck like chooseDesign does. Without the persist these edits were client-state only: the
+  // chat said "recoloured" but a reload (or a server-side export) showed the old design.
+  const applyDesignChange = useCallback(
+    (patch: (d: DesignDirection) => DesignDirection) => {
+      const next = patch(designDirectionRef.current ?? FALLBACK_DESIGN);
+      setDesignDirection(next);
+      if (stateRef.current.draftSlides.some((s) => isBackendSlide(s.id))) {
+        void applyDeckDesign(projectId, next).catch(() => {});
+      }
+    },
+    [projectId],
+  );
   const applyAccent = useCallback((hex: string) => {
-    setDesignDirection((d) => withAccent(d ?? FALLBACK_DESIGN, hex));
-  }, []);
+    applyDesignChange((d) => withAccent(d, hex));
+  }, [applyDesignChange]);
   const applyThemePalette = useCallback((palette: ColorToken[]) => {
-    setDesignDirection((d) => ({ ...(d ?? FALLBACK_DESIGN), palette }));
-  }, []);
+    applyDesignChange((d) => ({ ...d, palette }));
+  }, [applyDesignChange]);
   const applyDisplayFont = useCallback((font: string) => {
-    setDesignDirection((d) => ({
-      ...(d ?? FALLBACK_DESIGN),
-      fonts: { display: font, body: d?.fonts?.body },
-    }));
-  }, []);
+    applyDesignChange((d) => ({ ...d, fonts: { display: font, body: d.fonts?.body } }));
+  }, [applyDesignChange]);
 
   // Director picked a visual-system candidate — preview it instantly, remember it for build, and
   // persist to the deck if one already exists.
@@ -823,6 +879,8 @@ export function SetupWizardProvider({
       updateDraftSlide,
       undo,
       canUndo,
+      redo,
+      canRedo,
       restoreDeckSnapshot,
       updateDraftSlideMeta,
       addSlideComment,
@@ -830,6 +888,7 @@ export function SetupWizardProvider({
       insertDraftSlideAfter,
       duplicateDraftSlide,
       moveDraftSlide,
+      reorderDraftSlide,
       regenerateDraftSlide,
       regenerateAllDraftSlides,
       deckHistory,
@@ -847,8 +906,9 @@ export function SetupWizardProvider({
       state, projectId, designDirection, generationProgress, generationError, saveStatus,
       updateForm, completeStep, isStepComplete, setSelectedTemplate, setExtractedSummary,
       setScriptUploaded, initDraftSlides, prepareDraftSlides, replaceDraftSlide,
-      updateDraftSlide, undo, canUndo, restoreDeckSnapshot, updateDraftSlideMeta,
+      updateDraftSlide, undo, canUndo, redo, canRedo, restoreDeckSnapshot, updateDraftSlideMeta,
       addSlideComment, deleteDraftSlide, insertDraftSlideAfter, duplicateDraftSlide, moveDraftSlide,
+      reorderDraftSlide,
       regenerateDraftSlide, regenerateAllDraftSlides, deckHistory, removedSlides, restoreSlide,
       applyAccent, applyThemePalette,
       applyDisplayFont, chooseDesign, setGenerationStatus, approveContent,

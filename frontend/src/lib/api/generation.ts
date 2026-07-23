@@ -16,10 +16,17 @@ export interface GenerationJob {
   mode?: string;
 }
 
-export const generateDeck = (projectId: string, templateId?: string, withImages = true) => {
+export const generateDeck = (
+  projectId: string,
+  templateId?: string,
+  withImages = true,
+  /** Same-look rebuild: keep the current design system, regenerate copy/pacing/art only. */
+  keepLook = false,
+) => {
   const params = new URLSearchParams();
   if (templateId) params.set("template_id", templateId);
   params.set("with_images", String(withImages));
+  if (keepLook) params.set("keep_design", "true");
   return apiFetch<GenerationJob>(`/generate/${projectId}/deck?${params.toString()}`, {
     method: "POST",
   });
@@ -34,9 +41,15 @@ export const analyzeStory = (projectId: string) =>
   apiFetch<StoryAnalysis>(`/generate/${projectId}/analyze`, { method: "POST" });
 
 /** Workshop step 1: analysis + design + outline → empty slide shells (no batch generation). */
-export const prepareDeck = (projectId: string, templateId?: string) => {
+export const prepareDeck = (
+  projectId: string,
+  templateId?: string,
+  /** Same-look rebuild: keep the current design system, regenerate copy/pacing/art only. */
+  keepLook = false,
+) => {
   const params = new URLSearchParams();
   if (templateId) params.set("template_id", templateId);
+  if (keepLook) params.set("keep_design", "true");
   const qs = params.toString();
   return apiFetch<GenerationJob>(`/generate/${projectId}/deck/prepare${qs ? `?${qs}` : ""}`, {
     method: "POST",

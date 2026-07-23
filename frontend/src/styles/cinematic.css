@@ -49,6 +49,69 @@
   --font-sans: var(--font-geist-sans);
 }
 
+/* ── Z-index scale (workspace chrome) ──────────────────────────────────────
+   0  base content
+   10 sticky panel headers + floating canvas controls (zoom, resize handles)
+   40 dropdowns / menus / popovers (portaled to <body> — components/ui/overlay.tsx)
+   50 modal backdrop (e.g. the removed-slides bin)
+   60 modal dialog content
+   70 toasts
+   Slide-INTERNAL stacking (inside SlideRenderer) is its own context and may
+   use its own values. Never reach for arbitrary escalations like z-[999]. */
+
+/* ── Interactive control feedback ──────────────────────────────────────────
+   Every button gets consistent, short motion: colours in ~140ms, press in
+   ~90ms. Uses the standalone `scale` property so Tailwind's translate/scale
+   utilities (which also use standalone properties) still compose and any
+   `active:scale-*` utility class wins over this element-level default. */
+button {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease,
+    scale 90ms ease,
+    transform 90ms ease;
+}
+button:active:not(:disabled) {
+  scale: 0.98;
+}
+button:focus-visible,
+[role="separator"]:focus-visible {
+  outline: 2px solid var(--accent-neon);
+  outline-offset: 2px;
+}
+
+/* Menus and popovers open from their origin — short, predictable, no bounce. */
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+.animate-dropdown-in {
+  transform-origin: top;
+  animation: dropdown-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Honour the OS-level reduced-motion preference across the whole app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .glass-panel {
   background: rgba(24, 24, 27, 0.65);
   border: 1px solid var(--border-glass);

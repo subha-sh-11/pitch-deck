@@ -18,9 +18,12 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
   if (acts.length > 0) {
     return (
       <SlideFrame>
-        <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }}
+        />
         <div className="relative grid h-full grid-cols-[1.15fr_0.85fr]">
-          <div className="flex flex-col justify-center p-[7%] pr-[5%]">
+          <div className="flex flex-col justify-center p-[calc(7%_+_var(--slide-pad-delta,0%))] pr-[5%]">
             <SlideLabel>
               <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
             </SlideLabel>
@@ -82,9 +85,12 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
     /* ── Editorial full-width columns — for image-less or very long synopses ── */
     return (
       <SlideFrame>
-        <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }}
+        />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,211,238,0.05),transparent_50%)]" />
-        <div className="relative flex h-full flex-col justify-center p-[8%]">
+        <div className="relative flex h-full flex-col justify-center p-[calc(8%_+_var(--slide-pad-delta,0%))]">
           <SlideLabel>
             <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
           </SlideLabel>
@@ -110,9 +116,12 @@ export function SynopsisSlide({ content, layout }: SynopsisSlideProps) {
   /* ── Split: text left, imagery right (no act structure available) ── */
   return (
     <SlideFrame>
-      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+      <div
+        className="absolute inset-0"
+        style={{ background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }}
+      />
       <div className="relative grid h-full grid-cols-2 gap-0">
-        <div className="flex flex-col justify-center p-[8%] pr-[6%]">
+        <div className="flex flex-col justify-center p-[calc(8%_+_var(--slide-pad-delta,0%))] pr-[6%]">
           <SlideLabel>
             <EditableText k="heading" as="span" value={content.heading || "Synopsis"} />
           </SlideLabel>

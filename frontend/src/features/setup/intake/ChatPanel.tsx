@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { projectRoutes } from "@/lib/routes";
 import type { ChatMessage, Interview } from "./useInterview";
 import { useWorkshopOptional } from "./workshop";
 
@@ -12,7 +10,17 @@ import { useWorkshopOptional } from "./workshop";
 // Scripts/docs get parsed, images get staged, and ANY other file is attached as-is.
 const ALL_ACCEPT = "*/*";
 
-export function ChatPanel({ iv }: { iv: Interview }) {
+export function ChatPanel({
+  iv,
+  onCollapse,
+  onReviewBrief,
+}: {
+  iv: Interview;
+  /** Collapse the assistant rail (the panel-header button). */
+  onCollapse?: () => void;
+  /** Jump to the Brief tab — the Review action on captured-detail cards. */
+  onReviewBrief?: () => void;
+}) {
   const [draft, setDraft] = useState("");
   // Images pasted/dropped/picked but NOT sent — held as chips IN the composer (like Claude),
   // so the director can add a prompt and send both together. They never touch the chat until Send.
@@ -107,30 +115,41 @@ export function ChatPanel({ iv }: { iv: Interview }) {
   const pending = [...iv.questions].reverse().find((q) => q.answer === undefined);
   const options = pending?.options ?? [];
   const isCards = pending?.inputType === "cards";
+  // The Undo action only makes sense on the most recent edit card — earlier
+  // batches are buried under later ones on the snapshot stack.
+  const lastEditId = [...iv.messages].reverse().find((m) => m.role === "tool" && m.kind === "edit")?.id;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-1/40">
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border-glass px-3 py-3">
-        <Link
-          href={projectRoutes.dashboard()}
-          title="Back to dashboard"
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-dim hover:bg-surface-2 hover:text-text-primary"
-        >
-          <BackIcon />
-        </Link>
-        <PaletteIcon />
-        <span className="flex-1 truncate text-sm font-medium text-text-primary">{iv.projectName}</span>
-        <Link
-          href={projectRoutes.newProject()}
-          title="Create a new pitch deck"
-          className="flex shrink-0 items-center gap-1 rounded-lg border border-border-glass px-2 py-1 text-xs text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary"
+      {/* Panel header — assistant-scoped only; app navigation lives in the global header. */}
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-glass px-3">
+        <SparkIcon className="shrink-0 text-accent-neon" />
+        <span className="flex-1 truncate text-sm font-medium text-text-primary">AI Assistant</span>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("Start a new chat? The conversation clears — your brief and deck stay as they are.")) {
+              iv.resetConversation();
+            }
+          }}
+          title="New chat — clears the conversation, keeps your brief and deck"
+          className="flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-text-dim transition-colors hover:bg-surface-2 hover:text-text-primary"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          New
-        </Link>
+          New chat
+        </button>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            title="Collapse the assistant (Ctrl+\)"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-dim transition-colors hover:bg-surface-2 hover:text-text-primary"
+          >
+            <CollapseIcon />
+          </button>
+        )}
       </div>
 
       {iv.offline && (
@@ -142,12 +161,25 @@ export function ChatPanel({ iv }: { iv: Interview }) {
       {/* Message log */}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-5">
         {iv.messages.map((m) => (
-          <MessageView key={m.id} message={m} />
+          <MessageView
+            key={m.id}
+            message={m}
+            onReviewBrief={onReviewBrief}
+            onUndo={
+              m.role === "tool" && m.id === lastEditId && iv.canUndoAgent && !iv.thinking
+                ? iv.undoAgentEdit
+                : undefined
+            }
+          />
         ))}
-        {/* Start state: labelled context options (only before the conversation gets going). */}
-        {iv.messages.length <= 1 && options.length === 0 && !iv.thinking && (
-          <ContextOptions onDescribe={() => textareaRef.current?.focus()} />
-        )}
+        {/* Start state (only before the conversation gets going): before a deck exists,
+            the single "describe your idea" entry point; after, slide-scoped prompts. */}
+        {iv.messages.length <= 1 && options.length === 0 && !iv.thinking &&
+          (iv.draftSlides.length > 0 ? (
+            <SlidePrompts onPick={(p) => iv.sendText(p, selectedSlideId)} />
+          ) : (
+            <ContextOptions onDescribe={() => textareaRef.current?.focus()} />
+          ))}
         {iv.thinking && <Thinking />}
       </div>
 
@@ -282,6 +314,37 @@ export function ChatPanel({ iv }: { iv: Interview }) {
   );
 }
 
+// Once a deck exists the "describe your idea" card is stale — offer starting points
+// scoped to the slide the director is looking at instead.
+const SLIDE_PROMPTS = [
+  "Simplify the text on this slide",
+  "Swap this slide's image",
+  "Try another layout for this slide",
+  "Make this slide more cinematic",
+];
+
+function SlidePrompts({ onPick }: { onPick: (prompt: string) => void }) {
+  return (
+    <div className="animate-intake-fade-in pt-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-dim">
+        Ask about this slide
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {SLIDE_PROMPTS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onPick(p)}
+            className="rounded-full border border-border-glass bg-surface-2/60 px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary"
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ContextOptions({ onDescribe }: { onDescribe: () => void }) {
   return (
     <div className="animate-intake-fade-in pt-3">
@@ -322,12 +385,36 @@ function PencilIcon() {
   );
 }
 
-function MessageView({ message }: { message: ChatMessage }) {
+function MessageView({
+  message,
+  onReviewBrief,
+  onUndo,
+}: {
+  message: ChatMessage;
+  onReviewBrief?: () => void;
+  onUndo?: () => void;
+}) {
   if (message.role === "user") return <UserBubble text={message.text} />;
   if (message.role === "assistant") return <Assistant text={message.text} />;
   if (message.role === "attachment")
     return <AttachmentCard name={message.name} previewUrl={message.previewUrl} note={message.note} />;
-  return <ToolRow label={message.label} detail={message.detail} />;
+  // Activity cards. `kind` is set on new messages; the label checks keep
+  // conversations saved before `kind` existed rendering correctly.
+  const isCapture = message.kind === "capture" || message.label.startsWith("Captured");
+  return (
+    <ToolRow
+      label={message.label}
+      detail={message.detail}
+      tone={isCapture ? "check" : "spark"}
+      action={
+        isCapture && onReviewBrief
+          ? { label: "Review", onClick: onReviewBrief, title: "Open the brief to check what was captured" }
+          : onUndo
+            ? { label: "Undo", onClick: onUndo, title: "Roll the deck back to before this change" }
+            : undefined
+      }
+    />
+  );
 }
 
 function AttachmentCard({ name, previewUrl, note }: { name: string; previewUrl?: string; note?: string }) {
@@ -396,18 +483,41 @@ function Assistant({ text }: { text: string }) {
   );
 }
 
-function ToolRow({ label, detail }: { label: string; detail: string[] }) {
+function ToolRow({
+  label,
+  detail,
+  tone = "spark",
+  action,
+}: {
+  label: string;
+  detail: string[];
+  tone?: "spark" | "check";
+  action?: { label: string; onClick: () => void; title?: string };
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="overflow-hidden rounded-lg border border-border-glass bg-surface-2/40">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-2/70"
-      >
-        <SparkIcon className="text-accent-neon" />
-        <span className="flex-1">{label}</span>
-        <ChevronDown className={`text-text-dim transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+      <div className="flex w-full items-center gap-2 py-1.5 pl-3 pr-2">
+        {tone === "check" ? <CheckCircleIcon className="shrink-0 text-emerald-400" /> : <SparkIcon className="shrink-0 text-accent-neon" />}
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left text-sm text-text-muted transition-colors hover:text-text-primary"
+          title={open ? "Hide details" : "Show details"}
+        >
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <ChevronDown className={`shrink-0 text-text-dim transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            title={action.title}
+            className="shrink-0 rounded-md border border-border-glass px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:border-accent-neon/40 hover:text-text-primary"
+          >
+            {action.label}
+          </button>
+        )}
+      </div>
       {open && (
         <div className="space-y-1 border-t border-border-glass px-3 py-2 pl-9 font-mono text-xs text-text-dim">
           {detail.map((d) => (
@@ -455,10 +565,21 @@ function IconButton({ title, onClick, children, glow = false }: {
   );
 }
 
-function BackIcon() {
+function CollapseIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5M12 19l-7-7 7-7" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="M16 9l-3 3 3 3" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
     </svg>
   );
 }
@@ -475,18 +596,6 @@ function SparkIcon({ className = "" }: { className?: string }) {
   return (
     <svg className={className} width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z" />
-    </svg>
-  );
-}
-
-function PaletteIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-text-dim">
-      <circle cx="13.5" cy="6.5" r="1.2" fill="currentColor" />
-      <circle cx="17.5" cy="10.5" r="1.2" fill="currentColor" />
-      <circle cx="8.5" cy="7.5" r="1.2" fill="currentColor" />
-      <circle cx="6.5" cy="12.5" r="1.2" fill="currentColor" />
-      <path d="M12 22a10 10 0 1 1 0-20c5.5 0 10 4 10 9 0 3-2.5 4-4 4h-2a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 22z" />
     </svg>
   );
 }
