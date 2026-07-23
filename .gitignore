@@ -15,3 +15,4 @@ docs/
 *.pdf
 # local-only cloud sync credentials
 scripts/cloud.env
+.claude/settings.local.json
