@@ -195,6 +195,19 @@ CASES: list[dict[str, Any]] = [
                    expect_field_contains("edit_slide", "characters", "Meenakshi")],
     },
     {
+        # The model trusted chat history ("Done — recoloured") over deck state and replied
+        # "already done as per your previous instruction" with ZERO actions — while the deck
+        # still showed the old accent. History is not state: re-asked edits must re-emit.
+        "name": "history-claim-is-not-state",
+        "instruction": "change the accent colour to a deep blood red across the whole deck",
+        "history": [
+            {"role": "user",
+             "text": "change the accent colour to a deep blood red across the whole deck"},
+            {"role": "assistant", "text": "Done — recoloured the accent."},
+        ],
+        "checks": [expect_op("set_accent")],
+    },
+    {
         # "undo that" must call undo_last — never a manual re-edit reconstruction.
         "name": "undo-calls-undo-last",
         "instruction": "undo that",

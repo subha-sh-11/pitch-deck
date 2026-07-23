@@ -436,18 +436,26 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
     os.environ.setdefault("FAL_KEY", settings.fal_key)
     if reference_images:
         # Reference supplied → image-to-image so the director's reference conditions the result
-        # (palette, grade, mood). fal accepts a data-URI for image_url.
+        # (palette, grade, mood). fal accepts a data-URI for image_url. FLUX `strength` is denoise
+        # strength (1.0 = fully remade from the prompt): verified empirically that ≤0.7 returns a
+        # near-copy of the reference — layout and garbled text included — so clamp to ≥0.85 to
+        # keep reference influence LOW: every slide stays a unique, text-free frame that carries
+        # the reference's grade. Seed still varies per slide upstream.
         ref = reference_images[0]
         image_url = f"data:{ref.get('mediaType', 'image/jpeg')};base64,{ref['data']}"
         model = settings.fal_image_to_image_model
+        strength = max(0.85, min(1.0, settings.fal_image_strength))
+        _log.info("fal img2img: conditioning on reference at low influence "
+                  "(model=%s strength=%.2f)", model, strength)
         args: dict[str, Any] = {
             "prompt": prompt,
             "image_url": image_url,
-            "strength": settings.fal_image_strength,
+            "strength": strength,
             "image_size": {"width": w, "height": h},
         }
     else:
         model = settings.fal_image_model
+        strength = None
         args = {"prompt": prompt, "image_size": {"width": w, "height": h}}
     # FLUX-family endpoints are guidance-distilled and reject/ignore negative prompts;
     # SD/SDXL-style fal endpoints honour them.
@@ -458,8 +466,11 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
     result = _fal_run(model, args)
     url = result["images"][0]["url"]
     data, mime = _fetch_bytes(url)
-    return ImageResult(data, mime, {"provider": "fal", "model": model, "prompt": prompt,
-                                    "seed": seed, "referenced": bool(reference_images)})
+    meta: dict[str, Any] = {"provider": "fal", "model": model, "prompt": prompt,
+                            "seed": seed, "referenced": bool(reference_images)}
+    if strength is not None:
+        meta["strength"] = strength
+    return ImageResult(data, mime, meta)
 
 
 def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> ImageResult:

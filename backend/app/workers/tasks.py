@@ -7,8 +7,10 @@ from app.workers.celery_app import celery_app
 
 @celery_app.task(name="generate_deck")
 def generate_deck_task(project_id: str, template_id: str | None = None,
-                       job_id: str | None = None, with_images: bool = True):
-    return generation_service.run_full_deck(project_id, template_id, job_id, with_images)
+                       job_id: str | None = None, with_images: bool = True,
+                       keep_design: bool = False):
+    return generation_service.run_full_deck(project_id, template_id, job_id, with_images,
+                                            keep_design)
 
 
 @celery_app.task(name="generate_design")

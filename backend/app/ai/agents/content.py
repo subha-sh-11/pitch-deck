@@ -320,6 +320,17 @@ def compose_prompt(slide_type: str, title: str, purpose: str, intake: dict,
     visual_style = design.get("visualStyle")
     if isinstance(visual_style, list) and visual_style:
         lines.append("VISUAL STYLE: " + ", ".join(str(v) for v in visual_style[:4]))
+    # Reference-derived copy density: when the director's references are minimal/image-led,
+    # the writing must match (a text-heavy slide would break the promised visual language).
+    profile = design.get("referenceProfile")
+    if isinstance(profile, dict):
+        text_per_slide = str((profile.get("layout") or {}).get("textPerSlide") or "").lower()
+        if "very little" in text_per_slide:
+            lines.append("COPY DENSITY (from the director's references): VERY SPARSE — a few "
+                         "words to one short line per element; the imagery carries the slide.")
+        elif "short" in text_per_slide:
+            lines.append("COPY DENSITY (from the director's references): SHORT blocks — 1-2 "
+                         "tight sentences per element, never a paragraph.")
 
     relevant = _SLIDE_FIELDS.get(slide_type, ["logline", "synopsis"])
     lines += ["", "THIS SLIDE IS BUILT FROM (use these exact details; do not pull in other slides' "

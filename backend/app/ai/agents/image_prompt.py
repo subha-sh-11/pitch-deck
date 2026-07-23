@@ -215,6 +215,19 @@ def _facet_for(slide_type: str) -> str:
     return _FACET_BY_TYPE.get(slide_type, _FACET_BY_TYPE["generic"])
 
 
+def _reference_treatment(design: dict | None) -> str:
+    """The reference-derived IMAGE TREATMENT (design["referenceProfile"]["imageTreatment"]) as a
+    prompt fragment — grading, cropping bias, texture — so every generated frame carries the
+    grade/grain/crop language of the director's references even in pure text-to-image mode
+    (where the reference pixels themselves are not attached). Empty when no profile exists."""
+    profile = (design or {}).get("referenceProfile")
+    if not isinstance(profile, dict):
+        return ""
+    t = profile.get("imageTreatment") or {}
+    bits = [str(t.get(k) or "").strip() for k in ("grading", "cropping", "texture")]
+    return ", ".join(b for b in bits if b)
+
+
 def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
                           has_references: bool = False) -> str:
     """Register-anchored fallback: assemble a prompt from the intake + design (no LLM).
@@ -243,9 +256,15 @@ def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
     # Lighting + grade are LIGHTING-NEUTRAL in the framing below and set here from the theme,
     # so a light deck yields bright, airy images and a dark deck yields cinematic low-key ones.
     # With references attached, defer entirely to them rather than forcing a direction.
+    treatment = _reference_treatment(design)
     if has_references:
         lighting = "lighting, colour temperature and mood matching the supplied reference images"
-        grade = "colour grade and grain matching the reference images"
+        grade = treatment or "colour grade and grain matching the reference images"
+    elif treatment:
+        # No reference pixels attached, but the analysed profile tells us the treatment —
+        # bake the references' grade/crop/texture language straight into the prompt.
+        lighting = treatment
+        grade = "consistent with the film's reference-derived grade"
     elif light:
         lighting = ("bright high-key natural daylight, soft even illumination, airy and luminous, "
                     "light clean background, fresh and vibrant")
@@ -447,6 +466,10 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
             "grain and graphic treatment. Do NOT impose a dark or low-key look if the references "
             "are bright or warm."
         )
+    elif _reference_treatment(design):
+        theme = ("MATCH THE FILM'S REFERENCE-DERIVED TREATMENT: "
+                 + _reference_treatment(design)
+                 + " — every frame in the deck must read as graded from the same references")
     elif _is_light_theme(design):
         theme = "LIGHT — bright, high-key, airy, luminous, clean (NOT dark or moody)"
     else:
@@ -562,8 +585,11 @@ def build_item_prompt(item: dict, intake: dict, design: dict | None = None,
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
     cue = _genre_cue(title)
 
+    treatment = _reference_treatment(design)
     if has_references:
-        grade = "colour and grade matching the supplied reference images"
+        grade = treatment or "colour and grade matching the supplied reference images"
+    elif treatment:
+        grade = treatment
     elif _is_light_theme(design):
         grade = "bright high-key natural light, airy"
     else:
@@ -599,8 +625,11 @@ def build_character_prompt(char: dict, intake: dict, design: dict | None = None,
     tone = _g(intake, "tone")
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
+    treatment = _reference_treatment(design)
     if has_references:
-        lighting = "lighting and grade matching the supplied reference images"
+        lighting = treatment or "lighting and grade matching the supplied reference images"
+    elif treatment:
+        lighting = f"portrait light and grade per the film's references: {treatment}"
     elif _is_light_theme(design):
         lighting = "bright high-key portrait light, soft and clean"
     else:
@@ -634,8 +663,11 @@ def build_mood_prompt(block: dict, intake: dict, design: dict | None = None,
     mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
+    treatment = _reference_treatment(design)
     if has_references:
-        lighting = "lighting, colour and grade matching the supplied reference images"
+        lighting = treatment or "lighting, colour and grade matching the supplied reference images"
+    elif treatment:
+        lighting = treatment
     elif _is_light_theme(design):
         lighting = "bright high-key natural light, airy"
     else:

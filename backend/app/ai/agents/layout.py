@@ -58,6 +58,35 @@ def _text_len(content: dict | None, key: str = "body") -> int:
     return len(val) if isinstance(val, str) else 0
 
 
+def _profile_traits(design: dict | None) -> dict:
+    """Layout traits from the reference-derived visual profile (design["referenceProfile"]).
+
+    The profile's structured layout fields (density / whitespace / imageToText / composition)
+    are a much stronger signal than adjective-sniffing the design language, so when a director
+    shared references these traits STEER the deck's pacing: quiet references → quiet deck,
+    image-led references → full-bleed-leaning compositions, dense editorial references → denser
+    split/framed compositions. Empty dict when no profile exists (no references shared).
+    """
+    profile = (design or {}).get("referenceProfile")
+    if not isinstance(profile, dict):
+        return {}
+    layout = profile.get("layout") or {}
+    comp = str(profile.get("composition") or "").lower()
+    whitespace = str(layout.get("whitespace") or "").lower()
+    density = str(layout.get("density") or "").lower()
+    image_to_text = str(layout.get("imageToText") or "").lower()
+    traits: dict = {}
+    if whitespace == "high" or density == "minimal":
+        traits["quiet"] = True
+    if density == "dense" or whitespace == "low":
+        traits["loud"] = True
+    if "image-led" in image_to_text or "full-bleed" in comp or "full bleed" in comp:
+        traits["image_led"] = True
+    if "collage" in comp or "grid" in comp:
+        traits["collage"] = True
+    return traits
+
+
 def run(slide_type: str, design: dict | None = None,
         content: dict | None = None, has_image: bool | None = None,
         rng: random.Random | None = None) -> dict:
@@ -173,7 +202,8 @@ def plan_appearances(slide_types: list[str], design: dict | None = None,
             str((design or {}).get("layoutStyle") or ""),
             " ".join(vs0) if isinstance(vs0, list) else str(vs0 or ""),
         ]).lower()
-        quiet0 = any(w in mood0 for w in ("minimal", "negative space", "restrained", "quiet", "elegant"))
+        quiet0 = _profile_traits(design).get("quiet") or any(
+            w in mood0 for w in ("minimal", "negative space", "restrained", "quiet", "elegant"))
         text_variant = "minimal" if quiet0 else "standard"
         hero_variant0 = "standard" if quiet0 else "bold"
         comp0 = rng.choice(["split", "framed"])
@@ -194,14 +224,25 @@ def plan_appearances(slide_types: list[str], design: dict | None = None,
         " ".join(vs) if isinstance(vs, list) else str(vs or ""),
         str((design or {}).get("mood") or ""),
     ]).lower()
-    quiet = any(w in mood for w in ("minimal", "negative space", "restrained", "quiet", "elegant"))
-    loud = any(w in mood for w in ("bold", "poster", "maximal", "vibrant", "mass", "high-energy"))
+    # Reference-derived traits win over adjective-sniffing: when the director shared
+    # references, their analysed layout grammar sets the deck's personality.
+    traits = _profile_traits(design)
+    quiet = traits.get("quiet") or any(
+        w in mood for w in ("minimal", "negative space", "restrained", "quiet", "elegant"))
+    loud = (traits.get("loud") and not traits.get("quiet")) or any(
+        w in mood for w in ("bold", "poster", "maximal", "vibrant", "mass", "high-energy"))
 
     # Deck-level personality — per-film, seeded.
     base_text_variant = "minimal" if quiet else rng.choice(["standard", "minimal", "cinematic"])
     hero_variant = "bold" if loud else rng.choice(["bold", "cinematic"])
     prefer, alt = rng.choice([("split", "framed"), ("framed", "split")])
     side = rng.choice(["left", "right"])
+    # Image-led references (full-bleed hero compositions) → the deck leans full-bleed:
+    # cinematic text pacing and a much higher chance of full-bleed punch beats.
+    image_led = bool(traits.get("image_led"))
+    punch_chance = 0.4 if image_led else 0.18
+    if image_led and base_text_variant == "standard":
+        base_text_variant = "cinematic"
 
     plan: list[dict] = []
     last_comp: str | None = None
@@ -228,8 +269,9 @@ def plan_appearances(slide_types: list[str], design: dict | None = None,
         appearance: dict = {"styleVariant": variant}
         if slide_type in _COMPOSABLE:
             comp = prefer if last_comp != prefer else alt
-            # Occasional full-bleed punch beat (not on dense business slides, never twice in a row).
-            if slide_type not in ("budget", "team") and last_comp != "full" and rng.random() < 0.18:
+            # Occasional full-bleed punch beat (not on dense business slides, never twice in a
+            # row) — much more frequent when the references are image-led/full-bleed.
+            if slide_type not in ("budget", "team") and last_comp != "full" and rng.random() < punch_chance:
                 comp = "full"
             appearance["composition"] = comp
             if comp != "full":

@@ -21,6 +21,7 @@ from app.ai.agents import image_prompt as image_prompt_agent
 from app.ai.agents import layout as layout_agent
 from app.ai.agents import outline as outline_agent
 from app.ai.agents import quality_review as quality_review_agent
+from app.ai.agents import reference_analysis as reference_analysis_agent
 from app.ai.agents import story_analysis as story_agent
 from app.ai import pptx_ref
 from app.ai.images import generate_image
@@ -94,22 +95,29 @@ def _project_dict(project: Project) -> dict:
     }
 
 
-def _load_reference_images(session, project_id, limit: int = 4) -> list[dict]:
-    """The director's visual-direction references as [{"mediaType", "data": <base64>}].
+def _load_references_full(session, project_id, limit: int = 6) -> tuple[list[dict], list[str], list[str]]:
+    """The director's visual-direction references → (images, sha256 hashes, names).
 
     These are the images uploaded in the intake 'Choose Your Visual Direction' gallery, persisted
     as `upload_ref` assets tagged ``source=visual_direction`` (slide-replacement uploads share the
-    `upload_ref` kind but a different source, so they're excluded). They condition slide image
-    generation so the output actually resembles what the director referenced.
+    `upload_ref` kind but a different source, so they're excluded). Hashes feed the visual-profile
+    fingerprint (recompute only when the reference set changes); names label the profile's
+    per-reference roles.
     """
     rows = session.execute(
         select(Asset).where(Asset.project_id == project_id, Asset.kind == "upload_ref")
     ).scalars().all()
+    candidates = [a for a in rows
+                  if (a.generation_meta or {}).get("source") == "visual_direction"]
+    # When capping, images the director shared directly outrank reference-deck page
+    # renders / extracted pictures (named 'refdeck-*'). Stable sort keeps upload order.
+    candidates.sort(
+        key=lambda a: str((a.generation_meta or {}).get("name") or "").startswith("refdeck-"))
     refs: list[dict] = []
-    for asset in rows:
+    hashes: list[str] = []
+    names: list[str] = []
+    for asset in candidates:
         meta = asset.generation_meta or {}
-        if meta.get("source") != "visual_direction":
-            continue
         data = load_asset_bytes(asset.storage_key, meta.get("stored_in_s3"))
         if not data:
             continue
@@ -117,9 +125,47 @@ def _load_reference_images(session, project_id, limit: int = 4) -> list[dict]:
             "mediaType": asset.mime or "image/jpeg",
             "data": base64.b64encode(data).decode("ascii"),
         })
+        hashes.append(meta.get("sha256") or "")
+        names.append(meta.get("name") or f"reference-{len(refs)}")
         if len(refs) >= limit:
             break
-    return refs
+    return refs, hashes, names
+
+
+def _load_reference_images(session, project_id, limit: int = 4) -> list[dict]:
+    """Back-compat wrapper: just the image payloads (see _load_references_full)."""
+    return _load_references_full(session, project_id, limit)[0]
+
+
+def _ensure_visual_profile(session, project, intake: dict,
+                           references: list[dict], ref_hashes: list[str],
+                           ref_names: list[str]) -> dict | None:
+    """The reference-analysis stage: make sure the project carries a CURRENT visual profile.
+
+    Computed once per reference set (fingerprint over image hashes + reference deck + the
+    director's designDirection notes) and persisted on the project, so the deck can be rebuilt —
+    or single slides regenerated — against the same stable, reference-derived design system.
+    Returns None when there is nothing visual to analyse (no references at all).
+    """
+    reference = project.reference_deck or None
+    if not references and not (reference and reference.get("colors")):
+        return None
+    fp = reference_analysis_agent.fingerprint(
+        ref_hashes, reference, str(intake.get("designDirection") or ""))
+    existing = project.visual_profile
+    if isinstance(existing, dict) and existing.get("_fingerprint") == fp:
+        return existing
+    profile = reference_analysis_agent.run(
+        references, reference_deck=reference, intake=intake, image_names=ref_names)
+    if isinstance(profile, dict) and profile:
+        profile["_fingerprint"] = fp
+        project.visual_profile = profile
+        session.flush()
+        log.info("  -visual profile %s (refs=%d, style=%r)",
+                 "refreshed" if existing else "created", len(references),
+                 profile.get("style"))
+        return profile
+    return existing if isinstance(existing, dict) else None
 
 
 def _set_job(session, job_id: str | None, *, status: str | None = None,
@@ -154,11 +200,15 @@ def _gen_image_resilient(prompt, aspect, palette, reference_images, seed=None):
     return img
 
 
-def _slide_seed(slide_type: str) -> int:
-    """A STABLE but DISTINCT seed per slide type. When a thin brief makes every slide's prompt
-    collapse to the same generic scene (e.g. a dark city skyline), a shared seed would render the
-    SAME picture on every slide. A per-slide seed forces each frame's composition to differ."""
-    return (abs(hash(slide_type)) % 2_000_000_000) + 1
+def _slide_seed(slide_type: str, salt: str = "") -> int:
+    """A DISTINCT seed per slide type (so thin briefs don't render the same picture on every
+    slide), salted with the deck's per-build token so every Build re-rolls the art. hashlib, not
+    hash(): Python string hashing is randomized per process, which silently changed seeds on
+    every server restart."""
+    import hashlib
+
+    digest = hashlib.sha1(f"{slide_type}:{salt}".encode()).hexdigest()
+    return (int(digest[:8], 16) % 2_000_000_000) + 1
 
 
 def _generate_slide_image(slide_type: str, intake: dict, design: dict, content: dict | None = None,
@@ -172,7 +222,8 @@ def _generate_slide_image(slide_type: str, intake: dict, design: dict, content: 
         slide_type, intake, design, content, has_references=bool(reference_images)
     )
     img = _gen_image_resilient(prompt, image_prompt_agent.aspect_for(slide_type),
-                               design.get("palette"), reference_images, seed=_slide_seed(slide_type))
+                               design.get("palette"), reference_images,
+                               seed=_slide_seed(slide_type, str(design.get("buildSeed") or "")))
     return prompt, img
 
 
@@ -355,9 +406,23 @@ def _generate_all_item_images(session, project_id, slides, intake: dict, design:
     return made
 
 
+def _prior_design(session, project_id) -> dict | None:
+    """The current deck's persisted design system, for same-look rebuilds."""
+    prior = session.execute(
+        select(Deck).where(Deck.project_id == project_id)
+    ).scalars().first()
+    dd = (prior.design_direction if prior else None) or None
+    return dict(dd) if dd else None
+
+
 def run_full_deck(project_id: str, template_id: str | None = None,
-                  job_id: str | None = None, with_images: bool = True) -> dict:
-    """Generate a complete deck for a project. Returns {deckId, slideCount}."""
+                  job_id: str | None = None, with_images: bool = True,
+                  keep_design: bool = False) -> dict:
+    """Generate a complete deck for a project. Returns {deckId, slideCount}.
+
+    ``keep_design``: same-look rebuild — reuse the current deck's design system (palette,
+    typography, motifs, image style) instead of minting a fresh take; the new build_seed still
+    re-rolls copy, pacing and art so the rebuild is new material in the SAME identity."""
     with session_scope() as session:
         try:
             _set_job(session, job_id, status="running", progress=2)
@@ -367,7 +432,7 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             intake = project.intake_form or {}
             reference = project.reference_deck or None
             pdict = _project_dict(project)
-            references = _load_reference_images(session, project.id)
+            references, ref_hashes, ref_names = _load_references_full(session, project.id)
             # References always inform the DESIGN (palette/typography). They condition the per-slide
             # IMAGES (img2img) only when explicitly enabled — otherwise every slide would copy the
             # same reference and look identical (and inherit its text). Default: text-to-image, so
@@ -377,24 +442,52 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                      project.title, pdict["genres"], pdict["tone"], len(references),
                      bool(image_refs), (reference or {}).get("fileName"))
 
-            # 1. Story analysis
+            # 1a. Reference analysis — the dedicated stage that turns the director's references
+            #     into a structured visual profile (cached per reference set on the project).
+            profile = _ensure_visual_profile(session, project, intake,
+                                             references, ref_hashes, ref_names)
+            _set_job(session, job_id, progress=5)
+
+            # 1b. Story analysis
             project.story_analysis = story_agent.run(pdict, intake)
             log.info("  -story analysis")
             _set_job(session, job_id, progress=8)
 
             # 2. Design direction — palette/typography/motifs driven by reference images when
-            #    present, and additionally anchored to any uploaded reference deck.
-            design = design_agent.run(pdict, intake, references, reference=reference)
+            #    present, anchored to any uploaded reference deck, and grounded in the profile.
+            #    build_seed: every Build is a fresh take (new identity, new outline pacing, new
+            #    art seeds) instead of a byte-identical cache replay of the previous build.
+            #    Same-look rebuild: reuse the persisted design, new seed only (fresh copy/art).
+            build_seed = uuid.uuid4().hex[:8]
+            prior = _prior_design(session, project.id) if keep_design else None
+            if prior:
+                design = {**prior, "buildSeed": build_seed}
+                log.info("  -design direction KEPT (same-look rebuild), new buildSeed=%s",
+                         build_seed)
+            else:
+                design = design_agent.run(pdict, intake, references, reference=reference,
+                                          visual_profile=profile, variation=build_seed)
             design_clean = {k: v for k, v in design.items() if k != "_register"}
             palette = [c.get("hex") for c in (design_clean.get("palette") or [])[:4]]
             log.info("  -design direction -register=%s palette=%s",
                      design.get("_register"), palette)
+            # Per-deck img2img: when the director explicitly asked to FOLLOW their references
+            # ("match exactly" / "follow this template" in the intake, or the design agent's
+            # template-faithful verdict), condition slide images on the reference pixels at LOW
+            # influence (see fal_image_strength). The env flag stays a global override; without
+            # either, images remain text-to-image so every slide is a unique, text-free frame.
+            if references and image_refs is None and _wants_exact_match(intake, design_clean):
+                image_refs = references
+                log.info("  -per-deck reference img2img ENABLED (director asked to follow "
+                         "references; low-influence conditioning, %d ref image(s))",
+                         len(references))
             _set_job(session, job_id, progress=14)
 
             # 3. Outline — brief-aware: honours deckLength, drops ungrounded slides,
             # adds grounded extras for longer decks (LLM with deterministic fallback).
             tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
-            outline = outline_agent.run(pdict, intake, tpl, reference=reference)
+            outline = outline_agent.run(pdict, intake, tpl, reference=reference,
+                                        variation=build_seed)
             log.info("  -outline -template=%s, %d slides (deckLength=%r)",
                      tpl, len(outline), (intake or {}).get("deckLength") or "default")
 
@@ -416,8 +509,11 @@ def run_full_deck(project_id: str, template_id: str | None = None,
             def _content(item):
                 ref_slide = (pptx_ref.match_slide(item["title"], item["purpose"], reference)
                              if reference else None)
+                # fresh=True: every Build rewrites the copy (bypasses the 24h prompt cache) so
+                # a rebuild reads new, not like a replay of the previous deck.
                 return content_agent.run(item["slide_type"], item["title"], item["purpose"],
-                                         intake, design_clean, reference_slide=ref_slide)
+                                         intake, design_clean, reference_slide=ref_slide,
+                                         fresh=True)
 
             with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
                 contents = list(ex.map(_content, outline))
@@ -475,7 +571,10 @@ def run_full_deck(project_id: str, template_id: str | None = None,
                                             rng=layout_rng),
                     # Initial visual rhythm — rendered via the appearance channel;
                     # the director can override it in the editor.
-                    meta={"appearance": appearances[i]},
+                    # generated: the batch build DID produce content (+image where applicable) —
+                    # without this the workshop showed "0/N generated" on a finished deck and
+                    # "Generate all slides" re-spent LLM+image credits regenerating everything.
+                    meta={"appearance": appearances[i], "generated": True},
                     status="draft",
                 )
                 session.add(slide)
@@ -531,8 +630,11 @@ def run_full_deck(project_id: str, template_id: str | None = None,
 
 
 def prepare_deck(project_id: str, template_id: str | None = None,
-                 job_id: str | None = None) -> dict:
+                 job_id: str | None = None, keep_design: bool = False) -> dict:
     """Workshop step 1: story analysis + design + outline → EMPTY slides, no batch generation.
+
+    ``keep_design``: same-look rebuild — reuse the current deck's design system; only the
+    build seed (copy/pacing/art variation) is fresh.
 
     Each slide is created as a pending shell carrying its purpose and a pre-seeded,
     EDITABLE image prompt in meta.prompts. The director then generates/refines each
@@ -551,15 +653,26 @@ def prepare_deck(project_id: str, template_id: str | None = None,
                      project.title, (reference or {}).get("fileName"))
 
             project.story_analysis = story_agent.run(pdict, intake)
-            references = _load_reference_images(session, project.id)
+            references, ref_hashes, ref_names = _load_references_full(session, project.id)
+            profile = _ensure_visual_profile(session, project, intake,
+                                             references, ref_hashes, ref_names)
             _set_job(session, job_id, progress=25)
 
-            design = design_agent.run(pdict, intake, references, reference=reference)
+            build_seed = uuid.uuid4().hex[:8]  # every workshop prepare is a fresh take too
+            prior = _prior_design(session, project.id) if keep_design else None
+            if prior:
+                design = {**prior, "buildSeed": build_seed}
+                log.info("  -design direction KEPT (same-look rebuild), new buildSeed=%s",
+                         build_seed)
+            else:
+                design = design_agent.run(pdict, intake, references, reference=reference,
+                                          visual_profile=profile, variation=build_seed)
             design_clean = {k: v for k, v in design.items() if k != "_register"}
             _set_job(session, job_id, progress=55)
 
             tpl = template_id or recommend_template(pdict["genres"], pdict["tone"])
-            outline = outline_agent.run(pdict, intake, tpl, reference=reference)
+            outline = outline_agent.run(pdict, intake, tpl, reference=reference,
+                                        variation=build_seed)
             _set_job(session, job_id, progress=80)
 
             existing = session.execute(
@@ -639,8 +752,13 @@ def run_design(project_id: str, job_id: str | None = None) -> dict:
         project = session.get(Project, uuid.UUID(project_id))
         if project is None:
             raise ValueError("project not found")
-        references = _load_reference_images(session, project.id)
-        design = design_agent.run(_project_dict(project), project.intake_form or {}, references)
+        intake = project.intake_form or {}
+        references, ref_hashes, ref_names = _load_references_full(session, project.id)
+        profile = _ensure_visual_profile(session, project, intake,
+                                         references, ref_hashes, ref_names)
+        design = design_agent.run(_project_dict(project), intake, references,
+                                  reference=project.reference_deck or None,
+                                  visual_profile=profile)
         design_clean = {k: v for k, v in design.items() if k != "_register"}
         deck = session.execute(
             select(Deck).where(Deck.project_id == project.id).limit(1)
@@ -672,11 +790,17 @@ def regenerate_slide(slide_id: str, job_id: str | None = None, with_image: bool 
         project = session.get(Project, deck.project_id)
         intake = project.intake_form or {}
         design = {k: v for k, v in (deck.design_direction or {}).items() if k != "_register"}
-        # Persisted intake references drive img2img only when explicitly enabled — otherwise every
-        # regenerate would copy the same reference (identical-looking + text-laden frames). A
-        # per-call reference (deck-edit "make this slide look like this image") is ALWAYS honoured.
+        # Persisted intake references drive img2img when explicitly enabled globally (env flag) OR
+        # per-deck, when the director asked to follow their references exactly — conditioning runs
+        # at low influence (see fal_image_strength) so frames stay unique and text-free rather than
+        # copies of the reference. A per-call reference (deck-edit "make this slide look like this
+        # image") is ALWAYS honoured.
+        deck_wants_refs = _wants_exact_match(intake, design)
         references = (_load_reference_images(session, project.id)
-                      if settings.build_images_from_references else [])
+                      if settings.build_images_from_references or deck_wants_refs else [])
+        if references and deck_wants_refs and not settings.build_images_from_references:
+            log.info("per-deck reference img2img active for slide %s regen (%d ref image(s))",
+                     slide_id, len(references))
         if reference_image and reference_image.get("data"):
             references = [{"mediaType": reference_image.get("mediaType", "image/jpeg"),
                            "data": reference_image["data"]}, *references][:4]
