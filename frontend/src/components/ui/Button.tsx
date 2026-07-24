@@ -46,7 +46,9 @@ export function Button({
   }
 
   return (
-    <button className={classes} {...props}>
+    // Default to type="button" so Buttons inside forms never submit by accident;
+    // an explicit `type` in props still wins (it spreads after).
+    <button type="button" className={classes} {...props}>
       {children}
     </button>
   );

@@ -26,9 +26,14 @@ export function CharacterSlide({ content }: CharacterSlideProps) {
     <SlideFrame imageUrl={content.imageUrl}>
       {/* A grid of per-character portraits; a slide-level background image shows behind them. */}
       <div
-        className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : "bg-[var(--slide-bg,#0a0a0c)]"}`}
+        className={`absolute inset-0 ${content.imageUrl ? "bg-black/70" : ""}`}
+        style={
+          content.imageUrl
+            ? undefined
+            : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+        }
       />
-      <div className="relative flex h-full flex-col p-[7%]">
+      <div className="relative flex h-full flex-col p-[calc(7%_+_var(--slide-pad-delta,0%))]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Characters"} />
         </SlideLabel>

@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { DeckEditor } from "@/components/editor/DeckEditor";
 import { useSetupWizard } from "@/features/setup/SetupWizardContext";
+import { pollJob, workshopSlideImage } from "@/lib/api";
 import { projectRoutes } from "@/lib/routes";
 import type { DesignDirection } from "@/types/design";
+import type { Slide } from "@/types/slide";
 
 interface SlideEditorWorkspaceProps {
   projectId: string;
@@ -49,7 +51,29 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
     updateDraftSlide,
     updateDraftSlideMeta,
     addSlideComment,
+    replaceDraftSlide,
+    applyAccent,
+    applyThemePalette,
+    applyDisplayFont,
   } = useSetupWizard();
+
+  // Image-only regeneration for the AI assistant: generate, poll, adopt the updated slide.
+  // Mirrors useInterview.generateSlideImage so both chat surfaces behave identically.
+  const generateSlideImage = useCallback(
+    async (id: string, imagePrompt?: string) => {
+      try {
+        const job = await workshopSlideImage(id, imagePrompt);
+        const final = await pollJob(job);
+        if (final.status === "failed") return;
+        const res = final.result as { slide?: Slide; ok?: boolean } | Slide | undefined;
+        const updated = (res as { slide?: Slide })?.slide ?? (res as Slide | undefined);
+        if (updated?.id) replaceDraftSlide({ ...updated, generated: true });
+      } catch {
+        /* keep existing image */
+      }
+    },
+    [replaceDraftSlide],
+  );
 
   useEffect(() => {
     if (!contentApproved) {
@@ -91,6 +115,10 @@ export function SlideEditorWorkspace({ projectId }: SlideEditorWorkspaceProps) {
       onUpdateSlide={updateDraftSlide}
       onUpdateSlideMeta={updateDraftSlideMeta}
       onAddComment={addSlideComment}
+      onGenerateImage={generateSlideImage}
+      onSetAccent={applyAccent}
+      onSetTheme={applyThemePalette}
+      onSetFont={applyDisplayFont}
     />
   );
 }

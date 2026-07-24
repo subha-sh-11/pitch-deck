@@ -198,12 +198,14 @@ def _sanitize(result: dict, fallback: list[dict], target: int) -> list[dict]:
 
 
 def run(project: dict, intake: dict, template_id: str | None = None,
-        reference: dict | None = None) -> list[dict]:
+        reference: dict | None = None, variation: str | None = None) -> list[dict]:
     """Return the ordered outline: [{slide_type, title, purpose, required, slide_number}].
 
     ``reference``: a parsed uploaded deck ({slideCount, slides:[{title,text}]}). When given,
     the outline mirrors its length and slide sequence/titles so the generated deck follows
     the structure the director handed us.
+    ``variation``: per-build token — makes each Build re-architect the deck fresh (busting
+    the prompt cache) and nudges pacing/selection to differ between builds.
     """
     intake = intake or {}
     base = build_outline(template_id)
@@ -238,6 +240,14 @@ def run(project: dict, intake: dict, template_id: str | None = None,
             "slideCount": (reference or {}).get("slideCount"),
             "slides": [{"title": s.get("title", ""), "text": (s.get("text") or "")[:200]}
                        for s in ref_slides[:40]],
+        }
+    if variation:
+        payload["freshTake"] = {
+            "token": variation,
+            "note": ("This is a NEW build. Within the brief's material and any reference deck's "
+                     "structure, vary the architecture versus earlier builds: which optional "
+                     "slides make the cut, where the world/mood beats sit, and the pacing of the "
+                     "middle — two builds should not read as the identical deck."),
         }
     result = complete_json(
         system=_SYSTEM,

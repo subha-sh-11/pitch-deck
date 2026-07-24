@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import uuid
+from functools import partial
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ from starlette.concurrency import run_in_threadpool
 from app.ai.agents import design_candidates, slide_edit
 from app.core.db import get_db
 from app.core.storage import load_asset_bytes
-from app.models import Asset, Project, Slide
+from app.models import Asset, Deck, Project, Slide
 from app.routers.deps import get_owned_project
 from app.schemas.slide import SlideCreate, SlideUpdate
 from app.services import deck_service
@@ -61,20 +62,34 @@ def _clean_images(images: list[dict]) -> list[dict] | None:
 async def deck_command(
     body: DeckCommand,
     project: Project = Depends(get_owned_project),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Turn a director's instruction into structured edit actions the editor applies live.
 
     This is the agent action layer: the chat drives real changes to the deck. The LLM call is
     blocking, so it runs off the event loop; results are sanitized to safe, well-formed actions.
+    The agent gets the project's full grounding context — completed brief, pitch purpose, deck
+    design and uploaded script — so it interprets requests against the source material instead
+    of guessing from slide fragments.
     """
-    result = await run_in_threadpool(
+    deck = (await db.execute(
+        select(Deck).where(Deck.project_id == project.id).limit(1)
+    )).scalar_one_or_none()
+    design = {k: v for k, v in ((deck.design_direction if deck else {}) or {}).items()
+              if k != "_register"}
+    run = partial(
         slide_edit.run,
         body.instruction,
         body.slides,
         body.history,
         body.selected_slide_id,
         _clean_images(body.images),
+        intake=project.intake_form or {},
+        design=design,
+        purpose=project.pitch_purpose,
+        script=project.script_text,
     )
+    result = await run_in_threadpool(run)
     return slide_edit.sanitize(result if isinstance(result, dict) else {}, body.slides)
 
 

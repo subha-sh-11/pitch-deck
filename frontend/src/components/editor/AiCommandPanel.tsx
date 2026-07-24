@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { deckCommand } from "@/lib/api/deck";
-import { applyDeckActions, type DeckActionHandlers } from "@/lib/apply-deck-actions";
+import { deckCommand, deckCommandErrorText, honestDeckCommandText } from "@/lib/api/deck";
+import { applyDeckActions, describeDeckAction, type DeckActionHandlers } from "@/lib/apply-deck-actions";
 
-interface Msg {
-  role: "user" | "agent";
-  text: string;
-}
+type Msg =
+  | { role: "user" | "agent"; text: string }
+  // A live tool-step row: what the agent is DOING, narrated like Claude/ChatGPT tool use.
+  | { role: "tool"; label: string; detail: string[] };
 
 const SUGGESTIONS = [
   "Make the cover moodier",
@@ -23,9 +23,12 @@ const SUGGESTIONS = [
 export function AiCommandPanel({
   projectId,
   handlers,
+  selectedSlideId,
 }: {
   projectId: string;
   handlers: DeckActionHandlers;
+  /** The slide currently open in the editor — the agent's default edit target. */
+  selectedSlideId?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,19 +54,46 @@ export function AiCommandPanel({
         title: s.title,
         content: s.content,
       }));
-      const res = await deckCommand(projectId, instruction, slides);
-      await applyDeckActions(res.actions, handlers);
-      setLog((l) => [
-        ...l,
-        {
-          role: "agent",
-          text:
-            res.message +
-            (res.actions.length ? "" : "\n(no changes made — try rephrasing or be more specific)"),
-        },
-      ]);
-    } catch {
-      setLog((l) => [...l, { role: "agent", text: "Sorry — I couldn't reach the editing model. Try again in a moment." }]);
+      // Conversation BEFORE this instruction, so follow-ups ("9th", "yes, that one")
+      // resolve against the agent's own previous question. Tool-step rows are UI-only —
+      // exclude them; roles map agent → assistant.
+      const priorHistory = log
+        .filter((m): m is Extract<Msg, { role: "user" | "agent" }> => m.role !== "tool")
+        .slice(-8)
+        .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("assistant" as const), text: m.text }));
+      const res = await deckCommand(projectId, instruction, slides, priorHistory, selectedSlideId);
+      // Narrate the work as live tool steps: each action shows in the chat, ticks over
+      // while running, and ✓s when done — so the user always sees what the agent is doing.
+      if (res.actions.length > 0) {
+        const labels = res.actions.map((a) => describeDeckAction(a, handlers.slides));
+        const renderDetail = (upTo: number, runningIdx: number | null) =>
+          labels.map((l, j) => (j < upTo ? `✓ ${l}` : j === runningIdx ? `⏳ ${l}…` : `• ${l}`));
+        setLog((l) => [
+          ...l,
+          {
+            role: "tool",
+            label: `Editing the deck — ${labels.length} ${labels.length === 1 ? "step" : "steps"}`,
+            detail: renderDetail(0, 0),
+          },
+        ]);
+        // The tool row stays the last log entry until the agent's reply is appended below.
+        const patchTool = (patch: Partial<Extract<Msg, { role: "tool" }>>) =>
+          setLog((l) =>
+            l.map((m, i) => (i === l.length - 1 && m.role === "tool" ? { ...m, ...patch } : m)),
+          );
+        await applyDeckActions(res.actions, handlers, (i, phase) =>
+          patchTool({ detail: phase === "start" ? renderDetail(i, i) : renderDetail(i + 1, null) }),
+        );
+        patchTool({
+          label: `Edited the deck — ${labels.length} ${labels.length === 1 ? "change" : "changes"} applied`,
+          detail: labels.map((l) => `✓ ${l}`),
+        });
+      }
+      // Echo the agent's confirmation only when its changes actually applied;
+      // otherwise report honestly instead of relaying a fabricated "Done".
+      setLog((l) => [...l, { role: "agent", text: honestDeckCommandText(res) }]);
+    } catch (err) {
+      setLog((l) => [...l, { role: "agent", text: deckCommandErrorText(err) }]);
     } finally {
       setBusy(false);
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 9e9, behavior: "smooth" }));
@@ -73,18 +103,31 @@ export function AiCommandPanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto pr-1">
-        {log.map((m, i) => (
-          <div
-            key={i}
-            className={
-              m.role === "user"
-                ? "ml-6 rounded-xl bg-[#EEF0FF] px-3 py-2 text-sm text-[#1F2330]"
-                : "mr-2 whitespace-pre-line rounded-xl bg-[#F4F4F6] px-3 py-2 text-sm text-[#3A3F4B]"
-            }
-          >
-            {m.text}
-          </div>
-        ))}
+        {log.map((m, i) =>
+          m.role === "tool" ? (
+            <div key={i} className="mr-2 rounded-xl border border-[#E2E4EC] bg-white px-3 py-2">
+              <p className="text-xs font-medium text-[#5C6270]">⚙ {m.label}</p>
+              <ul className="mt-1 space-y-0.5">
+                {m.detail.map((d, j) => (
+                  <li key={j} className="text-xs text-[#9CA3AF]">
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div
+              key={i}
+              className={
+                m.role === "user"
+                  ? "ml-6 rounded-xl bg-[#EEF0FF] px-3 py-2 text-sm text-[#1F2330]"
+                  : "mr-2 whitespace-pre-line rounded-xl bg-[#F4F4F6] px-3 py-2 text-sm text-[#3A3F4B]"
+              }
+            >
+              {m.text}
+            </div>
+          ),
+        )}
         {busy && <div className="mr-2 rounded-xl bg-[#F4F4F6] px-3 py-2 text-sm text-[#9CA3AF]">Working on it…</div>}
       </div>
 

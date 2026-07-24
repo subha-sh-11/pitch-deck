@@ -103,8 +103,9 @@ export interface ReferenceDeck {
 }
 
 /**
- * Upload a reference deck (.pptx only). Parsed + persisted on the project so generation
- * follows its slide structure and look.
+ * Upload a reference deck (.pptx or PDF). Parsed + persisted on the project so generation
+ * follows its slide structure and look; its pages/pictures also feed the vision-based
+ * reference analysis as images.
  */
 export const uploadReferenceDeck = (projectId: string, file: File) =>
   postFile<ReferenceDeck>(`/projects/${projectId}/references/pptx`, file);

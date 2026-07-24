@@ -118,11 +118,14 @@ class Settings(BaseSettings):
     #   FAL_IMAGE_MODEL=fal-ai/flux-pro/v1.1        (or fal-ai/flux-pro/v1.1-ultra)
     fal_image_model: str = "fal-ai/flux/dev"
     # When reference images are supplied, fal switches to an image-to-image model so the
-    # references actually condition the output. ``fal_image_strength`` is how far the result moves
-    # FROM the reference TOWARD the text prompt: higher (≈0.85) → new content carrying the
-    # reference's palette/grade; lower → output hews closely to the reference.
+    # references actually condition the output. ``fal_image_strength`` is FLUX denoise strength —
+    # how far the result moves FROM the reference TOWARD the text prompt. Empirically (verified
+    # against a text-heavy template reference): ≤0.7 returns a near-copy of the reference —
+    # its layout AND garbled text stamped onto every slide (the historical failure mode) — while
+    # 0.9 renders the prompt's own scene as a unique, text-free frame that still carries the
+    # reference's palette, grade and mood (low reference influence). Keep in the 0.85–0.95 band.
     fal_image_to_image_model: str = "fal-ai/flux/dev/image-to-image"
-    fal_image_strength: float = 0.85
+    fal_image_strength: float = 0.9
     # Hard ceiling on diffusion calls per deck (background + per-element passes combined) so a long
     # deck can't explode image cost / rate-limits. Generous default; lower it to cap spend.
     max_deck_images: int = 48

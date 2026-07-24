@@ -72,16 +72,23 @@ Layout under `backend/app/`:
 
 ### AI agent pipeline (order)
 
-`intake → story_analysis → design → outline → content → image_prompt (+ images) → layout → review`
+`intake → reference_analysis → story_analysis → design → outline → content → image_prompt (+ images) → layout → review`
 
 (In code, `design` runs BEFORE `outline`/`content`, and `layout` is applied when slides are
 persisted — not as a separate later stage. See `run_full_deck` in `services/generation_service.py`.)
 
-Files present: `intake_interview.py`, `intake_extract.py`, `story_analysis.py`,
-`outline.py`, `content.py`, `design.py`, `design_candidates.py`, `image_prompt.py`,
-`layout.py`, `slide_edit.py`, and `quality_review.py` (the `review` step — a structural
-QA pass stored on `Deck.quality_review`). (`agents/README.md` may use older/idealized
+Files present: `intake_interview.py`, `intake_extract.py`, `reference_analysis.py`,
+`story_analysis.py`, `outline.py`, `content.py`, `design.py`, `design_candidates.py`,
+`image_prompt.py`, `layout.py`, `slide_edit.py`, and `quality_review.py` (the `review` step —
+a structural QA pass stored on `Deck.quality_review`). (`agents/README.md` may use older/idealized
 names; trust the actual files on disk.)
+
+`reference_analysis.py` turns the director's uploaded references (images + .pptx reference deck)
+into a structured **visual profile** persisted on `Project.visual_profile`, fingerprinted per
+reference set so it recomputes only when references or the director's usage notes change. A slim
+copy is embedded at `design_direction["referenceProfile"]`, which layout (pacing/density/full-bleed
+bias), content (copy density), image_prompt (grade/crop/texture language), and quality_review
+(reference-alignment issues) all read — so references actively shape the deck, not just the palette.
 
 ## Frontend (`frontend/`)
 
@@ -165,6 +172,14 @@ Never commit real secrets. `.env` is local-only.
 - Deck/slide content is JSONB — changes to slide shape are schema-level (Pydantic/TS types),
   not necessarily DB migrations. Keep `frontend/src/types/*` in sync with backend schemas.
 - Two DB engines: async at runtime, sync for Alembic. Don't mix them.
+- Per-build variety: `run_full_deck`/`prepare_deck` mint a `build_seed` passed to the design
+  and outline agents (`variation=`) — it busts the 24h LLM prompt cache, deterministically
+  assigns an accent-family + composition "take" (see `_ACCENT_TAKES` in `agents/design.py`),
+  rides the design dict as `design["buildSeed"]`, and salts the per-slide diffusion seeds.
+  Every build is a fresh visual identity by design — don't "optimise" it back to cached.
+  Same-look rebuild: `keep_design=true` on `POST /generate/{id}/deck[/prepare]` reuses the
+  current deck's design system (new seed only → fresh copy/pacing/art). Surfaced in the
+  workshop as "Rebuild · same look" vs "Rebuild · fresh look" (SlideWorkshop.tsx).
 - AI providers are optional and provider-agnostic — code paths must degrade gracefully when
   keys are absent (`IMAGE_PROVIDER=none`, `AI_OFFLINE=true`).
 - Frontend slide templates and the backend outline/content agents are coupled: a new slide

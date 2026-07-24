@@ -10,6 +10,29 @@
 :root {
   --background: #0c0a09;
   --foreground: #f7f3ee;
+  /* Tell the browser this is a dark UI so native widgets (select popups,
+     date pickers, scrollbars) render in their dark theme instead of white. */
+  color-scheme: dark;
+}
+
+/* NOTE: do NOT style `select option` background/color here. Some Chromium
+   builds apply the author `color` inside the native popup but ignore the
+   `background-color`, producing light-on-light "invisible" options. Native
+   popups get their theme from `color-scheme: dark` above; anything that must
+   look designed uses components/ui/Select.tsx instead. */
+
+/* Chrome/Edge autofill forces a light background on filled inputs;
+   clip it away and repaint with the app's field surface instead. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  box-shadow: 0 0 0 1000px var(--surface-2, #1c1916) inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 /* Native smooth scrolling — browser-driven (no JS), so it stays lag-free.

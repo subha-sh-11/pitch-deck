@@ -10,14 +10,33 @@ const GRAIN_URI =
 const HOLES =
   "repeating-linear-gradient(to right, color-mix(in srgb, var(--slide-text,#F5F1E8) 80%, transparent) 0 0.9%, transparent 0.9% 2.7%)";
 
-function FilmStripBand({ edge }: { edge: "top" | "bottom" }) {
+function FilmStripBand({ edge, strong = false }: { edge: "top" | "bottom"; strong?: boolean }) {
   return (
     <div
       className="absolute inset-x-0"
-      style={{ [edge]: 0, height: "4.4%", background: "rgba(8,8,10,0.72)" } as CSSProperties}
+      style={
+        {
+          [edge]: 0,
+          height: strong ? "7.5%" : "4.4%",
+          background: strong ? "rgba(5,5,7,0.92)" : "rgba(8,8,10,0.72)",
+        } as CSSProperties
+      }
     >
       <div className="absolute inset-x-0 top-[15%] h-[26%]" style={{ backgroundImage: HOLES }} />
       <div className="absolute inset-x-0 bottom-[15%] h-[26%]" style={{ backgroundImage: HOLES }} />
+      {strong && (
+        // hairline along the band's inner edge, so the strip reads as a deliberate frame
+        <div
+          className="absolute inset-x-0"
+          style={
+            {
+              [edge === "top" ? "bottom" : "top"]: 0,
+              height: 1,
+              background: "color-mix(in srgb, var(--slide-accent,#caa86a) 35%, transparent)",
+            } as CSSProperties
+          }
+        />
+      )}
     </div>
   );
 }
@@ -26,8 +45,17 @@ function FilmStripBand({ edge }: { edge: "top" | "bottom" }) {
  * Deck-wide graphic motifs derived from the design direction (which the design agent fills from
  * the director's reference images). Rendered as a non-interactive overlay above the slide content,
  * positioned at the edges so it never sits over copy (templates pad content ~8%).
+ *
+ * `strongFilmStrip` (from the reference profile's surface.framing) turns the film-strip bands
+ * into a real compositional frame — taller, denser, with an accent hairline — on image slides.
  */
-export function SlideMotifs({ motifs }: { motifs?: DesignMotif[] }) {
+export function SlideMotifs({
+  motifs,
+  strongFilmStrip = false,
+}: {
+  motifs?: DesignMotif[];
+  strongFilmStrip?: boolean;
+}) {
   if (!motifs?.length) return null;
   const has = (m: DesignMotif) => motifs.includes(m);
   return (
@@ -54,8 +82,8 @@ export function SlideMotifs({ motifs }: { motifs?: DesignMotif[] }) {
       )}
       {has("film_strip") && (
         <>
-          <FilmStripBand edge="top" />
-          <FilmStripBand edge="bottom" />
+          <FilmStripBand edge="top" strong={strongFilmStrip} />
+          <FilmStripBand edge="bottom" strong={strongFilmStrip} />
         </>
       )}
     </div>

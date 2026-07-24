@@ -10,7 +10,7 @@ import type {
   SlideStyleVariant,
   SlideType,
 } from "@/types/slide";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 
 /** A candidate visual system the director can choose from (a complete "template"). */
 export interface DesignCandidate {
@@ -82,21 +82,69 @@ export const reorderSlides = (projectId: string, slideIds: string[]) =>
 // ── Agent action layer: natural-language deck edits ──
 
 export type DeckAction =
-  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[] }
+  | { op: "edit_slide"; slideId: string; title?: string; heading?: string; subheading?: string; body?: string; bullets?: string[]; items?: { title: string; description: string }[]; comps?: { title: string; note: string; posterUrl?: string }[]; characters?: { name: string; role: string; description: string; appearance?: string; imageUrl?: string }[]; moodBlocks?: { label: string; color?: string; imageUrl?: string }[] }
   | { op: "style_image"; slideId: string; imageBlur?: number; imageDim?: number; imageScale?: number }
   | { op: "move_slide"; slideId: string; direction: "up" | "down"; steps?: number }
-  | { op: "add_slide"; afterSlideNumber: number; slideType: string }
+  | { op: "add_slide"; afterSlideNumber: number; slideType: string; title?: string; contentBrief?: string; pointCount?: number }
   | { op: "delete_slide"; slideId: string }
-  | { op: "regenerate_slide"; slideId: string }
+  | { op: "regenerate_slide"; slideId: string; direction?: string }
   | { op: "generate_image"; slideId: string; imagePrompt?: string }
   | { op: "set_appearance"; slideId: string; styleVariant?: SlideStyleVariant; accentColor?: string; backgroundKey?: SlideBackgroundKey; textColor?: string; composition?: "full" | "split" | "framed"; imageSide?: "left" | "right" }
   | { op: "set_accent"; hex: string }
   | { op: "set_theme"; palette: { name: string; hex: string; usage: string }[] }
-  | { op: "set_font"; font: "cormorant" | "playfair" | "oswald" | "poppins" | "anton" };
+  | { op: "set_font"; font: "cormorant" | "playfair" | "oswald" | "poppins" | "anton" }
+  | { op: "undo_last" };
 
 export interface DeckCommandResult {
   message: string;
   actions: DeckAction[];
+  /** Actions the agent emitted that the backend discarded as invalid — when > 0 and
+   *  `actions` is empty, the agent's message may claim a change that never applied. */
+  discarded?: number;
+}
+
+/** Example commands shown when the agent needs direction — so the user always knows what
+ *  kind of instruction works (the way Claude/ChatGPT suggest next steps). */
+const COMMAND_EXAMPLES =
+  'For example: “make slide 2’s text white”, “add an image to the cover”, or “move the budget slide up”.';
+
+/** Human-readable chat line for a FAILED deck-command request — name the actual cause
+ *  (backend down / session expired / server error) instead of vaguely blaming "the model". */
+export function deckCommandErrorText(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 0) {
+      return "I can't reach the backend server — make sure it's running (uvicorn on :8000), then try again.";
+    }
+    if (err.status === 401 || err.status === 403) {
+      return "Your session has expired — log in again and I'll pick up right where we left off.";
+    }
+    return `The editing request failed (${err.status}: ${err.message}) — try again in a moment.`;
+  }
+  return "Something went wrong applying that change — try again in a moment.";
+}
+
+/** Honest chat text for a deck-command result: echo the agent's message only when its
+ *  changes actually applied; otherwise say so instead of relaying a fabricated "Done". */
+export function honestDeckCommandText(res: DeckCommandResult): string {
+  if (res.actions.length > 0) return res.message;
+  if ((res.discarded ?? 0) > 0) {
+    return (
+      "I tried to make that change but it didn't apply cleanly — tell me the exact slide (or rephrase) and I'll do it.\n" +
+      COMMAND_EXAMPLES
+    );
+  }
+  if (!res.message) {
+    return `I didn't change anything — tell me which slide and what to change and I'll do it.\n${COMMAND_EXAMPLES}`;
+  }
+  // Zero actions and none discarded: a clarification question, an informational answer
+  // (slide read-back, suggested options to pick from), or a fabricated success claim.
+  // Multi-line / list-shaped replies are informational by design — relay them untouched;
+  // the corrective notes are for terse one-liners only.
+  const informational = res.message.includes("\n") || /(^|\n)\s*(\d+[.)]|[-•])\s/.test(res.message);
+  if (informational) return res.message;
+  return res.message.includes("?")
+    ? `${res.message}\n${COMMAND_EXAMPLES}`
+    : `${res.message}\n(No changes were applied to the deck.)`;
 }
 
 export interface DeckCommandTurn {

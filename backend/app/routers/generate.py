@@ -52,6 +52,9 @@ async def generate_deck(
     background_tasks: BackgroundTasks,
     template_id: str | None = Query(default=None),
     with_images: bool = Query(default=True),
+    keep_design: bool = Query(default=False,
+                              description="Same-look rebuild: reuse the current deck's design "
+                                          "system; regenerate copy, pacing and art only."),
     project: Project = Depends(get_owned_project),
     db: AsyncSession = Depends(get_db),
 ):
@@ -60,7 +63,8 @@ async def generate_deck(
     effective_images = with_images and settings.build_with_images
     job = await _create_job(db, project.id, "full_deck", {"templateId": template_id})
     mode = await dispatch("generate_deck", generation_service.run_full_deck,
-                          [str(project.id), template_id, str(job.id), effective_images],
+                          [str(project.id), template_id, str(job.id), effective_images,
+                           keep_design],
                           background_tasks)
     return _job_payload(job, mode)
 
@@ -105,13 +109,17 @@ class ImageRegenBody(BaseModel):
 async def prepare_deck(
     background_tasks: BackgroundTasks,
     template_id: str | None = Query(default=None),
+    keep_design: bool = Query(default=False,
+                              description="Same-look rebuild: reuse the current deck's design "
+                                          "system; regenerate copy, pacing and art only."),
     project: Project = Depends(get_owned_project),
     db: AsyncSession = Depends(get_db),
 ):
     """Workshop step 1: analysis + design + outline → empty slide shells (no batch generation)."""
     job = await _create_job(db, project.id, "prepare_deck", {"templateId": template_id})
     mode = await dispatch("prepare_deck", generation_service.prepare_deck,
-                          [str(project.id), template_id, str(job.id)], background_tasks)
+                          [str(project.id), template_id, str(job.id), keep_design],
+                          background_tasks)
     return _job_payload(job, mode)
 
 

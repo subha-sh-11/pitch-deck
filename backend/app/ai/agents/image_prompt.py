@@ -147,7 +147,8 @@ def _subject(slide_type: str, intake: dict) -> str:
 # bible). COMPOSITION ONLY here — lighting/grade come from the theme.
 _SHOT_BY_TYPE: dict[str, str] = {
     "cover": "epic wide establishing shot of the story's world, anamorphic widescreen, monumental "
-             "scale, layered depth, a generous expanse of empty sky and open uncluttered space, no people",
+             "scale, layered depth, a generous expanse of empty sky and open uncluttered space for "
+             "the title, no people",
     "logline": "a lone central figure small within the wide world at a charged moment, poetic wide "
                "shot, a large clean uncluttered empty area of the frame",
     "synopsis": "an establishing shot of a DISTINCT key location from the story (a different place "
@@ -214,6 +215,19 @@ def _facet_for(slide_type: str) -> str:
     return _FACET_BY_TYPE.get(slide_type, _FACET_BY_TYPE["generic"])
 
 
+def _reference_treatment(design: dict | None) -> str:
+    """The reference-derived IMAGE TREATMENT (design["referenceProfile"]["imageTreatment"]) as a
+    prompt fragment — grading, cropping bias, texture — so every generated frame carries the
+    grade/grain/crop language of the director's references even in pure text-to-image mode
+    (where the reference pixels themselves are not attached). Empty when no profile exists."""
+    profile = (design or {}).get("referenceProfile")
+    if not isinstance(profile, dict):
+        return ""
+    t = profile.get("imageTreatment") or {}
+    bits = [str(t.get(k) or "").strip() for k in ("grading", "cropping", "texture")]
+    return ", ".join(b for b in bits if b)
+
+
 def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
                           has_references: bool = False) -> str:
     """Register-anchored fallback: assemble a prompt from the intake + design (no LLM).
@@ -242,9 +256,15 @@ def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
     # Lighting + grade are LIGHTING-NEUTRAL in the framing below and set here from the theme,
     # so a light deck yields bright, airy images and a dark deck yields cinematic low-key ones.
     # With references attached, defer entirely to them rather than forcing a direction.
+    treatment = _reference_treatment(design)
     if has_references:
         lighting = "lighting, colour temperature and mood matching the supplied reference images"
-        grade = "colour grade and grain matching the reference images"
+        grade = treatment or "colour grade and grain matching the reference images"
+    elif treatment:
+        # No reference pixels attached, but the analysed profile tells us the treatment —
+        # bake the references' grade/crop/texture language straight into the prompt.
+        lighting = treatment
+        grade = "consistent with the film's reference-derived grade"
     elif light:
         lighting = ("bright high-key natural daylight, soft even illumination, airy and luminous, "
                     "light clean background, fresh and vibrant")
@@ -274,9 +294,11 @@ def _deterministic_prompt(slide_type: str, intake: dict, design: dict | None,
         parts.append(visual_style)
     if palette:
         parts.append(f"color palette: {palette}")
+    # Deliberately NO "no text/no watermark" negations here: diffusion text encoders handle
+    # negation poorly, and mentioning text-words at all primes the model to render lettering.
     parts.append(
         f"film still, professional cinematography, {grade}, authentic regional detail, "
-        "no text, no watermark, no logo, no real-person likeness"
+        "pure photographic scene, no real-person likeness"
     )
     return _clean(", ".join(p for p in parts if p))
 
@@ -293,7 +315,8 @@ film and THIS slide — generic stock imagery is a failure.
 
 Match the slide's job (by kind):
 - cover_image / background: an evocative establishing image of the story's world/setting; leave a
-  clean, uncluttered EMPTY area of the frame (the app overlays its own text later — you render none);
+  clean, uncluttered EMPTY area of the frame (open sky, deep shadow, blank wall, still water — the
+  app overlays its own copy there later; you render none);
   usually no people.
 - story_world: an establishing environmental shot of the ACTUAL setting described in the summary.
 - character_art: a cinematic mood study evoking the SPECIFIC character(s) named on this slide — their
@@ -316,15 +339,19 @@ pick a fresh location rather than reusing one another slide already used. Market
 slides are intentionally MINIMAL and clarity-first — restrained, plain, lots of empty space.
 
 ALWAYS weave in, explicitly: subject · setting · mood · lighting · camera angle · lens (e.g.
-anamorphic, 35mm, 85mm) · composition WITH a deliberate clean, EMPTY, uncluttered area of the frame ·
-colour palette · texture/grain · and a film-still / editorial-photography realism level, plus a
-cinematic reference feel. The result must read like a premium cinematic film still, and must NOT
-look: glossy, plastic, generic-AI, over-saturated, deformed, cartoonish, or like a stock photo.
-NEVER describe a poster, title card, credits, typography or any lettering — those induce garbled
-text in the render; the frame must be a clean photograph with NO text anywhere.
+anamorphic, 35mm, 85mm) · composition WITH a deliberate clean, EMPTY, uncluttered area of the frame
+(open sky, shadow, blank wall) · colour palette · texture/grain · and a film-still /
+editorial-photography realism level, plus a cinematic reference feel. The result must read like a
+premium cinematic film still, and must NOT look: glossy, plastic, generic-AI, over-saturated,
+deformed, cartoonish, or like a stock photo.
 
-HARD RULES: the image must contain NO text, letters, words, captions, watermarks or logos; NO
-real-person likeness; NO minors; film-still quality.
+HARD RULES for the prompt you write (a diffusion model paints whatever nouns it reads, so):
+- NEVER use the words "text", "title", "typography", "lettering", "caption", "font", "poster",
+  "slide", "logo", "sign", "signage", "headline", "book", "manuscript page", "words" — not even to
+  forbid them ("no text" makes the model MORE likely to paint gibberish lettering).
+- NEVER quote the film's title, character names as display text, or any of the slide's copy in the
+  prompt. Use the material only to describe the SCENE.
+- Describe a pure photographic scene only; NO real-person likeness; NO minors; film-still quality.
 
 Return ONLY JSON: {"prompt": "<one cohesive prompt, ~40-70 words, comma-separated descriptors>"}
 """
@@ -439,6 +466,10 @@ def build_prompt(slide_type: str, intake: dict, design: dict | None = None,
             "grain and graphic treatment. Do NOT impose a dark or low-key look if the references "
             "are bright or warm."
         )
+    elif _reference_treatment(design):
+        theme = ("MATCH THE FILM'S REFERENCE-DERIVED TREATMENT: "
+                 + _reference_treatment(design)
+                 + " — every frame in the deck must read as graded from the same references")
     elif _is_light_theme(design):
         theme = "LIGHT — bright, high-key, airy, luminous, clean (NOT dark or moody)"
     else:
@@ -554,8 +585,11 @@ def build_item_prompt(item: dict, intake: dict, design: dict | None = None,
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
     cue = _genre_cue(title)
 
+    treatment = _reference_treatment(design)
     if has_references:
-        grade = "colour and grade matching the supplied reference images"
+        grade = treatment or "colour and grade matching the supplied reference images"
+    elif treatment:
+        grade = treatment
     elif _is_light_theme(design):
         grade = "bright high-key natural light, airy"
     else:
@@ -573,7 +607,7 @@ def build_item_prompt(item: dict, intake: dict, design: dict | None = None,
         f"color palette: {palette}" if palette else "",
         "single strong focal point, shallow depth of field, professional cinematography, film grain, "
         "photorealistic film photograph, real-location detail, not an illustration, not a 3D render, "
-        "no text, no watermark, no logo, no real-person likeness",
+        "pure photographic scene, no real-person likeness",
     ]
     return _clean(", ".join(p for p in parts if p))
 
@@ -591,8 +625,11 @@ def build_character_prompt(char: dict, intake: dict, design: dict | None = None,
     tone = _g(intake, "tone")
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
+    treatment = _reference_treatment(design)
     if has_references:
-        lighting = "lighting and grade matching the supplied reference images"
+        lighting = treatment or "lighting and grade matching the supplied reference images"
+    elif treatment:
+        lighting = f"portrait light and grade per the film's references: {treatment}"
     elif _is_light_theme(design):
         lighting = "bright high-key portrait light, soft and clean"
     else:
@@ -611,7 +648,7 @@ def build_character_prompt(char: dict, intake: dict, design: dict | None = None,
         "true to the stated age and physique, shallow depth of field, 85mm portrait lens, film "
         "grain, photorealistic film photograph, real skin texture and pores, candid expression, not "
         "an illustration, not a 3D render, fictional original face, no real-person likeness, no "
-        "celebrity, no text, no watermark, no logo",
+        "celebrity",
     ]
     return _clean(", ".join(p for p in parts if p))
 
@@ -626,8 +663,11 @@ def build_mood_prompt(block: dict, intake: dict, design: dict | None = None,
     mood = _g(intake, "visualMood") or _g(intake, "visualAesthetic")
     palette = ", ".join(c.get("name", "") for c in (design.get("palette") or [])[:4])
 
+    treatment = _reference_treatment(design)
     if has_references:
-        lighting = "lighting, colour and grade matching the supplied reference images"
+        lighting = treatment or "lighting, colour and grade matching the supplied reference images"
+    elif treatment:
+        lighting = treatment
     elif _is_light_theme(design):
         lighting = "bright high-key natural light, airy"
     else:
@@ -641,6 +681,6 @@ def build_mood_prompt(block: dict, intake: dict, design: dict | None = None,
         lighting,
         f"color palette: {palette}" if palette else "",
         "photorealistic cinematic film still, real photograph, film grain, not an illustration, "
-        "not a 3D render, no text, no watermark, no logo",
+        "not a 3D render, pure photographic scene",
     ]
     return _clean(", ".join(p for p in parts if p))

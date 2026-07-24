@@ -38,9 +38,12 @@ export function RelationshipMapSlide({ content }: RelationshipMapSlideProps) {
 
   return (
     <SlideFrame>
-      <div className="absolute inset-0 bg-[var(--slide-bg,#0a0a0c)]" />
+      <div
+        className="absolute inset-0"
+        style={{ background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }}
+      />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,rgba(34,211,238,0.06),transparent_55%)]" />
-      <div className="relative flex h-full flex-col p-[6%]">
+      <div className="relative flex h-full flex-col p-[calc(6%_+_var(--slide-pad-delta,0%))]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Relationship Map"} />
         </SlideLabel>

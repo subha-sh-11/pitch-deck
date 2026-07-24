@@ -18,12 +18,15 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
       <SlideFrame imageUrl={content.imageUrl}>
         <div
           className={`absolute inset-0 ${
-            content.imageUrl
-              ? "bg-gradient-to-r from-black/75 via-black/20 to-transparent"
-              : "bg-[var(--slide-bg,#0a0a0c)]"
+            content.imageUrl ? "bg-gradient-to-r from-black/75 via-black/20 to-transparent" : ""
           }`}
+          style={
+            content.imageUrl
+              ? undefined
+              : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+          }
         />
-        <div className="relative flex h-full items-center p-[7%]">
+        <div className="relative flex h-full items-center p-[calc(7%_+_var(--slide-pad-delta,0%))]">
           <div className="max-w-[44%] rounded-xl border border-white/[0.08] bg-black/45 p-7 backdrop-blur-md">
             <SlideLabel>{content.heading || "Story World"}</SlideLabel>
             {content.body && (
@@ -46,13 +49,16 @@ export function StoryWorldSlide({ content, layout }: StoryWorldSlideProps) {
     <SlideFrame imageUrl={content.imageUrl}>
       <div
         className={`absolute inset-0 ${
-          content.imageUrl
-            ? "bg-gradient-to-t from-black/90 via-black/45 to-black/30"
-            : "bg-[var(--slide-bg,#0a0a0c)]"
+          content.imageUrl ? "bg-gradient-to-t from-black/90 via-black/45 to-black/30" : ""
         }`}
+        style={
+          content.imageUrl
+            ? undefined
+            : { background: "var(--slide-ground, var(--slide-bg, #0a0a0c))" }
+        }
       />
 
-      <div className="relative flex h-full flex-col justify-end p-[8%]">
+      <div className="relative flex h-full flex-col justify-end p-[calc(8%_+_var(--slide-pad-delta,0%))]">
         <SlideLabel>
           <EditableText k="heading" as="span" value={content.heading || "Story World"} />
         </SlideLabel>

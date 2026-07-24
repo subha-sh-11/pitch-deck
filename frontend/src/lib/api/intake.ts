@@ -96,3 +96,19 @@ export const finalizeInterview = (projectId: string, brief: InterviewBrief) =>
     method: "POST",
     body: JSON.stringify({ brief }),
   });
+
+/** The saved conversation blob (messages/sections/brief/history + savedAt), shared across
+ *  devices — localStorage is only the fast local mirror. */
+export interface SavedInterviewState {
+  savedAt?: number;
+  [key: string]: unknown;
+}
+
+export const getInterviewState = (projectId: string) =>
+  apiFetch<{ state: SavedInterviewState | null }>(`/projects/${projectId}/interview/state`);
+
+export const saveInterviewState = (projectId: string, state: SavedInterviewState) =>
+  apiFetch<{ ok: boolean }>(`/projects/${projectId}/interview/state`, {
+    method: "PUT",
+    body: JSON.stringify({ state }),
+  });

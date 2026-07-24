@@ -110,10 +110,115 @@ def _openai_complete(system: str, prompt: str, model: str, max_tokens: int, temp
     return resp.choices[0].message.content or ""
 
 
+def _anthropic_complete_tools(system: str, prompt: str, model: str, max_tokens: int, temp: float,
+                              tools: list[dict], images: list[dict] | None = None,
+                              context: str | None = None) -> dict:
+    """Native Anthropic tool use. Returns {"text": str, "tool_calls": [{"name", "arguments"}]}."""
+    from anthropic import Anthropic  # lazy
+
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    system_blocks: list[dict] = [
+        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+    ]
+    if context:
+        system_blocks.append(
+            {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}}
+        )
+    if images:
+        content: Any = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.get("mediaType", "image/jpeg"),
+                    "data": img["data"],
+                },
+            }
+            for img in images
+        ]
+        content.append({"type": "text", "text": prompt})
+    else:
+        content = prompt
+    msg = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temp,
+        system=system_blocks,
+        tools=[
+            {"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
+            for t in tools
+        ],
+        messages=[{"role": "user", "content": content}],
+    )
+    text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+    calls = [
+        {"name": b.name, "arguments": dict(b.input or {})}
+        for b in msg.content
+        if getattr(b, "type", "") == "tool_use"
+    ]
+    return {"text": text.strip(), "tool_calls": calls}
+
+
+def _openai_complete_tools(system: str, prompt: str, model: str, max_tokens: int, temp: float,
+                           tools: list[dict], images: list[dict] | None = None,
+                           context: str | None = None) -> dict:
+    """Native OpenAI function calling. Returns {"text": str, "tool_calls": [{"name", "arguments"}]}."""
+    from openai import OpenAI  # lazy
+
+    kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
+    client = OpenAI(**kwargs)
+    full_system = f"{system}\n\n{context}" if context else system
+    if images:
+        user_content: Any = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{img.get('mediaType', 'image/jpeg')};base64,{img['data']}",
+                },
+            }
+            for img in images
+        ]
+        user_content.append({"type": "text", "text": prompt})
+    else:
+        user_content = prompt
+    resp = client.chat.completions.create(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temp,
+        tools=[
+            {"type": "function",
+             "function": {"name": t["name"], "description": t["description"],
+                          "parameters": t["parameters"]}}
+            for t in tools
+        ],
+        tool_choice="auto",
+        messages=[
+            {"role": "system", "content": full_system},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    m = resp.choices[0].message
+    calls = []
+    for tc in m.tool_calls or []:
+        try:
+            args = json.loads(tc.function.arguments or "{}")
+        except Exception:  # noqa: BLE001 — one malformed call shouldn't sink the rest
+            continue
+        calls.append({"name": tc.function.name, "arguments": args if isinstance(args, dict) else {}})
+    return {"text": (m.content or "").strip(), "tool_calls": calls}
+
+
 _PROVIDERS: dict[str, tuple[Callable[..., str], str, str]] = {
     # name: (callable, api_key_attr, default_model_attr)
     "anthropic": (_anthropic_complete, "anthropic_api_key", "anthropic_default_model"),
     "openai": (_openai_complete, "openai_api_key", "openai_default_model"),
+}
+
+_TOOL_PROVIDERS: dict[str, Callable[..., dict]] = {
+    "anthropic": _anthropic_complete_tools,
+    "openai": _openai_complete_tools,
 }
 
 
@@ -222,3 +327,61 @@ def complete_json(
     if use_cache:
         cache_set(key, result, ttl=86400)
     return result
+
+
+def complete_tools(
+    *,
+    system: str,
+    prompt: str,
+    tools: list[dict],
+    fallback: Callable[[], Any],
+    log_prefix: str,
+    model: str | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+    images: list[dict] | None = None,
+    context: str | None = None,
+) -> Any:
+    """Call the active LLM with NATIVE tool/function calling; never cached (conversational).
+
+    ``tools``: [{"name": str, "description": str, "parameters": <JSON schema>}] — translated
+    to each provider's format (Anthropic tool use / OpenAI function calling). The model emits
+    schema-validated calls instead of free-form JSON, which is far more reliable than asking
+    for an actions blob in the prompt.
+
+    Returns {"text": str, "tool_calls": [{"name": str, "arguments": dict}]} on success,
+    otherwise ``fallback()`` (with the reason recorded for ``last_error``).
+    """
+    global _last_error
+    resolved = resolve_provider()
+    if resolved is None:
+        _last_error = ("no AI text provider configured — set ANTHROPIC_API_KEY or OPENAI_API_KEY in "
+                       "backend/.env (and LLM_PROVIDER=auto)")
+        _log.info("llm-tools[%s] no provider → fallback", log_prefix)
+        return fallback()
+
+    name, _fn, default_model = resolved
+    tool_fn = _TOOL_PROVIDERS.get(name)
+    if tool_fn is None:  # provider without a tools backend — shouldn't happen, but degrade safely
+        _last_error = f"{name}: tool calling not supported"
+        return fallback()
+    use_model = model or settings.llm_model or default_model
+    try:
+        result = tool_fn(
+            system,
+            prompt,
+            use_model,
+            max_tokens or settings.llm_max_tokens,
+            settings.llm_temperature if temperature is None else temperature,
+            tools,
+            images,
+            context,
+        )
+        _last_error = ""
+        _log.info("llm-tools[%s] %s/%s ok (%d call(s))",
+                  log_prefix, name, use_model, len(result.get("tool_calls", [])))
+        return result
+    except Exception as exc:  # noqa: BLE001
+        _last_error = f"{name} ({use_model}): {str(exc)[:200]}"
+        _log.warning("llm-tools[%s] %s failed (%s) → fallback", log_prefix, name, exc)
+        return fallback()

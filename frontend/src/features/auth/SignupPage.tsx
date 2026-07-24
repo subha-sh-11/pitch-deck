@@ -44,6 +44,12 @@ export function SignupPage() {
     event.preventDefault();
     if (busy) return;
     setError(null);
+    // Mirror the backend rule (password ≥ 6 chars) so users get a clear message
+    // instead of a raw 422 from the API.
+    if (mode === "signup" && password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {

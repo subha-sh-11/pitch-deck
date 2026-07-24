@@ -85,10 +85,11 @@ def _resolve_image_provider() -> str:
 # Prepended to the prompt when the director supplied reference images, so the model treats
 # them as a STYLE guide for new art rather than something to copy literally.
 _REF_STYLE_PREAMBLE = (
-    "Use the attached reference image(s) as the VISUAL STYLE GUIDE for brand-new, original key art: "
-    "match their colour palette, lighting, grain/texture and graphic treatment (framing, composition, "
-    "typographic mood, any film-strip / poster motifs). Render THIS film's subject described below — "
-    "do NOT copy the reference's people, faces, or any text/letters that appear in them.\n\n"
+    "Use the attached reference image(s) as the VISUAL STYLE GUIDE for a brand-new, original image: "
+    "match their colour palette, lighting, grain/texture and graphic treatment (framing, "
+    "composition, mood). Render THIS film's subject described below — do NOT copy the reference's "
+    "people or faces, and the new image must be a pure photographic scene with absolutely no "
+    "lettering, writing or typography of any kind, even if the references contain some.\n\n"
 )
 
 
@@ -151,7 +152,7 @@ def _enforce_no_text(prompt: str) -> str:
 # Beefed-up negative for providers that honour it (fal/replicate). FLUX ignores negatives entirely,
 # which is why the positive guard above is the real workhorse.
 _NO_TEXT_NEGATIVE = ("text, words, letters, numbers, caption, subtitle, title card, typography, "
-                     "watermark, logo, signage, billboard, poster, writing")
+                     "watermark, logo, signage, billboard, poster, writing, gibberish lettering")
 
 
 def generate_image(
@@ -391,11 +392,24 @@ def _fetch_bytes(url: str) -> tuple[bytes, str]:
     return resp.content, resp.headers.get("content-type", "image/png")
 
 
+# Account-level fal failures that no amount of retrying can cure — an exhausted balance or a
+# bad/locked key fails identically on every attempt, and a deck build fires ~20 image calls,
+# so retrying these 3× each just adds minutes of dead time before the placeholder fallback.
+_FAL_FATAL = ("exhausted balance", "user is locked", "unauthorized", "invalid api key",
+              "forbidden", "401", "403")
+
+
+def _fal_fatal(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _FAL_FATAL)
+
+
 def _fal_run(model: str, args: dict, attempts: int = 3):
     """Call fal with a short exponential backoff. A full deck fires ~20 image calls in two bursts
     (backgrounds, then per-element portraits/genres); the later burst is the one that gets
     rate-limited, and a single 429/timeout used to degrade straight to a placeholder. Retrying a
-    couple of times with jittered backoff turns those transient failures back into real images."""
+    couple of times with jittered backoff turns those transient failures back into real images.
+    Account-level errors (balance, auth) are NOT retried — they fail the same way every time."""
     import random
     import time
 
@@ -405,9 +419,9 @@ def _fal_run(model: str, args: dict, attempts: int = 3):
     for i in range(max(1, attempts)):
         try:
             return fal_client.run(model, arguments=args)
-        except Exception as exc:  # noqa: BLE001 — retry ANY error; non-transient ones just exhaust
+        except Exception as exc:  # noqa: BLE001 — retry transient errors; fatal ones raise now
             last = exc
-            if i == attempts - 1:
+            if i == attempts - 1 or _fal_fatal(exc):
                 raise
             _log.warning("fal attempt %d/%d failed (%s); retrying…",
                          i + 1, attempts, str(exc)[:140])
@@ -422,37 +436,55 @@ def _fal_generate(prompt: str, w: int, h: int, neg: str, seed: int | None,
     os.environ.setdefault("FAL_KEY", settings.fal_key)
     if reference_images:
         # Reference supplied → image-to-image so the director's reference conditions the result
-        # (palette, grade, mood). fal accepts a data-URI for image_url.
+        # (palette, grade, mood). fal accepts a data-URI for image_url. FLUX `strength` is denoise
+        # strength (1.0 = fully remade from the prompt): verified empirically that ≤0.7 returns a
+        # near-copy of the reference — layout and garbled text included — so clamp to ≥0.85 to
+        # keep reference influence LOW: every slide stays a unique, text-free frame that carries
+        # the reference's grade. Seed still varies per slide upstream.
         ref = reference_images[0]
         image_url = f"data:{ref.get('mediaType', 'image/jpeg')};base64,{ref['data']}"
         model = settings.fal_image_to_image_model
+        strength = max(0.85, min(1.0, settings.fal_image_strength))
+        _log.info("fal img2img: conditioning on reference at low influence "
+                  "(model=%s strength=%.2f)", model, strength)
         args: dict[str, Any] = {
             "prompt": prompt,
             "image_url": image_url,
-            "strength": settings.fal_image_strength,
+            "strength": strength,
             "image_size": {"width": w, "height": h},
         }
     else:
         model = settings.fal_image_model
+        strength = None
         args = {"prompt": prompt, "image_size": {"width": w, "height": h}}
+    # FLUX-family endpoints are guidance-distilled and reject/ignore negative prompts;
+    # SD/SDXL-style fal endpoints honour them.
+    if neg and "flux" not in model.lower():
+        args["negative_prompt"] = neg
     if seed is not None:
         args["seed"] = seed
     result = _fal_run(model, args)
     url = result["images"][0]["url"]
     data, mime = _fetch_bytes(url)
-    return ImageResult(data, mime, {"provider": "fal", "model": model, "prompt": prompt,
-                                    "seed": seed, "referenced": bool(reference_images)})
+    meta: dict[str, Any] = {"provider": "fal", "model": model, "prompt": prompt,
+                            "seed": seed, "referenced": bool(reference_images)}
+    if strength is not None:
+        meta["strength"] = strength
+    return ImageResult(data, mime, meta)
 
 
 def _replicate_generate(prompt: str, w: int, h: int, neg: str, seed: int | None) -> ImageResult:
     import replicate  # lazy
 
     client = replicate.Client(api_token=settings.replicate_api_token)
-    out = client.run(
-        settings.replicate_image_model,
-        input={"prompt": prompt, "width": w, "height": h,
-               **({"seed": seed} if seed is not None else {})},
-    )
+    model = settings.replicate_image_model
+    inputs: dict[str, Any] = {"prompt": prompt, "width": w, "height": h}
+    # Same caveat as fal: FLUX models don't take a negative prompt; SD-family ones do.
+    if neg and "flux" not in model.lower():
+        inputs["negative_prompt"] = neg
+    if seed is not None:
+        inputs["seed"] = seed
+    out = client.run(model, input=inputs)
     url = out[0] if isinstance(out, (list, tuple)) else str(out)
     data, mime = _fetch_bytes(url)
     return ImageResult(data, mime, {"provider": "replicate",

@@ -128,13 +128,18 @@ _SYSTEM = (
     "vague or generic rather than specific to THIS story, slides that contradict each other, and "
     "places where the commercial case is unconvincing or missing. Quote the slide. Never invent "
     "praise or padding. If a slide is fine, say nothing about it.\n"
+    "When a `referenceProfile` is provided, the director shared visual references and the deck "
+    "committed to that visual language — also flag REFERENCE-ALIGNMENT drift you can see from the "
+    "copy: slides whose text length/density contradicts the profile's textPerSlide, copy whose "
+    "mood clashes with the profile's mood, or slides that clearly abandon the promised treatment "
+    "(category \"reference_alignment\").\n"
     "Return ONLY JSON: {\"issues\": [{\"severity\": \"high|medium|low\", \"slideNumber\": <int or "
-    "null>, \"category\": \"spelling|generic|consistency|commercial|clarity\", \"message\": "
-    "\"<specific, actionable note>\"}], \"summary\": \"<one-line overall verdict>\"}."
+    "null>, \"category\": \"spelling|generic|consistency|commercial|clarity|reference_alignment\", "
+    "\"message\": \"<specific, actionable note>\"}], \"summary\": \"<one-line overall verdict>\"}."
 )
 
 
-def _llm_issues(slides: list[dict], intake: dict) -> tuple[list[dict], str]:
+def _llm_issues(slides: list[dict], intake: dict, design: dict | None = None) -> tuple[list[dict], str]:
     payload = {
         "film": {k: intake.get(k) for k in ("title", "logline", "genreBlend", "tone")
                  if isinstance(intake.get(k), str) and intake.get(k).strip()},
@@ -142,6 +147,11 @@ def _llm_issues(slides: list[dict], intake: dict) -> tuple[list[dict], str]:
                     "title": s.get("title"), "text": _text_of(s.get("content") or {})[:600]}
                    for s in slides],
     }
+    profile = (design or {}).get("referenceProfile")
+    if isinstance(profile, dict) and profile:
+        payload["referenceProfile"] = {
+            k: profile.get(k) for k in ("style", "mood", "layout", "synthesis") if profile.get(k)
+        }
     result = complete_json(
         system=_SYSTEM,
         prompt="QA this deck:\n" + json.dumps(payload, ensure_ascii=False),
@@ -174,7 +184,7 @@ def run(slides: list[dict], intake: dict | None = None, design: dict | None = No
     slides = slides or []
     intake = intake or {}
     issues = _deterministic_issues(slides)
-    llm_issues, summary = _llm_issues(slides, intake)
+    llm_issues, summary = _llm_issues(slides, intake, design)
     issues += llm_issues
 
     # Score from a clean 100, weighted by severity (a few low notes barely dent it).

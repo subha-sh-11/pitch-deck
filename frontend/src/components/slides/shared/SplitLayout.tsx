@@ -37,7 +37,11 @@ export function SplitLayout({ imageUrl, imageSide = "right", framed = false, chi
       )}
     </div>
   );
-  const textPanel = <div className="flex h-full w-1/2 flex-col justify-center p-[8%]">{children}</div>;
+  const textPanel = (
+    <div className="flex h-full w-1/2 flex-col justify-center p-[calc(8%_+_var(--slide-pad-delta,0%))]">
+      {children}
+    </div>
+  );
 
   return (
     <div className="absolute inset-0 flex">
